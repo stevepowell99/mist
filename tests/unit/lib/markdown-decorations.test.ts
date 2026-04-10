@@ -2,6 +2,10 @@ import { describe, it, expect } from "vitest";
 import {
   MARKDOWN_PATTERNS,
   findDecorations,
+  findCodeBlockDecorations,
+  CODE_FENCE_REGEX,
+  highlightLine,
+  getLanguageOptions,
   type MarkdownPattern,
 } from "~/lib/markdown-decorations";
 
@@ -267,5 +271,193 @@ describe("findDecorations", () => {
         { from: 14, to: 16 },
       ]);
     });
+  });
+});
+
+describe("CODE_FENCE_REGEX", () => {
+  it("matches triple backticks", () => {
+    expect(CODE_FENCE_REGEX.test("```")).toBe(true);
+  });
+
+  it("matches triple backticks with language", () => {
+    expect(CODE_FENCE_REGEX.test("```js")).toBe(true);
+  });
+
+  it("matches 4+ backticks", () => {
+    expect(CODE_FENCE_REGEX.test("````")).toBe(true);
+  });
+
+  it("does not match fewer than 3 backticks", () => {
+    expect(CODE_FENCE_REGEX.test("``")).toBe(false);
+  });
+
+  it("does not match backticks mid-line", () => {
+    expect(CODE_FENCE_REGEX.test("some ``` text")).toBe(false);
+  });
+});
+
+describe("findCodeBlockDecorations", () => {
+  // Helper to create mock paragraph nodes matching the shape
+  // findCodeBlockDecorations expects
+  function makeParagraphs(lines: string[]) {
+    let pos = 0;
+    return lines.map((text) => {
+      // nodeSize = 1 (open tag) + text length + 1 (close tag)
+      const nodeSize = text.length + 2;
+      const para = {
+        node: {
+          textContent: text,
+          nodeSize,
+          type: { name: "paragraph" },
+        },
+        pos,
+      };
+      pos += nodeSize;
+      return para;
+    });
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function decoInfo(d: any) {
+    return {
+      from: d.from,
+      to: d.to,
+      class: d.type?.attrs?.class ?? d.type?.spec?.class,
+    };
+  }
+
+  it("detects a simple fenced code block", () => {
+    const paras = makeParagraphs(["```", "hello", "```"]);
+    const { decorations, codeBlockRanges } = findCodeBlockDecorations(paras);
+
+    expect(codeBlockRanges).toHaveLength(1);
+    // 3 paragraphs: "```" (nodeSize 5) + "hello" (7) + "```" (5) = 17
+    expect(codeBlockRanges[0]).toEqual({ from: 0, to: 17 });
+
+    const classes = decorations.map(decoInfo).map((d) => d.class);
+    expect(classes).toContain("md-code-block md-code-block-open");
+    expect(classes).toContain("md-code-block");
+    expect(classes).toContain("md-code-block md-code-block-close");
+  });
+
+  it("detects a code block with language specifier", () => {
+    const paras = makeParagraphs(["```typescript", "const x = 1;", "```"]);
+    const { codeBlockRanges } = findCodeBlockDecorations(paras);
+    expect(codeBlockRanges).toHaveLength(1);
+  });
+
+  it("dims fence delimiters", () => {
+    const paras = makeParagraphs(["```", "code", "```"]);
+    const { decorations } = findCodeBlockDecorations(paras);
+    const delimiterDecos = decorations.map(decoInfo).filter((d) => d.class === "md-delimiter");
+    // Both opening ``` and closing ``` get delimiter decorations
+    expect(delimiterDecos).toHaveLength(2);
+  });
+
+  it("does not match unclosed fences", () => {
+    const paras = makeParagraphs(["```", "code", "no closing"]);
+    const { codeBlockRanges } = findCodeBlockDecorations(paras);
+    expect(codeBlockRanges).toHaveLength(0);
+  });
+
+  it("handles multiple code blocks", () => {
+    const paras = makeParagraphs(["```", "a", "```", "text", "```", "b", "```"]);
+    const { codeBlockRanges } = findCodeBlockDecorations(paras);
+    expect(codeBlockRanges).toHaveLength(2);
+  });
+
+  it("requires closing fence to have at least as many backticks as opening", () => {
+    const paras = makeParagraphs(["````", "code", "```", "more", "````"]);
+    const { codeBlockRanges } = findCodeBlockDecorations(paras);
+    // The ``` line is not a valid close for ```` — only ```` closes it
+    expect(codeBlockRanges).toHaveLength(1);
+    // The block spans from the first ```` to the last ````
+    expect(codeBlockRanges[0]).toEqual({
+      from: paras[0].pos,
+      to: paras[4].pos + paras[4].node.nodeSize,
+    });
+  });
+
+  it("returns empty for no code blocks", () => {
+    const paras = makeParagraphs(["hello", "world"]);
+    const { decorations, codeBlockRanges } = findCodeBlockDecorations(paras);
+    expect(codeBlockRanges).toHaveLength(0);
+    expect(decorations).toHaveLength(0);
+  });
+
+  it("produces syntax highlighting decorations for inner lines", () => {
+    const paras = makeParagraphs(["```js", "const x = 1;", "```"]);
+    const { decorations } = findCodeBlockDecorations(paras);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const classes = decorations.map((d: any) => d.type?.attrs?.class ?? d.type?.spec?.class).filter(Boolean);
+    // Should have sh- prefixed syntax highlight classes
+    expect(classes.some((c: string) => c.startsWith("sh-"))).toBe(true);
+    expect(classes).toContain("sh-keyword"); // "const" is a keyword
+  });
+});
+
+describe("highlightLine", () => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function decoInfo(d: any) {
+    return {
+      from: d.from,
+      to: d.to,
+      class: d.type?.attrs?.class,
+    };
+  }
+
+  it("highlights JavaScript keywords", () => {
+    const decos = highlightLine("const x = 1;", 0, "js").map(decoInfo);
+    expect(decos[0]).toEqual({ from: 0, to: 5, class: "sh-keyword" });
+  });
+
+  it("highlights strings", () => {
+    const decos = highlightLine('"hello"', 0, "js").map(decoInfo);
+    const stringDecos = decos.filter((d) => d.class === "sh-string");
+    expect(stringDecos.length).toBeGreaterThan(0);
+  });
+
+  it("highlights comments", () => {
+    const decos = highlightLine("// a comment", 0, "js").map(decoInfo);
+    expect(decos[0]?.class).toBe("sh-comment");
+  });
+
+  it("respects basePos offset", () => {
+    const decos = highlightLine("const x", 100, "js").map(decoInfo);
+    expect(decos[0]).toEqual({ from: 100, to: 105, class: "sh-keyword" });
+  });
+
+  it("returns empty for empty text", () => {
+    expect(highlightLine("", 0, "js")).toHaveLength(0);
+  });
+
+  it("works without a language specifier", () => {
+    const decos = highlightLine("const x = 1;", 0, undefined);
+    expect(decos.length).toBeGreaterThan(0);
+  });
+});
+
+describe("getLanguageOptions", () => {
+  it("returns a preset for known languages", () => {
+    expect(getLanguageOptions("python")).toBeDefined();
+    expect(getLanguageOptions("py")).toBeDefined();
+    expect(getLanguageOptions("rust")).toBeDefined();
+    expect(getLanguageOptions("go")).toBeDefined();
+    expect(getLanguageOptions("css")).toBeDefined();
+    expect(getLanguageOptions("java")).toBeDefined();
+    expect(getLanguageOptions("c")).toBeDefined();
+  });
+
+  it("is case-insensitive", () => {
+    expect(getLanguageOptions("Python")).toBeDefined();
+    expect(getLanguageOptions("RUST")).toBeDefined();
+  });
+
+  it("returns undefined for unknown languages", () => {
+    expect(getLanguageOptions("brainfuck")).toBeUndefined();
+  });
+
+  it("returns undefined for no language", () => {
+    expect(getLanguageOptions(undefined)).toBeUndefined();
   });
 });

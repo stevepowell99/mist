@@ -86,6 +86,32 @@ body {
   border-radius: 2px;
 }
 
+.tiptap p.md-code-block {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background-color: var(--color-border);
+  max-width: none;
+  padding: 0 1em;
+}
+
+.tiptap p.md-code-block-open {
+  padding-top: 0.5em;
+}
+
+.tiptap p.md-code-block-close {
+  padding-bottom: 0.5em;
+}
+
+/* Syntax highlighting tokens (sugar-high) */
+.sh-keyword { color: #8b5cf6; }
+.sh-string { color: #16a34a; }
+.sh-comment { color: var(--color-muted); font-style: italic; }
+.sh-class { color: #0891b2; }
+.sh-property { color: #2563eb; }
+.sh-entity { color: #c026d3; }
+.sh-jsxliterals { color: #0891b2; }
+.sh-sign { color: var(--color-muted); }
+
 .md-strikethrough {
   text-decoration: line-through;
 }
@@ -333,6 +359,12 @@ body {
 [data-theme="dark"] .cm-addition { color: #4ade80; }
 [data-theme="dark"] .cm-deletion { color: #f87171; }
 [data-theme="dark"] .preview a { color: #60a5fa; }
+[data-theme="dark"] .sh-keyword { color: #a78bfa; }
+[data-theme="dark"] .sh-string { color: #4ade80; }
+[data-theme="dark"] .sh-class { color: #22d3ee; }
+[data-theme="dark"] .sh-property { color: #60a5fa; }
+[data-theme="dark"] .sh-entity { color: #e879f9; }
+[data-theme="dark"] .sh-jsxliterals { color: #22d3ee; }
 
 /* Dark theme — auto mode follows system preference */
 @media (prefers-color-scheme: dark) {
@@ -348,6 +380,12 @@ body {
   [data-theme="auto"] .cm-addition { color: #4ade80; }
   [data-theme="auto"] .cm-deletion { color: #f87171; }
   [data-theme="auto"] .preview a { color: #60a5fa; }
+  [data-theme="auto"] .sh-keyword { color: #a78bfa; }
+  [data-theme="auto"] .sh-string { color: #4ade80; }
+  [data-theme="auto"] .sh-class { color: #22d3ee; }
+  [data-theme="auto"] .sh-property { color: #60a5fa; }
+  [data-theme="auto"] .sh-entity { color: #e879f9; }
+  [data-theme="auto"] .sh-jsxliterals { color: #22d3ee; }
 }
 
 /* Onboarding marquee button */

@@ -1,5 +1,7 @@
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
+import { tokenize, SugarHigh } from "sugar-high";
+import * as presets from "sugar-high/presets";
 
 export type PatternType = "inline" | "prefix" | "heading" | "link";
 
@@ -83,6 +85,174 @@ export const MARKDOWN_PATTERNS: MarkdownPattern[] = [
     delimiterClass: "md-hr",
   },
 ];
+
+export const CODE_FENCE_REGEX = /^(`{3,})(.*)?$/;
+
+const TOKEN_TYPE_NAMES = SugarHigh.TokenTypes as unknown as string[];
+
+// Token types that get no special colour — skip them to avoid unnecessary DOM nodes
+const SKIP_TOKEN_TYPES = new Set(["identifier", "break", "space"]);
+
+const LANGUAGE_PRESETS: Record<string, typeof presets.css | undefined> = {
+  css: presets.css,
+  rust: presets.rust,
+  rs: presets.rust,
+  python: presets.python,
+  py: presets.python,
+  c: presets.c,
+  cpp: presets.c,
+  "c++": presets.c,
+  h: presets.c,
+  go: presets.go,
+  golang: presets.go,
+  java: presets.java,
+};
+
+export function getLanguageOptions(lang: string | undefined) {
+  if (!lang) return undefined;
+  return LANGUAGE_PRESETS[lang.toLowerCase()];
+}
+
+export function highlightLine(
+  text: string,
+  basePos: number,
+  lang: string | undefined,
+): Decoration[] {
+  if (text.length === 0) return [];
+
+  const options = getLanguageOptions(lang);
+  const tokens = tokenize(text, options ?? undefined);
+  const decorations: Decoration[] = [];
+  let offset = 0;
+
+  for (const [typeIndex, tokenText] of tokens) {
+    const typeName = TOKEN_TYPE_NAMES[typeIndex];
+    const len = tokenText.length;
+    if (!SKIP_TOKEN_TYPES.has(typeName) && len > 0) {
+      decorations.push(
+        Decoration.inline(basePos + offset, basePos + offset + len, {
+          class: `sh-${typeName}`,
+        }),
+      );
+    }
+    offset += len;
+  }
+
+  return decorations;
+}
+
+interface ParagraphInfo {
+  node: Parameters<Parameters<typeof import("@tiptap/pm/model").Node.prototype.descendants>[0]>[0];
+  pos: number;
+}
+
+export function findCodeBlockDecorations(
+  paragraphs: ParagraphInfo[],
+): { decorations: Decoration[]; codeBlockRanges: Array<{ from: number; to: number }> } {
+  const decorations: Decoration[] = [];
+  const codeBlockRanges: Array<{ from: number; to: number }> = [];
+  let i = 0;
+
+  while (i < paragraphs.length) {
+    const { node: openNode, pos: openPos } = paragraphs[i];
+    const openText = openNode.textContent;
+    const openMatch = CODE_FENCE_REGEX.exec(openText);
+
+    if (!openMatch) {
+      i++;
+      continue;
+    }
+
+    const fenceChar = openMatch[1];
+    const fenceLen = fenceChar.length;
+
+    // Search for closing fence
+    let j = i + 1;
+    let closedAt = -1;
+    while (j < paragraphs.length) {
+      const closeText = paragraphs[j].node.textContent;
+      const closeMatch = CODE_FENCE_REGEX.exec(closeText);
+      if (closeMatch && closeMatch[1].length >= fenceLen && !closeMatch[2]?.trim()) {
+        closedAt = j;
+        break;
+      }
+      j++;
+    }
+
+    if (closedAt === -1) {
+      // No closing fence — not a code block
+      i++;
+      continue;
+    }
+
+    // Track the range from opening fence node start to closing fence node end
+    const blockFrom = openPos;
+    const closePara = paragraphs[closedAt];
+    const blockTo = closePara.pos + closePara.node.nodeSize;
+    codeBlockRanges.push({ from: blockFrom, to: blockTo });
+
+    // Opening fence: node decoration + inline delimiter
+    decorations.push(
+      Decoration.node(openPos, openPos + openNode.nodeSize, {
+        class: "md-code-block md-code-block-open",
+      }),
+    );
+    if (openNode.textContent.length > 0) {
+      decorations.push(
+        Decoration.inline(openPos + 1, openPos + 1 + openNode.textContent.length, {
+          class: "md-delimiter",
+        }),
+      );
+    }
+
+    // Extract language from fence info string (e.g. "```js" → "js")
+    const lang = openMatch[2]?.trim() || undefined;
+
+    // Inner lines: node decoration for background + monospace, plus syntax highlighting
+    for (let k = i + 1; k < closedAt; k++) {
+      const { node: innerNode, pos: innerPos } = paragraphs[k];
+      decorations.push(
+        Decoration.node(innerPos, innerPos + innerNode.nodeSize, {
+          class: "md-code-block",
+        }),
+      );
+      // Syntax highlight the text content (pos + 1 to skip paragraph open token)
+      const innerText = innerNode.textContent;
+      if (innerText.length > 0) {
+        decorations.push(...highlightLine(innerText, innerPos + 1, lang));
+      }
+    }
+
+    // Closing fence: node decoration + inline delimiter
+    decorations.push(
+      Decoration.node(closePara.pos, closePara.pos + closePara.node.nodeSize, {
+        class: "md-code-block md-code-block-close",
+      }),
+    );
+    if (closePara.node.textContent.length > 0) {
+      decorations.push(
+        Decoration.inline(closePara.pos + 1, closePara.pos + 1 + closePara.node.textContent.length, {
+          class: "md-delimiter",
+        }),
+      );
+    }
+
+    i = closedAt + 1;
+  }
+
+  return { decorations, codeBlockRanges };
+}
+
+function posInsideCodeBlock(
+  pos: number,
+  nodeSize: number,
+  codeBlockRanges: Array<{ from: number; to: number }>,
+): boolean {
+  for (const range of codeBlockRanges) {
+    if (pos >= range.from && pos + nodeSize <= range.to) return true;
+  }
+  return false;
+}
 
 export function findDecorations(
   text: string,
@@ -231,8 +401,22 @@ export function markdownDecorations(): Plugin[] {
       decorations(state) {
         const decorations: Decoration[] = [];
 
+        // First pass: collect paragraphs and find code blocks
+        const paragraphs: ParagraphInfo[] = [];
+        state.doc.descendants((node, pos) => {
+          if (node.type.name === "paragraph") {
+            paragraphs.push({ node, pos });
+          }
+        });
+
+        const { decorations: codeBlockDecos, codeBlockRanges } =
+          findCodeBlockDecorations(paragraphs);
+        decorations.push(...codeBlockDecos);
+
+        // Second pass: inline patterns, skipping nodes inside code blocks
         state.doc.descendants((node, pos) => {
           if (!node.isText || !node.text) return;
+          if (posInsideCodeBlock(pos, node.nodeSize, codeBlockRanges)) return;
           for (const pattern of MARKDOWN_PATTERNS) {
             decorations.push(...findDecorations(node.text, pos, pattern));
           }
