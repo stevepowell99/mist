@@ -23,6 +23,17 @@ function markBefore(
   return node.marks.find((m) => m.type.name === markName) ?? null;
 }
 
+/** Check if the character at `pos` (the one a forward-Delete would remove) has a mark. */
+function markAfter(
+  state: import("@tiptap/pm/state").EditorState,
+  pos: number,
+  markName: string,
+) {
+  const node = state.doc.nodeAt(pos);
+  if (!node) return null;
+  return node.marks.find((m) => m.type.name === markName) ?? null;
+}
+
 /**
  * Check if the entire range [from, to) is within a single run of the given mark.
  */
@@ -48,10 +59,16 @@ function rangeHasOnlyMark(
   return allMarked;
 }
 
-export function suggestModePlugin(docState: ModeSource): Plugin {
+export function suggestModePlugin(docState: ModeSource, locked = false): Plugin {
   return new Plugin({
     key: pluginKey,
     props: {
+      // Block drag-and-drop in suggest mode: a dropped payload would otherwise
+      // insert directly, bypassing suggestion tracking.
+      handleDrop() {
+        return (docState.get("mode") ?? "suggest") === "suggest";
+      },
+
       handleTextInput(view, from, to, text) {
         // Suggest is the default; only an explicit "edit" turns it off
         const mode = docState.get("mode") ?? "suggest";
@@ -98,7 +115,13 @@ export function suggestModePlugin(docState: ModeSource): Plugin {
         const mode = docState.get("mode") ?? "suggest";
         if (mode !== "suggest") return false;
 
-        if (event.key !== "Backspace") return false;
+        // A locked (suggest-link) user cannot insert untracked structural
+        // changes such as new paragraphs.
+        if (locked && (event.key === "Enter" || event.key === "Tab")) return true;
+
+        const isBackspace = event.key === "Backspace";
+        const isDelete = event.key === "Delete";
+        if (!isBackspace && !isDelete) return false;
 
         const { state, dispatch } = view;
         const { from, to, empty } = state.selection;
@@ -107,7 +130,7 @@ export function suggestModePlugin(docState: ModeSource): Plugin {
         if (!additionType || !deletionType) return false;
 
         if (!empty) {
-          // Non-empty selection
+          // Non-empty selection (same for Backspace and Delete)
           if (rangeHasOnlyMark(state, from, to, "criticAddition")) {
             return false; // Normal delete inside addition (shrinks it)
           }
@@ -118,33 +141,89 @@ export function suggestModePlugin(docState: ModeSource): Plugin {
           // Mark selection as deleted
           const tr = state.tr;
           tr.addMark(from, to, deletionType.create());
-          tr.setSelection(TextSelection.near(tr.doc.resolve(from)));
+          tr.setSelection(TextSelection.near(tr.doc.resolve(isBackspace ? from : to)));
           dispatch(tr);
           return true;
         }
 
-        // Single character backspace
-        if (from <= 1) return false; // At start of doc content
-
-        const $from = state.doc.resolve(from);
-        if ($from.parentOffset <= 0) return false; // At start of paragraph
-
-        // Inside addition: normal backspace (shrink insertion)
-        if (markBefore(state, from, "criticAddition")) {
-          return false;
-        }
-
-        // Inside deletion: no-op (prevent editing deletions)
-        if (markBefore(state, from, "criticDeletion")) {
+        if (isBackspace) {
+          // Single character backspace
+          if (from <= 1) return false; // At start of doc content
+          const $from = state.doc.resolve(from);
+          if ($from.parentOffset <= 0) return false; // At start of paragraph
+          if (markBefore(state, from, "criticAddition")) return false; // shrink insertion
+          if (markBefore(state, from, "criticDeletion")) return true; // no-op in deletion
+          const tr = state.tr;
+          tr.addMark(from - 1, from, deletionType.create());
+          tr.setSelection(TextSelection.near(tr.doc.resolve(from - 1)));
+          dispatch(tr);
           return true;
         }
 
-        // Normal character: apply deletion mark to the character before cursor
+        // Forward Delete
+        const $from = state.doc.resolve(from);
+        if ($from.parentOffset >= $from.parent.content.size) return false; // end of paragraph
+        if (markAfter(state, from, "criticAddition")) return false; // shrink insertion forward
+        if (markAfter(state, from, "criticDeletion")) {
+          // Step over an already-deleted character
+          dispatch(state.tr.setSelection(TextSelection.near(state.doc.resolve(from + 1))));
+          return true;
+        }
         const tr = state.tr;
-        tr.addMark(from - 1, from, deletionType.create());
-        tr.setSelection(TextSelection.near(tr.doc.resolve(from - 1)));
+        tr.addMark(from, from + 1, deletionType.create());
+        tr.setSelection(TextSelection.near(tr.doc.resolve(from + 1)));
         dispatch(tr);
         return true;
+      },
+
+      handlePaste(view, _event, slice) {
+        const mode = docState.get("mode") ?? "suggest";
+        if (mode !== "suggest") return false;
+
+        const text = slice.content.textBetween(0, slice.content.size, "\n");
+        if (!text) return false; // non-text payloads fall through to default
+
+        const { state, dispatch } = view;
+        const { from, to, empty } = state.selection;
+        const additionType = state.schema.marks.criticAddition;
+        const deletionType = state.schema.marks.criticDeletion;
+        if (!additionType || !deletionType) return false;
+
+        const tr = state.tr;
+        if (!empty && !rangeHasOnlyMark(state, from, to, "criticDeletion")) {
+          tr.addMark(from, to, deletionType.create()); // replaced text marked deleted
+        }
+        const at = empty ? from : to;
+        tr.insertText(text, at);
+        tr.addMark(at, at + text.length, additionType.create());
+        tr.setSelection(TextSelection.near(tr.doc.resolve(at + text.length)));
+        dispatch(tr);
+        return true;
+      },
+
+      handleDOMEvents: {
+        cut(view, event) {
+          const mode = docState.get("mode") ?? "suggest";
+          if (mode !== "suggest") return false;
+
+          const { state, dispatch } = view;
+          const { from, to, empty } = state.selection;
+          if (empty) return false;
+          const deletionType = state.schema.marks.criticDeletion;
+          if (!deletionType) return false;
+
+          // Copy to clipboard but mark as deleted instead of removing
+          const text = state.doc.textBetween(from, to, "\n");
+          event.clipboardData?.setData("text/plain", text);
+          event.preventDefault();
+          if (!rangeHasOnlyMark(state, from, to, "criticDeletion")) {
+            const tr = state.tr;
+            tr.addMark(from, to, deletionType.create());
+            tr.setSelection(TextSelection.near(tr.doc.resolve(from)));
+            dispatch(tr);
+          }
+          return true;
+        },
       },
     },
   });

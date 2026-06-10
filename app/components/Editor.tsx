@@ -26,14 +26,14 @@ const MarkdownDecorations = Extension.create<{ resolveImageSrc: ImageResolver | 
   },
 });
 
-const SuggestMode = Extension.create<{ docState: ModeSource | null }>({
+const SuggestMode = Extension.create<{ docState: ModeSource | null; locked: boolean }>({
   name: "suggestMode",
   addOptions() {
-    return { docState: null };
+    return { docState: null, locked: false };
   },
   addProseMirrorPlugins() {
     if (!this.options.docState) return [];
-    return [suggestModePlugin(this.options.docState)];
+    return [suggestModePlugin(this.options.docState, this.options.locked)];
   },
 });
 
@@ -257,7 +257,7 @@ export default function Editor({
           render: renderCaret,
         }),
         MarkdownDecorations.configure({ resolveImageSrc: imageResolver }),
-        SuggestMode.configure({ docState: modeSource }),
+        SuggestMode.configure({ docState: modeSource, locked: !!forceSuggest }),
         CommentClickHandler.configure({ onCommentClick }),
         CommentHighlight,
         ActiveCommentHighlight,
