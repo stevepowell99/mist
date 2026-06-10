@@ -4,6 +4,7 @@ import { generateDocumentId } from "~/shared/constants";
 import { getCloudflare } from "~/lib/cloudflare.server";
 import { deserializeThreads } from "~/lib/thread-serialization";
 import { parseGitHubFileUrl, fetchPublicText } from "~/lib/github.server";
+import { stripMistBanner } from "~/shared/mist-banner";
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -37,7 +38,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 
   let content: string;
   try {
-    content = await fetchPublicText(file);
+    content = stripMistBanner(await fetchPublicText(file));
   } catch (err) {
     return json({ error: err instanceof Error ? err.message : "fetch failed" }, 502);
   }

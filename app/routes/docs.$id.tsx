@@ -111,12 +111,13 @@ function DocumentLayout({ id }: { id: string }) {
         <div className="flex min-w-0 grow items-center px-4">
           <span className="truncate font-medium" title={title}>{title}</span>
         </div>
-        {/* Right group is the aside width so its left edge lines up with the body/sidebar divide */}
-        <div className="flex w-96 shrink-0 items-stretch">
-          <div className="flex min-w-0 flex-1 items-center justify-center overflow-hidden whitespace-nowrap border-l border-border px-2">
+        {/* On desktop the right group is the aside width so its left edge lines up with
+            the body/sidebar divide. On mobile there is no sidebar, so it sizes naturally. */}
+        <div className="flex shrink-0 items-stretch lg:w-96">
+          <div className="flex items-center border-l border-border px-3 lg:min-w-0 lg:flex-1 lg:justify-center lg:overflow-hidden lg:px-2">
             <ConnectionStatus />
           </div>
-          <div className="flex shrink-0 items-center border-l border-border">
+          <div className="hidden shrink-0 items-center border-l border-border lg:flex">
             <UserName />
           </div>
           <div className="flex shrink-0 items-stretch border-l border-border">

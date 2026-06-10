@@ -5,6 +5,7 @@ import { useDocument } from "~/lib/DocumentContext";
 import { rewriteImageUrls } from "~/lib/github";
 import { renderWikiLinks } from "~/lib/wikilinks";
 import { convertCitations, formatReferenceList } from "~/lib/citations";
+import { stripMistBanner } from "~/shared/mist-banner";
 
 /** Strip pandoc attribute blocks from heading lines, e.g. "## Title {#anchor}".
  * Only blocks starting with # or . are removed, so CriticMarkup ({++ ++} etc.) is left alone. */
@@ -31,7 +32,7 @@ export default function Preview() {
   const { markdown, github, bibLib } = useDocument();
 
   const html = useMemo(() => {
-    const resolved = github ? rewriteImageUrls(markdown, github) : markdown;
+    const resolved = github ? rewriteImageUrls(stripMistBanner(markdown), github) : stripMistBanner(markdown);
     const siteBase = github ? PUBLISHED_SITES[github.repo] ?? null : null;
     const withLinks = stripPandocAttrs(renderWikiLinks(resolved, siteBase));
     let body = withLinks;

@@ -9,6 +9,7 @@ import { MSG_SYNC, MSG_AWARENESS, DOC_FORMAT_VERSION, COMMIT_THROTTLE_MS } from 
 import type { DocRole, GitHubMeta } from "../app/shared/types";
 import { commitFile } from "../app/lib/github.server";
 import { quickHash } from "../app/shared/hash";
+import { withMistBanner } from "../app/shared/mist-banner";
 
 /**
  * Durable Objects SQLite accepts Uint8Array for BLOB columns via the
@@ -251,7 +252,8 @@ class DocumentAgent extends Agent {
 
     const github = JSON.parse(githubRaw) as GitHubMeta;
     try {
-      await commitFile(token, github, pending, `Update ${github.path} via mist`);
+      // The committed file carries the Obsidian banner; the live doc never does.
+      await commitFile(token, github, withMistBanner(pending), `Update ${github.path} via mist`);
       this.sql`
         INSERT INTO doc_state (key, value) VALUES ('lastCommitMd', ${textBlob(pending)})
         ON CONFLICT(key) DO UPDATE SET value = excluded.value
