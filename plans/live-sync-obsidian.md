@@ -26,6 +26,17 @@ The whole document is a single Yjs `Y.Text` holding markdown, with suggestions a
 
 This is the key simplification. Because CriticMarkup is plain text, one `Y.Text` carries prose, tracked changes, and comments together. Plain-text CRDT binding to a plain-text editor is exactly what makes the Obsidian bridge tractable, unlike mist's current ProseMirror-structure-with-marks CRDT.
 
+## Modes: per-user edit or suggest (Google Docs style)
+
+Each collaborator chooses their own mode, Edit or Suggest, exactly like Google Docs. The choice is per-user and local, not a document-wide setting. This is a deliberate correction to the current mist, which stores mode as a single shared value; per-user is the right model.
+
+- Edit mode: the user's keystrokes change the shared `Y.Text` directly.
+- Suggest mode: the user's keystrokes are wrapped inline as CriticMarkup before going into the shared `Y.Text`, so an insertion becomes `{++...++}` and a deletion becomes `{--...--}`. Everyone sees the suggestion live, because it is just text in the shared doc.
+
+The secret links still set the ceiling: an edit-link holder may switch between Edit and Suggest; a suggest-link holder is locked to Suggest (the work already done on link roles carries over). The document owner accepts or rejects a suggestion by resolving the CriticMarkup (keep the added text, drop the deleted text, remove the markers).
+
+Obsidian side: typing in Obsidian changes the file directly, so the desktop user is effectively in Edit mode. To suggest from Obsidian, type CriticMarkup directly, which Steve already does. A later plugin toggle could wrap typed text as CriticMarkup for a true Suggest mode in Obsidian, but it is not needed to start.
+
 ## What we reuse from mist versus rebuild
 
 Reuse:
@@ -64,7 +75,6 @@ The hard case is the file on disk changing outside the CRDT while disconnected (
 
 ## Open questions
 
-- Do collaborators need the full suggestion workflow on the web, or is live co-editing plus inline comments enough for most cases? That decides how much of mist's suggest UI to port.
 - One relay per file, or a folder/collection of rooms with navigation? The folder idea from the earlier plan still applies.
 - Authentication for the Obsidian plugin: reuse the secret key per document, or a single owner token in the plugin settings.
 - How much of the existing mist web editor to keep versus a leaner plain-text editor with CriticMarkup styling.
