@@ -3,9 +3,12 @@ import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { serializeThreads } from "~/lib/thread-serialization";
 import { useDocument } from "~/lib/DocumentContext";
 
+const ADMIN_KEY_STORAGE = "mist-admin-key";
+
 export default function ShareButton() {
-  const { docId, markdown, threads, role, docKey, suggestKey } = useDocument();
+  const { docId, markdown, threads, role, docKey, suggestKey, github } = useDocument();
   const [copied, setCopied] = useState<"edit" | "suggest" | null>(null);
+  const [committing, setCommitting] = useState(false);
 
   const handleCopy = useCallback(
     async (kind: "edit" | "suggest", key: string | null) => {
@@ -17,6 +20,34 @@ export default function ShareButton() {
     },
     [],
   );
+
+  const handleCommit = useCallback(async () => {
+    if (committing) return;
+    let adminKey = localStorage.getItem(ADMIN_KEY_STORAGE);
+    if (!adminKey) {
+      adminKey = window.prompt("Admin key to commit to GitHub:") ?? "";
+      if (!adminKey) return;
+      localStorage.setItem(ADMIN_KEY_STORAGE, adminKey);
+    }
+    setCommitting(true);
+    try {
+      const content = serializeThreads(markdown, threads);
+      const res = await fetch("/gh/commit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ docId, key: docKey, adminKey, content }),
+      });
+      const body = (await res.json()) as { ok?: boolean; error?: string };
+      if (res.ok && body.ok) {
+        window.alert("Committed to GitHub.");
+      } else {
+        if (res.status === 403) localStorage.removeItem(ADMIN_KEY_STORAGE);
+        window.alert(`Commit failed: ${body.error ?? res.status}`);
+      }
+    } finally {
+      setCommitting(false);
+    }
+  }, [committing, markdown, threads, docId, docKey]);
 
   const handleDownload = useCallback(() => {
     const content = serializeThreads(markdown, threads);
@@ -77,6 +108,17 @@ export default function ShareButton() {
           >
             Download
           </DropdownMenu.Item>
+          {role === "edit" && github && (
+            <DropdownMenu.Item
+              onSelect={(e) => {
+                e.preventDefault();
+                handleCommit();
+              }}
+              className="block w-full cursor-pointer px-3 py-1.5 text-left text-sm outline-none data-[highlighted]:bg-border"
+            >
+              {committing ? "Committing…" : "Commit to GitHub"}
+            </DropdownMenu.Item>
+          )}
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
     </DropdownMenu.Root>

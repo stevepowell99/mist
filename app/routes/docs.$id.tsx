@@ -2,7 +2,7 @@ import { data, Link } from "react-router";
 import type { Route } from "./+types/docs.$id";
 import { getAgentByName } from "agents";
 import { isValidDocumentId } from "~/shared/constants";
-import type { DocRole } from "~/shared/types";
+import type { DocRole, GitHubMeta } from "~/shared/types";
 import { getCloudflare } from "~/lib/cloudflare.server";
 import { useYjsEditor } from "~/lib/useYjsEditor";
 import { DocumentProvider, useDocument } from "~/lib/DocumentContext";
@@ -37,22 +37,23 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
   const res = await stub.fetch(
     new Request(`https://do/?k=${encodeURIComponent(docKey ?? "")}`),
   );
-  const { exists, createdAt, role, suggestKey } = (await res.json()) as {
+  const { exists, createdAt, role, suggestKey, github } = (await res.json()) as {
     exists: boolean;
     createdAt: number | null;
     role: DocRole | null;
     suggestKey?: string;
+    github: GitHubMeta | null;
   };
 
   if (!exists || !role) {
     throw data(null, { status: 404 });
   }
 
-  return { id, createdAt, role, suggestKey: suggestKey ?? null, docKey };
+  return { id, createdAt, role, suggestKey: suggestKey ?? null, docKey, github };
 }
 
 export default function DocumentPage({ loaderData }: Route.ComponentProps) {
-  const { id, createdAt, role, suggestKey, docKey } = loaderData;
+  const { id, createdAt, role, suggestKey, docKey, github } = loaderData;
   const yjs = useYjsEditor(id, docKey);
 
   return (
@@ -63,6 +64,7 @@ export default function DocumentPage({ loaderData }: Route.ComponentProps) {
       role={role}
       docKey={docKey}
       suggestKey={suggestKey}
+      github={github}
     >
       <DocumentLayout id={id} />
     </DocumentProvider>

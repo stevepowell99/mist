@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 import { useDocument } from "~/lib/DocumentContext";
+import { rewriteImageUrls } from "~/lib/github";
 
 /** Replace CriticMarkup delimiters with styled HTML spans before markdown rendering */
 function renderCriticMarkup(text: string): string {
@@ -13,13 +14,14 @@ function renderCriticMarkup(text: string): string {
 }
 
 export default function Preview() {
-  const { markdown } = useDocument();
+  const { markdown, github } = useDocument();
 
   const html = useMemo(() => {
-    const withCritic = renderCriticMarkup(markdown);
+    const resolved = github ? rewriteImageUrls(markdown, github) : markdown;
+    const withCritic = renderCriticMarkup(resolved);
     const raw = marked.parse(withCritic, { async: false }) as string;
     return DOMPurify.sanitize(raw);
-  }, [markdown]);
+  }, [markdown, github]);
 
   return (
     <div

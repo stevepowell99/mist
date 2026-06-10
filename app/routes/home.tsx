@@ -23,6 +23,9 @@ export default function Home({ loaderData }: Route.ComponentProps) {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [copied, setCopied] = useState(false);
+  const [ghUrl, setGhUrl] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState("");
 
   const curlCommand = `curl ${origin}/new -T file.md`;
 
@@ -84,6 +87,29 @@ export default function Home({ loaderData }: Route.ComponentProps) {
     e.preventDefault();
   }, []);
 
+  const handleImport = useCallback(async () => {
+    if (importing || !ghUrl.trim()) return;
+    setImporting(true);
+    setImportError("");
+    try {
+      const res = await fetch("/gh/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: ghUrl.trim() }),
+      });
+      const body = (await res.json()) as { url?: string; error?: string };
+      if (res.ok && body.url) {
+        navigate(body.url);
+      } else {
+        setImportError(body.error ?? "import failed");
+      }
+    } catch {
+      setImportError("import failed");
+    } finally {
+      setImporting(false);
+    }
+  }, [importing, ghUrl, navigate]);
+
   return (
     <>
       <div
@@ -119,6 +145,29 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           onChange={handleFileChange}
           className="hidden"
         />
+        <p className="mt-8 text-muted">Or import a markdown file from a public GitHub repo</p>
+        <div className="mt-2 flex w-full max-w-xl items-center gap-2">
+          <input
+            type="url"
+            value={ghUrl}
+            onChange={(e) => setGhUrl(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleImport();
+            }}
+            placeholder="https://github.com/owner/repo/blob/main/doc.md"
+            className="min-w-0 flex-1 border border-border bg-transparent px-3 py-2 text-sm outline-none focus:border-ink"
+            aria-label="GitHub file URL"
+          />
+          <button
+            onClick={handleImport}
+            disabled={importing || !ghUrl.trim()}
+            className="shrink-0 cursor-pointer whitespace-nowrap border border-border px-4 py-2 text-sm text-muted transition-colors hover:border-ink hover:text-ink disabled:cursor-default disabled:opacity-40"
+          >
+            {importing ? "Importing…" : "Import"}
+          </button>
+        </div>
+        {importError && <p className="mt-2 text-sm text-coral">{importError}</p>}
+
         <p className="mt-8 text-muted">Or from your terminal</p>
         <div className="mt-2 flex max-w-full items-center gap-1.5">
           <code className="flex min-w-0 items-center overflow-x-auto font-mono text-base">

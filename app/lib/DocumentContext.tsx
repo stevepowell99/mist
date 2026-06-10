@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useCallback, useMemo } from "react";
 import { getMarkRange, type Editor as TiptapEditor } from "@tiptap/core";
-import type { CapturedSelection, DocMode, DocRole } from "~/shared/types";
+import type { CapturedSelection, DocMode, DocRole, GitHubMeta } from "~/shared/types";
 import type { MatchedThread } from "~/lib/comment-threads";
 import type { useYjsEditor } from "~/lib/useYjsEditor";
 import { useThreads } from "~/lib/useThreads";
@@ -18,6 +18,9 @@ export interface DocumentContextValue {
   role: DocRole;
   docKey: string | null;
   suggestKey: string | null;
+
+  // GitHub source, if this doc was imported from a repo
+  github: GitHubMeta | null;
 
   // Mode
   mode: DocMode;
@@ -78,6 +81,7 @@ export function DocumentProvider({
   role = "edit",
   docKey = null,
   suggestKey = null,
+  github = null,
   children,
 }: {
   docId: string;
@@ -86,6 +90,7 @@ export function DocumentProvider({
   role?: DocRole;
   docKey?: string | null;
   suggestKey?: string | null;
+  github?: GitHubMeta | null;
   children: React.ReactNode;
 }) {
   const [markdown, setMarkdown] = useState("");
@@ -236,6 +241,7 @@ export function DocumentProvider({
     role,
     docKey,
     suggestKey,
+    github,
     // Suggest-role users are locked to suggest regardless of the shared mode
     mode: role === "suggest" ? "suggest" : yjs.mode,
     toggleMode,

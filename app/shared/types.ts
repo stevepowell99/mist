@@ -9,6 +9,14 @@ export type DocMode = "edit" | "suggest";
 /** Access level granted by the secret link used to open a document */
 export type DocRole = "edit" | "suggest";
 
+/** GitHub source a document was imported from, for image resolution and commit-back */
+export interface GitHubMeta {
+  owner: string;
+  repo: string;
+  branch: string;
+  path: string;
+}
+
 export interface ThreadReply {
   id: string;
   author: UserInfo;

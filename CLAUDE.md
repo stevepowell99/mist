@@ -16,9 +16,20 @@ This is Steve Powell's fork of [inanimate-tech/mist](https://github.com/inanimat
 1. DONE 10 June 2026: deployed to Cloudflare Workers free tier at [mist.broad-smoke-cc64.workers.dev](https://mist.broad-smoke-cc64.workers.dev) (account `hello@causalmap.app`, auth via `npx wrangler login`, no `CLOUDFLARE_ACCOUNT_ID` needed). Verified: POST `/new` creates a document and the editor renders it with a live WebSocket connection. Redeploy with `npm run deploy`.
 2. DONE 10 June 2026: removed the 99-hour expiry (alarm in `agents/document.ts`, TTL constants, header copy, demo and README copy, tests). Also centred the editor and preview columns and moved the Preview toggle to the top of the right sidebar.
 3. DONE 10 June 2026: secret capability links. Each document has an `editKey` and a `suggestKey` (stored in the Durable Object). The URL carries `?k=<key>`; the loader and the WebSocket upgrade both validate it, so a bare or wrong-key URL 404s. An edit-link holder can switch to Suggest mode; a suggest-link holder is locked to suggest and never sees the mode toggle or accept/reject actions. The Share menu offers both links to edit-role users. `POST /new` returns the edit link. Suggest enforcement is client-side (Yjs updates are opaque to the server); the server gates who can connect. Also done same day: markdown tables (aligned monospace in the editor source, real bordered table in Preview), default line length 30% wider (91ch), default body font 20% larger (1.38rem).
-4. GitHub integration: import a file (then a folder, with navigation and an image proxy) from a repo on Steve's account and commit the reviewed result back (fine-grained PAT, server-side only). See `plans/secret-links-and-github.md`.
+4. DONE 10 June 2026 (single file): import a markdown file from a PUBLIC GitHub repo by pasting its URL on the home page, and commit the reviewed result back. Decided to use public repos only: reads need no auth and images are served straight from `raw.githubusercontent.com` (no proxy). Preview rewrites relative image URLs (markdown `![]()` and HTML `<img src>`) to raw URLs. Commit-back is the only path needing a fine-grained PAT (`GITHUB_TOKEN`, Contents: write), gated by `ADMIN_KEY` so only the admin can write, not edit-link holders; the admin key is stored in the browser and sent with the commit request. Both secrets are set with `wrangler secret put`. Still TODO under this item: folder import with file navigation between docs.
 5. Bibliography: support a `My Library.bib` the way the Garden project does, starting simple by showing a reference list at the bottom of the rendered document.
 6. Before sharing links widely, review `npm audit` (31 inherited vulnerabilities, 2 critical, as of 10 June 2026) and consider offering changes upstream as PRs where general.
+
+### GitHub integration setup
+
+Commit-back needs two Worker secrets (reads and images need neither):
+
+```
+npx wrangler secret put GITHUB_TOKEN   # fine-grained PAT, Contents: write, scoped to the repos you commit to
+npx wrangler secret put ADMIN_KEY      # any strong string; entered once in the browser to authorise a commit
+```
+
+Import: paste a `github.com/<owner>/<repo>/blob/<branch>/<path>.md` URL on the home page (public repos only). Commit back: Share menu, "Commit to GitHub" (edit link only, on GitHub-backed docs).
 
 ### Local dev gotchas
 

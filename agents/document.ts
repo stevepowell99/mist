@@ -6,7 +6,7 @@ import * as awarenessProtocol from "y-protocols/awareness";
 import * as encoding from "lib0/encoding";
 import * as decoding from "lib0/decoding";
 import { MSG_SYNC, MSG_AWARENESS, DOC_FORMAT_VERSION } from "../app/shared/constants";
-import type { DocRole } from "../app/shared/types";
+import type { DocRole, GitHubMeta } from "../app/shared/types";
 
 /**
  * Durable Objects SQLite accepts Uint8Array for BLOB columns via the
@@ -242,7 +242,14 @@ class DocumentAgent extends Agent {
       const contentType = request.headers.get("Content-Type") || "";
       if (contentType.includes("application/json")) {
         try {
-          const body = await request.json() as { content?: string; threads?: unknown[]; onboarding?: boolean };
+          const body = await request.json() as { content?: string; threads?: unknown[]; onboarding?: boolean; github?: GitHubMeta };
+          if (body.github) {
+            const g = body.github;
+            this.sql`
+              INSERT INTO doc_state (key, value) VALUES ('github', ${textBlob(JSON.stringify({ owner: g.owner, repo: g.repo, branch: g.branch, path: g.path }))})
+              ON CONFLICT(key) DO UPDATE SET value = excluded.value
+            `;
+          }
           if (body.content) {
             // Parse CriticMarkup and apply as marks on XmlText
             const { parseCriticMarkupToContent } = await import("../app/lib/critic-parser");
@@ -313,6 +320,9 @@ class DocumentAgent extends Agent {
       const k = new URL(request.url).searchParams.get("k");
       const role = exists ? this.roleForKey(k) : null;
 
+      const githubRaw = role ? this.readStoredText("github") : null;
+      const github = githubRaw ? (JSON.parse(githubRaw) as GitHubMeta) : null;
+
       return new Response(
         JSON.stringify({
           exists,
@@ -320,6 +330,7 @@ class DocumentAgent extends Agent {
           role,
           // Edit-role callers get the suggest key so they can share suggest links
           suggestKey: role === "edit" ? this.readStoredText("suggestKey") : undefined,
+          github,
         }),
         { headers: { "Content-Type": "application/json" } },
       );

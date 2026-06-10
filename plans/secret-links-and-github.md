@@ -25,19 +25,19 @@ Open point: `POST /new` itself stays public at first (anyone could create docs o
 
 Migration: existing documents have no keys. On first GET after deploy, the agent generates keys for legacy docs; old bare URLs stop working (acceptable: only test docs exist).
 
-## Phase 2: GitHub single file
+## Phase 2: GitHub single file (DONE 10 June 2026)
 
-Goal: import one markdown file from a repo on Steve's account, review it in mist, commit the result back.
+Built and deployed, with one design change: PUBLIC repos only. That removed the read auth and the image proxy entirely.
 
-- Fine-grained PAT (contents read/write, selected repos only) stored with `wrangler secret put GITHUB_TOKEN`. Server-side only; it never reaches the client.
-- New route `POST /gh/import` (gated by an admin key, also a Worker secret): body `owner/repo/branch/path`. It fetches the file via the GitHub contents API, creates a document seeded with it, stores `{owner, repo, branch, path, sha}` in `doc_state`, and returns the edit link.
-- "Commit to GitHub" action (visible to edit-link holders on GitHub-backed docs): serialises the document with the existing CriticMarkup serialiser and PUTs it back with the stored `sha`. A `sha` mismatch (file changed upstream) returns a clear error instead of overwriting.
+- Import: paste a `github.com/.../blob/<branch>/<path>.md` URL on the home page. `POST /gh/import` parses it, fetches the raw file unauthenticated, creates a doc seeded with the content, and stores `{owner, repo, branch, path}` in the agent. No auth, no admin gate (it only reads public data and makes a doc behind a secret link).
+- Images: Preview rewrites relative image URLs (markdown `![]()` and HTML `<img src>`) to `raw.githubusercontent.com`. The browser loads them directly, so no proxy and no token. Absolute and root-relative URLs are left alone. Verified live with a repo whose README embeds a relative logo.
+- Commit-back: `POST /gh/commit`, the only path needing the PAT (`GITHUB_TOKEN`, Contents: write). Gated by `ADMIN_KEY` so only the admin can write, not every edit-link holder. The Share menu "Commit to GitHub" item (edit role, GitHub-backed docs) sends the serialised document (CriticMarkup + comment threads, same as Download) and the admin key; the server fetches the current sha and PUTs. A sha mismatch returns a clear error.
 
-## Phase 3: folder of files, navigation, images
+## Phase 3: folder of files and navigation (TODO)
 
 - Import a folder: list `*.md` in the GitHub directory and create one document per file under a shared collection id; one pair of secret links covers the whole collection.
 - A file-list sidebar (or header dropdown) navigates between the collection's documents; relative `[links](other-file.md)` rewrite to the sibling document URL with the same key.
-- Images: a proxy route `/gh-assets/:collection/*` fetches images from the repo via the PAT and serves them with caching headers. Relative image paths in markdown resolve against the proxy, so private-repo images display in Preview. (The TipTap editor itself still shows raw `![]()` syntax; images render in Preview, which is fine for review.)
+- Images already work via the raw-URL rewrite, so no proxy is needed for the folder case either.
 
 ## Order and why
 

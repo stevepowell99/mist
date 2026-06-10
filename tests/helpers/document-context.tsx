@@ -53,6 +53,7 @@ export function createMockDocumentContext(
     role: "edit",
     docKey: "test-edit-key",
     suggestKey: "test-suggest-key",
+    github: null,
     mode: "edit",
     toggleMode: vi.fn(),
     showPreview: false,
