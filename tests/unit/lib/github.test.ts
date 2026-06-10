@@ -6,6 +6,7 @@ import {
   rawAssetUrl,
   rewriteImageUrls,
   resolveImageSrc,
+  resolveObsidianEmbed,
 } from "~/lib/github";
 
 describe("parseGitHubFileUrl", () => {
@@ -119,5 +120,47 @@ describe("resolveImageSrc", () => {
 
   it("returns null for an anchor", () => {
     expect(resolveImageSrc("#frag", gh)).toBeNull();
+  });
+
+  it("returns null for non-renderable schemes like file://", () => {
+    expect(resolveImageSrc("file:///C:/Temp/clip.png", gh)).toBeNull();
+  });
+});
+
+describe("resolveObsidianEmbed", () => {
+  const gh = { owner: "me", repo: "r", branch: "main", path: "docs/report.md" };
+
+  it("resolves a root-relative image embed", () => {
+    expect(resolveObsidianEmbed("001 Working Papers/img/map.jpg", gh)).toBe(
+      "https://raw.githubusercontent.com/me/r/main/001%20Working%20Papers/img/map.jpg",
+    );
+  });
+
+  it("strips a |size suffix", () => {
+    expect(resolveObsidianEmbed("img/a.png|300", gh)).toBe(
+      "https://raw.githubusercontent.com/me/r/main/img/a.png",
+    );
+  });
+
+  it("returns null for a non-image embed (note transclusion)", () => {
+    expect(resolveObsidianEmbed("1150 Names of tables and fields", gh)).toBeNull();
+  });
+
+  it("returns null with no github metadata", () => {
+    expect(resolveObsidianEmbed("img/a.png", null)).toBeNull();
+  });
+});
+
+describe("rewriteImageUrls with Obsidian embeds", () => {
+  const gh = { owner: "me", repo: "r", branch: "main", path: "docs/report.md" };
+
+  it("converts an image embed to an img tag with a raw URL", () => {
+    const out = rewriteImageUrls("![[img/a.png]]", gh);
+    expect(out).toBe('<img src="https://raw.githubusercontent.com/me/r/main/img/a.png" alt="">');
+  });
+
+  it("leaves a note transclusion embed untouched", () => {
+    const md = "![[Some note]]";
+    expect(rewriteImageUrls(md, gh)).toBe(md);
   });
 });

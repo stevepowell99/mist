@@ -11,7 +11,7 @@ import CollaborationCaret from "@tiptap/extension-collaboration-caret";
 import { CriticAddition, CriticDeletion, CriticComment, CriticHighlight, CriticDelimiters } from "~/lib/critic-marks";
 import { markdownDecorations, cleanViewKey, type ImageResolver } from "~/lib/markdown-decorations";
 import { suggestModePlugin, type ModeSource } from "~/lib/suggest-mode";
-import { resolveImageSrc } from "~/lib/github";
+import { resolveImageSrc, resolveObsidianEmbed } from "~/lib/github";
 import BubbleToolbar from "~/components/BubbleToolbar";
 import type { useYjsEditor } from "~/lib/useYjsEditor";
 import type { GitHubMeta } from "~/shared/types";
@@ -228,7 +228,10 @@ export default function Editor({
     [forceSuggest, docState],
   );
   const imageResolver: ImageResolver = useMemo(
-    () => (url: string) => resolveImageSrc(url, github ?? null),
+    () => (target: string, kind: "relative" | "root") =>
+      kind === "root"
+        ? resolveObsidianEmbed(target, github ?? null)
+        : resolveImageSrc(target, github ?? null),
     [github],
   );
   const prevHighlightRef = useRef<{ from: number; to: number } | null>(null);

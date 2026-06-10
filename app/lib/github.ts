@@ -63,13 +63,28 @@ export function rawAssetUrl(
   return `${RAW}/${f.owner}/${f.repo}/${f.branch}/${encoded}`;
 }
 
-// Markdown image: ![alt](url). HTML image: <img ... src="url">
+// Markdown image: ![alt](url). HTML image: <img ... src="url">.
+// Obsidian embed: ![[path|size]] (path is relative to the vault/repo root).
 const MD_IMAGE_RE = /(!\[[^\]]*\]\()([^)\s]+)(\)|\s)/g;
 const HTML_IMAGE_RE = /(<img\b[^>]*?\bsrc=["'])([^"']+)(["'])/gi;
+const OBSIDIAN_EMBED_RE = /!\[\[([^\]]+)\]\]/g;
+const IMG_EXT_RE = /\.(png|jpe?g|gif|webp|svg|avif|bmp|tiff|ico)$/i;
 
 /** Is this an absolute URL or root-relative path we should leave alone? */
 function isAbsolute(url: string): boolean {
   return /^[a-z]+:\/\//i.test(url) || url.startsWith("/") || url.startsWith("data:") || url.startsWith("#");
+}
+
+/**
+ * Resolve an Obsidian image embed target (![[path]]) to a raw URL. The path is
+ * relative to the vault/repo ROOT (not the document), and may carry a |size or
+ * #heading suffix. Returns null for non-image embeds (e.g. note transclusions).
+ */
+export function resolveObsidianEmbed(inner: string, github: GitHubMeta | null): string | null {
+  if (!github) return null;
+  const path = inner.split("|")[0].split("#")[0].trim().replace(/^\//, "");
+  if (!IMG_EXT_RE.test(path)) return null;
+  return rawAssetUrl(github, path);
 }
 
 /**
@@ -79,6 +94,8 @@ function isAbsolute(url: string): boolean {
  */
 export function resolveImageSrc(url: string, github: GitHubMeta | null): string | null {
   if (/^https?:\/\//i.test(url) || url.startsWith("data:")) return url;
+  // Other schemes (e.g. file:///… clipboard leftovers) are not renderable
+  if (/^[a-z][a-z0-9+.-]*:/i.test(url)) return null;
   if (url.startsWith("#")) return null;
   if (!github) return null;
   const path = url.startsWith("/") ? url.slice(1) : resolveAssetPath(github.path, url);
@@ -96,5 +113,11 @@ export function rewriteImageUrls(markdown: string, github: GitHubMeta): string {
     const resolved = resolveAssetPath(github.path, url);
     return `${prefix}${rawAssetUrl(github, resolved)}${suffix}`;
   };
-  return markdown.replace(MD_IMAGE_RE, rewrite).replace(HTML_IMAGE_RE, rewrite);
+  return markdown
+    .replace(MD_IMAGE_RE, rewrite)
+    .replace(HTML_IMAGE_RE, rewrite)
+    .replace(OBSIDIAN_EMBED_RE, (whole, inner: string) => {
+      const url = resolveObsidianEmbed(inner, github);
+      return url ? `<img src="${url}" alt="">` : whole;
+    });
 }

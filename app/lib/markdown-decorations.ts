@@ -369,12 +369,18 @@ export const cleanViewKey = new PluginKey<boolean>("cleanView");
 
 const markdownPluginKey = new PluginKey("markdownDecorations");
 
-// Image syntax in editor text: markdown ![alt](url) and HTML <img src="url">
+// Image syntax in editor text: markdown ![alt](url), HTML <img src="url">,
+// and Obsidian embed ![[path]] (path is relative to the repo root).
 const INLINE_IMAGE_RE = /!\[([^\]]*)\]\(([^)\s]+)\)/g;
 const INLINE_HTML_IMAGE_RE = /<img\b[^>]*?\bsrc=["']([^"']+)["'][^>]*>/gi;
+const INLINE_OBSIDIAN_RE = /!\[\[([^\]]+)\]\]/g;
 
-/** Resolve an image URL for inline display, or null to skip rendering. */
-export type ImageResolver = (url: string) => string | null;
+/**
+ * Resolve an image reference for inline display, or null to skip rendering.
+ * `kind` distinguishes a doc-relative URL (markdown/HTML) from a repo-root
+ * Obsidian embed target.
+ */
+export type ImageResolver = (target: string, kind: "relative" | "root") => string | null;
 
 export function markdownDecorations(resolveImageSrc: ImageResolver | null = null): Plugin[] {
   const cleanViewPlugin = new Plugin<boolean>({
@@ -444,19 +450,20 @@ export function markdownDecorations(resolveImageSrc: ImageResolver | null = null
           // Handles both markdown ![alt](url) and HTML <img src="url">.
           if (resolveImageSrc) {
             const text = node.text;
-            const found: Array<{ raw: string; alt: string; end: number }> = [];
-            for (const [re, urlGroup, altGroup] of [
-              [INLINE_IMAGE_RE, 2, 1],
-              [INLINE_HTML_IMAGE_RE, 1, 0],
+            const found: Array<{ raw: string; alt: string; end: number; kind: "relative" | "root" }> = [];
+            for (const [re, urlGroup, altGroup, kind] of [
+              [INLINE_IMAGE_RE, 2, 1, "relative"],
+              [INLINE_HTML_IMAGE_RE, 1, 0, "relative"],
+              [INLINE_OBSIDIAN_RE, 1, 0, "root"],
             ] as const) {
               re.lastIndex = 0;
               let m: RegExpExecArray | null;
               while ((m = re.exec(text)) !== null) {
-                found.push({ raw: m[urlGroup], alt: altGroup ? m[altGroup] : "", end: pos + m.index + m[0].length });
+                found.push({ raw: m[urlGroup], alt: altGroup ? m[altGroup] : "", end: pos + m.index + m[0].length, kind });
               }
             }
-            for (const { raw, alt, end } of found) {
-              const src = resolveImageSrc(raw);
+            for (const { raw, alt, end, kind } of found) {
+              const src = resolveImageSrc(raw, kind);
               if (!src) continue;
               decorations.push(
                 Decoration.widget(
