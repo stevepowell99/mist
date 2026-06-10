@@ -110,6 +110,15 @@ body {
   overflow-x: auto;
 }
 
+/* Inline image preview rendered under its markdown source while editing */
+.tiptap img.md-inline-image {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0.5em 0 1em;
+  border: 1px solid var(--color-border);
+}
+
 /* Syntax highlighting tokens (sugar-high) */
 .sh-keyword { color: #8b5cf6; }
 .sh-string { color: #16a34a; }

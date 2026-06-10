@@ -369,7 +369,14 @@ export const cleanViewKey = new PluginKey<boolean>("cleanView");
 
 const markdownPluginKey = new PluginKey("markdownDecorations");
 
-export function markdownDecorations(): Plugin[] {
+// Image syntax in editor text: markdown ![alt](url) and HTML <img src="url">
+const INLINE_IMAGE_RE = /!\[([^\]]*)\]\(([^)\s]+)\)/g;
+const INLINE_HTML_IMAGE_RE = /<img\b[^>]*?\bsrc=["']([^"']+)["'][^>]*>/gi;
+
+/** Resolve an image URL for inline display, or null to skip rendering. */
+export type ImageResolver = (url: string) => string | null;
+
+export function markdownDecorations(resolveImageSrc: ImageResolver | null = null): Plugin[] {
   const cleanViewPlugin = new Plugin<boolean>({
     key: cleanViewKey,
     state: {
@@ -430,6 +437,41 @@ export function markdownDecorations(): Plugin[] {
           if (posInsideCodeBlock(pos, node.nodeSize, codeBlockRanges)) return;
           for (const pattern of MARKDOWN_PATTERNS) {
             decorations.push(...findDecorations(node.text, pos, pattern));
+          }
+
+          // Inline image preview: render the picture below its source line so
+          // it can be seen (and its source text commented on) while editing.
+          // Handles both markdown ![alt](url) and HTML <img src="url">.
+          if (resolveImageSrc) {
+            const text = node.text;
+            const found: Array<{ raw: string; alt: string; end: number }> = [];
+            for (const [re, urlGroup, altGroup] of [
+              [INLINE_IMAGE_RE, 2, 1],
+              [INLINE_HTML_IMAGE_RE, 1, 0],
+            ] as const) {
+              re.lastIndex = 0;
+              let m: RegExpExecArray | null;
+              while ((m = re.exec(text)) !== null) {
+                found.push({ raw: m[urlGroup], alt: altGroup ? m[altGroup] : "", end: pos + m.index + m[0].length });
+              }
+            }
+            for (const { raw, alt, end } of found) {
+              const src = resolveImageSrc(raw);
+              if (!src) continue;
+              decorations.push(
+                Decoration.widget(
+                  end,
+                  () => {
+                    const img = document.createElement("img");
+                    img.src = src;
+                    img.alt = alt;
+                    img.className = "md-inline-image";
+                    return img;
+                  },
+                  { side: 1, key: `img:${end}:${src}` },
+                ),
+              );
+            }
           }
         });
 

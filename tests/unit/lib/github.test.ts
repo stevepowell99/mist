@@ -5,6 +5,7 @@ import {
   resolveAssetPath,
   rawAssetUrl,
   rewriteImageUrls,
+  resolveImageSrc,
 } from "~/lib/github";
 
 describe("parseGitHubFileUrl", () => {
@@ -92,5 +93,31 @@ describe("rewriteImageUrls", () => {
   it("leaves absolute HTML img src untouched", () => {
     const md = '<img src="https://cdn.example.com/a.png">';
     expect(rewriteImageUrls(md, gh)).toBe(md);
+  });
+});
+
+describe("resolveImageSrc", () => {
+  const gh = { owner: "me", repo: "r", branch: "main", path: "docs/report.md" };
+
+  it("passes through absolute http URLs", () => {
+    expect(resolveImageSrc("https://x.com/a.png", gh)).toBe("https://x.com/a.png");
+  });
+
+  it("passes through data URLs", () => {
+    expect(resolveImageSrc("data:image/png;base64,AAAA", gh)).toBe("data:image/png;base64,AAAA");
+  });
+
+  it("resolves a relative path against the doc directory", () => {
+    expect(resolveImageSrc(".assets/x.png", gh)).toBe(
+      "https://raw.githubusercontent.com/me/r/main/docs/.assets/x.png",
+    );
+  });
+
+  it("returns null for a relative path with no github metadata", () => {
+    expect(resolveImageSrc("images/a.png", null)).toBeNull();
+  });
+
+  it("returns null for an anchor", () => {
+    expect(resolveImageSrc("#frag", gh)).toBeNull();
   });
 });

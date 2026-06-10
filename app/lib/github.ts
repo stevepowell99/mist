@@ -73,6 +73,19 @@ function isAbsolute(url: string): boolean {
 }
 
 /**
+ * Resolve a single markdown/HTML image URL to something a browser can load,
+ * for inline rendering in the editor. Absolute http(s)/data URLs pass through;
+ * relative URLs need GitHub metadata; anything else returns null (don't render).
+ */
+export function resolveImageSrc(url: string, github: GitHubMeta | null): string | null {
+  if (/^https?:\/\//i.test(url) || url.startsWith("data:")) return url;
+  if (url.startsWith("#")) return null;
+  if (!github) return null;
+  const path = url.startsWith("/") ? url.slice(1) : resolveAssetPath(github.path, url);
+  return rawAssetUrl(github, path);
+}
+
+/**
  * Rewrite relative image URLs (markdown and HTML syntax) to public
  * raw.githubusercontent.com URLs so images in a GitHub-imported doc render
  * in Preview.

@@ -13,7 +13,8 @@ export function useYjsEditor(docId: string, docKey: string | null = null) {
   const docState = useMemo(() => doc.getMap<string>("docState"), [doc]);
   const providerRef = useRef<YjsProvider | null>(null);
   const [synced, setSynced] = useState(false);
-  const [mode, setModeState] = useState<DocMode>("edit");
+  // Suggest is the default; edit-link users can switch to Edit deliberately
+  const [mode, setModeState] = useState<DocMode>("suggest");
   const [isOnboarding, setIsOnboarding] = useState(false);
 
   const socket = useAgent({

@@ -9,15 +9,20 @@ import Text from "@tiptap/extension-text";
 import Collaboration from "@tiptap/extension-collaboration";
 import CollaborationCaret from "@tiptap/extension-collaboration-caret";
 import { CriticAddition, CriticDeletion, CriticComment, CriticHighlight, CriticDelimiters } from "~/lib/critic-marks";
-import { markdownDecorations, cleanViewKey } from "~/lib/markdown-decorations";
+import { markdownDecorations, cleanViewKey, type ImageResolver } from "~/lib/markdown-decorations";
 import { suggestModePlugin, type ModeSource } from "~/lib/suggest-mode";
+import { resolveImageSrc } from "~/lib/github";
 import BubbleToolbar from "~/components/BubbleToolbar";
 import type { useYjsEditor } from "~/lib/useYjsEditor";
+import type { GitHubMeta } from "~/shared/types";
 
-const MarkdownDecorations = Extension.create({
+const MarkdownDecorations = Extension.create<{ resolveImageSrc: ImageResolver | null }>({
   name: "markdownDecorations",
+  addOptions() {
+    return { resolveImageSrc: null };
+  },
   addProseMirrorPlugins() {
-    return markdownDecorations();
+    return markdownDecorations(this.options.resolveImageSrc);
   },
 });
 
@@ -189,6 +194,7 @@ function renderCaret(user: Record<string, unknown>) {
 export default function Editor({
   yjs,
   forceSuggest,
+  github,
   hidden,
   onEditorReady,
   onCommentClick,
@@ -201,6 +207,7 @@ export default function Editor({
 }: {
   yjs: YjsEditorState;
   forceSuggest?: boolean;
+  github?: GitHubMeta | null;
   hidden?: boolean;
   onEditorReady?: (editor: TiptapEditor) => void;
   onCommentClick?: (commentText: string) => void;
@@ -219,6 +226,10 @@ export default function Editor({
         ? { get: (key: string) => (key === "mode" ? "suggest" : docState.get(key)) }
         : docState,
     [forceSuggest, docState],
+  );
+  const imageResolver: ImageResolver = useMemo(
+    () => (url: string) => resolveImageSrc(url, github ?? null),
+    [github],
   );
   const prevHighlightRef = useRef<{ from: number; to: number } | null>(null);
   const prevActiveRangeRef = useRef<{ from: number; to: number } | null>(null);
@@ -242,7 +253,7 @@ export default function Editor({
           user,
           render: renderCaret,
         }),
-        MarkdownDecorations,
+        MarkdownDecorations.configure({ resolveImageSrc: imageResolver }),
         SuggestMode.configure({ docState: modeSource }),
         CommentClickHandler.configure({ onCommentClick }),
         CommentHighlight,

@@ -85,6 +85,7 @@ function DocumentLayout({ id }: { id: string }) {
     handleDeleteAtCursor,
     mode,
     role,
+    github,
   } = useDocument();
 
   return (
@@ -117,6 +118,7 @@ function DocumentLayout({ id }: { id: string }) {
           <Editor
             yjs={yjs}
             forceSuggest={role === "suggest"}
+            github={github}
             hidden={showPreview}
             onEditorReady={handleEditorReady}
             onCommentClick={handleCommentClick}
