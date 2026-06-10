@@ -4,9 +4,8 @@ import { serializeThreads } from "~/lib/thread-serialization";
 import { useDocument } from "~/lib/DocumentContext";
 
 export default function ShareButton() {
-  const { docId, markdown, threads, role, docKey, suggestKey, github, commitToGitHub } = useDocument();
+  const { docId, markdown, threads, role, docKey, suggestKey } = useDocument();
   const [copied, setCopied] = useState<"edit" | "suggest" | null>(null);
-  const [saved, setSaved] = useState(false);
 
   const handleCopy = useCallback(
     async (kind: "edit" | "suggest", key: string | null) => {
@@ -18,12 +17,6 @@ export default function ShareButton() {
     },
     [],
   );
-
-  const handleCommit = useCallback(() => {
-    commitToGitHub();
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-  }, [commitToGitHub]);
 
   const handleDownload = useCallback(() => {
     const content = serializeThreads(markdown, threads);
@@ -84,17 +77,6 @@ export default function ShareButton() {
           >
             Download
           </DropdownMenu.Item>
-          {role === "edit" && github && (
-            <DropdownMenu.Item
-              onSelect={(e) => {
-                e.preventDefault();
-                handleCommit();
-              }}
-              className="block w-full cursor-pointer px-3 py-1.5 text-left text-sm outline-none data-[highlighted]:bg-border"
-            >
-              {saved ? "✓ Saved" : "Save to GitHub now"}
-            </DropdownMenu.Item>
-          )}
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
     </DropdownMenu.Root>

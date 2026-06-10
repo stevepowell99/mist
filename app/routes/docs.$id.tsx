@@ -11,6 +11,7 @@ import Preview from "~/components/Preview";
 import PreviewToggle from "~/components/PreviewToggle";
 import ConnectionStatus from "~/components/ConnectionStatus";
 import UserName from "~/components/UserName";
+import SaveStatus from "~/components/SaveStatus";
 import ShareButton from "~/components/ShareButton";
 import ModeToggle from "~/components/ModeToggle";
 import CleanViewToggle from "~/components/CleanViewToggle";
@@ -106,6 +107,9 @@ function DocumentLayout({ id }: { id: string }) {
         </div>
         <div className="flex shrink-0 items-center border-l border-border">
           <UserName />
+        </div>
+        <div className="flex shrink-0 items-stretch border-l border-border">
+          <SaveStatus />
         </div>
         <div className="shrink-0 border-l border-border">
           <ShareButton />

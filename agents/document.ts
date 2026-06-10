@@ -8,6 +8,7 @@ import * as decoding from "lib0/decoding";
 import { MSG_SYNC, MSG_AWARENESS, DOC_FORMAT_VERSION } from "../app/shared/constants";
 import type { DocRole, GitHubMeta } from "../app/shared/types";
 import { commitFile } from "../app/lib/github.server";
+import { quickHash } from "../app/shared/hash";
 
 /** Throttle for auto-committing a GitHub-backed document back to the repo */
 const COMMIT_THROTTLE_MS = 90_000;
@@ -258,6 +259,16 @@ class DocumentAgent extends Agent {
         INSERT INTO doc_state (key, value) VALUES ('lastCommitMd', ${textBlob(pending)})
         ON CONFLICT(key) DO UPDATE SET value = excluded.value
       `;
+      // Tell connected clients which content is now saved, so they can show a
+      // clean state and clear the unsaved warning.
+      const ack = JSON.stringify({ type: "committed", hash: quickHash(pending) });
+      for (const conn of this.getConnections()) {
+        try {
+          conn.send(ack);
+        } catch {
+          // connection gone; ignore
+        }
+      }
     } catch {
       // Leave pending in place; the next edit or alarm retries.
     }

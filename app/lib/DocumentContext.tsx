@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useMemo, useEffect } from "react";
+import { createContext, useContext, useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { getMarkRange, type Editor as TiptapEditor } from "@tiptap/core";
 import type { CapturedSelection, DocMode, DocRole, GitHubMeta } from "~/shared/types";
 import type { MatchedThread } from "~/lib/comment-threads";
@@ -7,6 +7,7 @@ import { useThreads } from "~/lib/useThreads";
 import { findCommentTextAtCursor } from "~/lib/comment-threads";
 import { serializeWithCriticMarkup } from "~/lib/critic-serializer";
 import { serializeThreads } from "~/lib/thread-serialization";
+import { quickHash } from "~/shared/hash";
 
 export interface DocumentContextValue {
   docId: string;
@@ -24,6 +25,8 @@ export interface DocumentContextValue {
   github: GitHubMeta | null;
   /** Force an immediate commit of a GitHub-backed doc back to the repo */
   commitToGitHub: () => void;
+  /** True when the document has edits not yet committed to GitHub */
+  unsaved: boolean;
 
   // Mode
   mode: DocMode;
@@ -150,6 +153,42 @@ export function DocumentProvider({
 
   const commitToGitHub = useCallback(() => sendDoc(true), [sendDoc]);
 
+  // Track whether the shown document matches what was last committed to GitHub.
+  const [lastCommittedHash, setLastCommittedHash] = useState<string | null>(null);
+  const baselineSetRef = useRef(false);
+  const currentHash = useMemo(
+    () => (github ? quickHash(serializeThreads(markdown, threads)) : null),
+    [github, markdown, threads],
+  );
+
+  // The freshly imported content came from GitHub, so treat it as already saved.
+  useEffect(() => {
+    if (!github || baselineSetRef.current || !markdown) return;
+    baselineSetRef.current = true;
+    setLastCommittedHash(currentHash); // eslint-disable-line react-hooks/set-state-in-effect
+  }, [github, markdown, currentHash]);
+
+  // Clear the unsaved state when the agent confirms a commit.
+  useEffect(() => {
+    const socket = yjs.socket as unknown as WebSocket | null;
+    if (!socket) return;
+    const onMsg = (e: MessageEvent) => {
+      if (typeof e.data !== "string") return;
+      try {
+        const m = JSON.parse(e.data) as { type?: string; hash?: string };
+        if (m.type === "committed" && typeof m.hash === "string") {
+          setLastCommittedHash(m.hash);
+        }
+      } catch {
+        // not a JSON control message
+      }
+    };
+    socket.addEventListener("message", onMsg);
+    return () => socket.removeEventListener("message", onMsg);
+  }, [yjs.socket]);
+
+  const unsaved = !!github && !!currentHash && currentHash !== lastCommittedHash;
+
   const togglePreview = useCallback(() => {
     setPreviewToggled((v) => !v);
   }, []);
@@ -273,6 +312,7 @@ export function DocumentProvider({
     suggestKey,
     github,
     commitToGitHub,
+    unsaved,
     // Suggest-role users are locked to suggest regardless of the shared mode
     mode: role === "suggest" ? "suggest" : yjs.mode,
     toggleMode,
