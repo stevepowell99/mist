@@ -3,6 +3,7 @@ import { marked } from "marked";
 import DOMPurify from "dompurify";
 import { useDocument } from "~/lib/DocumentContext";
 import { rewriteImageUrls } from "~/lib/github";
+import { renderWikiLinks } from "~/lib/wikilinks";
 
 /** Replace CriticMarkup delimiters with styled HTML spans before markdown rendering */
 function renderCriticMarkup(text: string): string {
@@ -18,7 +19,8 @@ export default function Preview() {
 
   const html = useMemo(() => {
     const resolved = github ? rewriteImageUrls(markdown, github) : markdown;
-    const withCritic = renderCriticMarkup(resolved);
+    const withLinks = renderWikiLinks(resolved);
+    const withCritic = renderCriticMarkup(withLinks);
     const raw = marked.parse(withCritic, { async: false }) as string;
     return DOMPurify.sanitize(raw);
   }, [markdown, github]);

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useEffect, useCallback } from "react";
 import { useDocument } from "~/lib/DocumentContext";
 
 function Spinner() {
@@ -27,12 +27,10 @@ function Spinner() {
 }
 
 export default function PreviewToggle() {
-  const { showPreview: active, togglePreview: onToggle, setPreviewHeld: onHold, yjs } = useDocument();
+  const { showPreview, togglePreview, setPreviewHeld: onHold, yjs } = useDocument();
   const synced = yjs.synced;
-  const [hovering, setHovering] = useState(false);
-  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // P key hold: show preview while held (only when editor not focused)
+  // P key hold: peek at preview while held (only when editor not focused)
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (e.key !== "p" && e.key !== "P") return;
@@ -61,38 +59,39 @@ export default function PreviewToggle() {
     };
   }, [handleKeyDown, handleKeyUp]);
 
-  // Hover: show preview after 500ms
-  function handleMouseEnter() {
-    hoverTimer.current = setTimeout(() => {
-      setHovering(true);
-      onHold(true);
-    }, 500);
-  }
+  const setView = useCallback(
+    (preview: boolean) => {
+      if (preview !== showPreview) togglePreview();
+    },
+    [showPreview, togglePreview],
+  );
 
-  function handleMouseLeave() {
-    if (hoverTimer.current) {
-      clearTimeout(hoverTimer.current);
-      hoverTimer.current = null;
-    }
-    if (hovering) {
-      setHovering(false);
-      onHold(false);
-    }
-  }
+  const base =
+    "flex flex-1 cursor-pointer items-center justify-center gap-1.5 transition-colors";
+  const activeCls = "bg-ink text-paper";
+  const inactiveCls = "text-muted hover:bg-border";
 
   return (
-    <button
-      onClick={onToggle}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-      className={`flex h-12 w-full cursor-pointer items-center justify-center text-sm uppercase tracking-wider transition-colors ${
-        active
-          ? "bg-ink text-paper"
-          : "text-muted hover:bg-border"
-      }`}
-    >
-      {!synced && !active && <Spinner />}
-      Preview
-    </button>
+    <div className="flex h-12 w-full text-sm uppercase tracking-wider" role="tablist" aria-label="Editor or preview">
+      <button
+        type="button"
+        role="tab"
+        aria-selected={!showPreview}
+        onClick={() => setView(false)}
+        className={`${base} ${!showPreview ? activeCls : inactiveCls}`}
+      >
+        Editor
+      </button>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={showPreview}
+        onClick={() => setView(true)}
+        className={`${base} ${showPreview ? activeCls : inactiveCls}`}
+      >
+        {!synced && <Spinner />}
+        Preview
+      </button>
+    </div>
   );
 }

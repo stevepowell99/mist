@@ -362,6 +362,13 @@ body {
   text-decoration: underline;
 }
 
+/* Obsidian internal links, rendered as readable text (not yet clickable) */
+.preview .md-wikilink {
+  color: #2563eb;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+}
+
 /* CriticMarkup in rendered preview (same colors as editor marks) */
 .preview .cm-addition {
   color: #22c55e;
@@ -379,6 +386,21 @@ body {
   text-decoration-thickness: 4.5px;
   text-underline-offset: 2px;
   text-decoration-skip-ink: none;
+}
+
+/* Unsaved (pending commit) indicator: a thin bar sliding across to show a
+   save is coming on the throttle. */
+@keyframes save-pending-slide {
+  0% { left: -40%; }
+  100% { left: 100%; }
+}
+.save-pending-bar {
+  position: absolute;
+  bottom: 0;
+  height: 2px;
+  width: 40%;
+  background-color: var(--color-coral);
+  animation: save-pending-slide 1.6s linear infinite;
 }
 
 /* Dark theme — explicit dark mode */
