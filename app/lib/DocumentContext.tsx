@@ -8,6 +8,8 @@ import { findCommentTextAtCursor } from "~/lib/comment-threads";
 import { serializeWithCriticMarkup } from "~/lib/critic-serializer";
 import { serializeThreads } from "~/lib/thread-serialization";
 import { quickHash } from "~/shared/hash";
+import { rawAssetUrl } from "~/lib/github";
+import { parseBib, type BibLibrary } from "~/lib/citations";
 
 export interface DocumentContextValue {
   docId: string;
@@ -27,6 +29,8 @@ export interface DocumentContextValue {
   commitToGitHub: () => void;
   /** True when the document has edits not yet committed to GitHub */
   unsaved: boolean;
+  /** Parsed BibTeX library for citation rendering, if found in the repo */
+  bibLib: BibLibrary | null;
 
   // Mode
   mode: DocMode;
@@ -189,6 +193,40 @@ export function DocumentProvider({
 
   const unsaved = !!github && !!currentHash && currentHash !== lastCommittedHash;
 
+  // Lazily fetch and parse the repo's BibTeX library the first time Preview opens.
+  const [bibLib, setBibLib] = useState<BibLibrary | null>(null);
+  const bibFetchedRef = useRef(false);
+  useEffect(() => {
+    if (!github || !showPreview || bibFetchedRef.current) return;
+    bibFetchedRef.current = true;
+    let cancelled = false;
+    (async () => {
+      const candidates = [
+        "assets/MyLibrary.bib",
+        "assets/My Library.bib",
+        "My Library.bib",
+        "MyLibrary.bib",
+        "references.bib",
+        "bibliography.bib",
+      ];
+      for (const path of candidates) {
+        try {
+          const res = await fetch(rawAssetUrl(github, path));
+          if (res.ok) {
+            const text = await res.text();
+            if (!cancelled) setBibLib(parseBib(text));
+            return;
+          }
+        } catch {
+          // try the next candidate path
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [github, showPreview]);
+
   const togglePreview = useCallback(() => {
     setPreviewToggled((v) => !v);
   }, []);
@@ -313,6 +351,7 @@ export function DocumentProvider({
     github,
     commitToGitHub,
     unsaved,
+    bibLib,
     // Suggest-role users are locked to suggest regardless of the shared mode
     mode: role === "suggest" ? "suggest" : yjs.mode,
     toggleMode,

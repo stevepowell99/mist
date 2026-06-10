@@ -16,14 +16,20 @@ Approach:
   2. The published page, e.g. `garden.causalmap.app/<slug>`. Cleanest for readers, but the slug scheme is garden-specific, so it must be configurable per import (a base URL plus a slug rule), not hard-coded.
   3. The GitHub file (`github.com/<owner>/<repo>/blob/<branch>/<path>`). Generic, needs no config, always available for a public repo. Good default.
 
+Decision (10 June 2026): link to the **garden site** (the published page), not the GitHub file. So the next step is to learn the garden's slug scheme from `build_static_site.py` (how a note title maps to a `garden.causalmap.app/...` URL), build the repo index, and resolve `[[Note]]` to that public URL. A configurable base URL keeps it general for other repos.
+
 Recommended phasing:
-1. Resolve via the repo index and link to the GitHub file (generic, no config). Unresolved targets stay as plain styled text.
-2. When folder import lands, prefer linking to the sibling mist doc.
-3. Optional: a configurable published-site base URL per import for reader-facing links.
+1. Resolve via the repo index and the garden slug scheme, linking to the published page.
+2. When folder import lands, optionally prefer the sibling mist doc.
+3. Unresolved or ambiguous targets stay as plain styled text.
 
 Unresolved or ambiguous targets remain readable text rather than a broken link.
 
 ## Zotero / BibTeX references
+
+DONE 10 June 2026: Preview converts pandoc `[@key]` (and bracket groups, locators, `-@key` author suppression, bare `@key`) to inline APA, and appends an APA reference list of cited keys, mirroring `build_static_site.py`. The library is fetched from the repo (`assets/MyLibrary.bib`, with a few fallback paths) and parsed client-side; the fetch is lazy, on first Preview. Verified live: `[@powell...]` rendered as "(Powell et al. 2025)" linked to its DOI, with a References entry. `app/lib/citations.ts`. The Garden's own build still reads the machine-local Zotero export (`C:/Users/Zoom/Zotero-cm/My Library.bib`); the repo copy at `assets/MyLibrary.bib` is what mist uses, so keep that copy fresh (a build step could refresh it).
+
+The original plan, for reference:
 
 The roadmap already has "support a `My Library.bib` the way the Garden does, starting simple by showing a reference list at the bottom". This is the detailed plan.
 

@@ -58,6 +58,7 @@ export function createMockDocumentContext(
     github: null,
     commitToGitHub: vi.fn(),
     unsaved: false,
+    bibLib: null,
     mode: "edit",
     toggleMode: vi.fn(),
     showPreview: false,

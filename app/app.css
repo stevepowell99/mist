@@ -369,6 +369,22 @@ body {
   text-underline-offset: 2px;
 }
 
+/* Reference list rendered from cited BibTeX keys */
+.preview .references {
+  margin-top: 2em;
+  padding-top: 1em;
+  border-top: 1px solid var(--color-border);
+}
+.preview .references h2 {
+  font-size: 1.25em;
+}
+.preview .reference {
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+  text-indent: -1.5em;
+  font-size: 0.9em;
+}
+
 /* CriticMarkup in rendered preview (same colors as editor marks) */
 .preview .cm-addition {
   color: #22c55e;
