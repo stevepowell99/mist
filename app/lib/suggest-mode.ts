@@ -59,7 +59,7 @@ function rangeHasOnlyMark(
   return allMarked;
 }
 
-export function suggestModePlugin(docState: ModeSource, locked = false): Plugin {
+export function suggestModePlugin(docState: ModeSource): Plugin {
   return new Plugin({
     key: pluginKey,
     props: {
@@ -114,10 +114,6 @@ export function suggestModePlugin(docState: ModeSource, locked = false): Plugin 
         // Suggest is the default; only an explicit "edit" turns it off
         const mode = docState.get("mode") ?? "suggest";
         if (mode !== "suggest") return false;
-
-        // A locked (suggest-link) user cannot insert untracked structural
-        // changes such as new paragraphs.
-        if (locked && (event.key === "Enter" || event.key === "Tab")) return true;
 
         const isBackspace = event.key === "Backspace";
         const isDelete = event.key === "Delete";
