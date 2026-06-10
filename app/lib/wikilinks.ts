@@ -13,13 +13,30 @@ export function wikiLinkDisplay(inner: string): string {
   return (alias ?? target.split("#")[0]).trim();
 }
 
+// Garden notes publish at a short permalink taken from a trailing ((id)) in the
+// title, e.g. "005 ... ((minimalist))" is served at <site>/minimalist/.
+const PAGE_ID_RE = /\(\(([^)]+)\)\)/;
+
+/** The published permalink id for a wikilink target, or null if it has none. */
+export function wikiLinkPageId(inner: string): string | null {
+  const target = inner.split("|")[0];
+  const m = PAGE_ID_RE.exec(target);
+  return m ? m[1].trim() : null;
+}
+
 /**
- * Render Obsidian wikilinks to readable styled text so Preview no longer shows
- * raw [[...]] brackets. Not yet clickable: resolving a target to a real URL
- * (a sibling repo note or its published page) is planned separately.
+ * Render Obsidian wikilinks. When `siteBase` is given and the target carries a
+ * ((id)) permalink, link to the published page (<siteBase>/<id>/); otherwise
+ * render readable but non-clickable styled text.
  */
-export function renderWikiLinks(markdown: string): string {
+export function renderWikiLinks(markdown: string, siteBase?: string | null): string {
   return markdown.replace(WIKILINK_RE, (_whole, inner: string) => {
-    return `<span class="md-wikilink">${escapeHtml(wikiLinkDisplay(inner))}</span>`;
+    const display = escapeHtml(wikiLinkDisplay(inner));
+    const id = siteBase ? wikiLinkPageId(inner) : null;
+    if (siteBase && id) {
+      const href = `${siteBase.replace(/\/$/, "")}/${encodeURIComponent(id)}/`;
+      return `<a class="md-wikilink" href="${href}" target="_blank" rel="noopener noreferrer">${display}</a>`;
+    }
+    return `<span class="md-wikilink">${display}</span>`;
   });
 }

@@ -1,14 +1,18 @@
-import { useEffect } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useDocument } from "~/lib/DocumentContext";
+import { SAVE_WINDOW_MS } from "~/shared/constants";
 
 /**
- * Header indicator for GitHub-backed documents. Shows an amber "Unsaved" while
- * edits have not yet been committed to the repo, and "Saved" once the agent
- * confirms. Clicking commits immediately. Also warns before closing the tab
- * with uncommitted edits.
+ * Header indicator for GitHub-backed documents. While edits are uncommitted it
+ * shows "Unsaved" with a bar that fills over the auto-commit window, so the bar
+ * reaching the right edge means the save is landing. Clicking commits now and
+ * shows instant "Saving…" feedback. Also warns before closing the tab with
+ * uncommitted edits.
  */
 export default function SaveStatus() {
   const { github, unsaved, commitToGitHub } = useDocument();
+  const [saving, setSaving] = useState(false);
+  const barRef = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
     if (!unsaved) return;
@@ -20,17 +24,39 @@ export default function SaveStatus() {
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, [unsaved]);
 
+  // Clear the click feedback once the commit is confirmed (unsaved -> false)
+  useEffect(() => {
+    if (!unsaved) setSaving(false); // eslint-disable-line react-hooks/set-state-in-effect
+  }, [unsaved]);
+
+  // Fill the bar over the commit window, starting when the doc first goes unsaved
+  useEffect(() => {
+    if (!unsaved) return;
+    const el = barRef.current;
+    if (!el) return;
+    el.style.transition = "none";
+    el.style.width = "0%";
+    void el.offsetWidth; // reflow so the next change animates
+    el.style.transition = `width ${SAVE_WINDOW_MS}ms linear`;
+    el.style.width = "100%";
+  }, [unsaved]);
+
   if (!github) return null;
+
+  function handleClick() {
+    commitToGitHub();
+    setSaving(true);
+  }
 
   return (
     <button
-      onClick={commitToGitHub}
+      onClick={handleClick}
       className={`relative flex h-full cursor-pointer items-center gap-2 overflow-hidden px-3 text-sm uppercase tracking-wider transition-colors ${
         unsaved ? "text-coral hover:bg-coral/10" : "text-muted hover:bg-border"
       }`}
       title={
         unsaved
-          ? "Unsaved changes. Saving to GitHub shortly; click to save now."
+          ? "Unsaved changes. Click to save to GitHub now."
           : "All changes saved to GitHub"
       }
       aria-label={unsaved ? "Unsaved changes, save to GitHub now" : "Saved to GitHub"}
@@ -38,8 +64,8 @@ export default function SaveStatus() {
       {unsaved ? (
         <>
           <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-coral" />
-          Unsaved
-          <span className="save-pending-bar" aria-hidden="true" />
+          {saving ? "Saving…" : "Unsaved"}
+          <span ref={barRef} className="absolute bottom-0 left-0 h-0.5 bg-coral" style={{ width: "0%" }} />
         </>
       ) : (
         <>

@@ -5,13 +5,10 @@ import * as syncProtocol from "y-protocols/sync";
 import * as awarenessProtocol from "y-protocols/awareness";
 import * as encoding from "lib0/encoding";
 import * as decoding from "lib0/decoding";
-import { MSG_SYNC, MSG_AWARENESS, DOC_FORMAT_VERSION } from "../app/shared/constants";
+import { MSG_SYNC, MSG_AWARENESS, DOC_FORMAT_VERSION, COMMIT_THROTTLE_MS } from "../app/shared/constants";
 import type { DocRole, GitHubMeta } from "../app/shared/types";
 import { commitFile } from "../app/lib/github.server";
 import { quickHash } from "../app/shared/hash";
-
-/** Throttle for auto-committing a GitHub-backed document back to the repo */
-const COMMIT_THROTTLE_MS = 90_000;
 
 /**
  * Durable Objects SQLite accepts Uint8Array for BLOB columns via the

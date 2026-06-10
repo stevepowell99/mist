@@ -404,21 +404,6 @@ body {
   text-decoration-skip-ink: none;
 }
 
-/* Unsaved (pending commit) indicator: a thin bar sliding across to show a
-   save is coming on the throttle. */
-@keyframes save-pending-slide {
-  0% { left: -40%; }
-  100% { left: 100%; }
-}
-.save-pending-bar {
-  position: absolute;
-  bottom: 0;
-  height: 2px;
-  width: 40%;
-  background-color: var(--color-coral);
-  animation: save-pending-slide 1.6s linear infinite;
-}
-
 /* Dark theme — explicit dark mode */
 [data-theme="dark"] {
   --color-ink: #e5e5e5;

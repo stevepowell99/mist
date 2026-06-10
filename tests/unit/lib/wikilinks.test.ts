@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { renderWikiLinks, wikiLinkDisplay } from "~/lib/wikilinks";
+import { renderWikiLinks, wikiLinkDisplay, wikiLinkPageId } from "~/lib/wikilinks";
 
 describe("wikiLinkDisplay", () => {
   it("uses the alias when given", () => {
@@ -32,5 +32,26 @@ describe("renderWikiLinks", () => {
   });
   it("leaves normal markdown links untouched", () => {
     expect(renderWikiLinks("[text](url)")).toBe("[text](url)");
+  });
+
+  it("links to the published site when a ((id)) and siteBase are present", () => {
+    const out = renderWikiLinks("[[005 X ((minimalist))|the stance]]", "https://garden.causalmap.app");
+    expect(out).toBe(
+      '<a class="md-wikilink" href="https://garden.causalmap.app/minimalist/" target="_blank" rel="noopener noreferrer">the stance</a>',
+    );
+  });
+
+  it("stays a non-clickable span without a ((id))", () => {
+    const out = renderWikiLinks("[[Some Note]]", "https://garden.causalmap.app");
+    expect(out).toBe('<span class="md-wikilink">Some Note</span>');
+  });
+});
+
+describe("wikiLinkPageId", () => {
+  it("extracts a trailing ((id))", () => {
+    expect(wikiLinkPageId("005 Minimalist ((minimalist))|alias")).toBe("minimalist");
+  });
+  it("returns null when absent", () => {
+    expect(wikiLinkPageId("Plain Note")).toBeNull();
   });
 });

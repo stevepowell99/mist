@@ -8,6 +8,7 @@ import { findCommentTextAtCursor } from "~/lib/comment-threads";
 import { serializeWithCriticMarkup } from "~/lib/critic-serializer";
 import { serializeThreads } from "~/lib/thread-serialization";
 import { quickHash } from "~/shared/hash";
+import { RELAY_DEBOUNCE_MS } from "~/shared/constants";
 import { rawAssetUrl } from "~/lib/github";
 import { parseBib, type BibLibrary } from "~/lib/citations";
 
@@ -151,7 +152,7 @@ export function DocumentProvider({
 
   useEffect(() => {
     if (!github || !markdown) return;
-    const t = setTimeout(() => sendDoc(false), 5000);
+    const t = setTimeout(() => sendDoc(false), RELAY_DEBOUNCE_MS);
     return () => clearTimeout(t);
   }, [github, markdown, threads, sendDoc]);
 

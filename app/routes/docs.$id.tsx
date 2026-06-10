@@ -23,8 +23,15 @@ import MobilePanel from "~/components/MobilePanel";
 import OnboardingBanner from "~/components/OnboardingBanner";
 import NamePrompt from "~/components/NamePrompt";
 
-export function meta(_args: Route.MetaArgs) {
-  return [{ title: "mist" }];
+function fileTitle(github: GitHubMeta | null, fallback: string): string {
+  if (!github) return fallback;
+  const name = (github.path.split("/").pop() ?? fallback).replace(/\.md$/i, "");
+  return name || fallback;
+}
+
+export function meta({ data }: Route.MetaArgs) {
+  const title = data?.github ? fileTitle(data.github, "mist") : "mist";
+  return [{ title: title || "mist" }];
 }
 
 export async function loader({ params, request, context }: Route.LoaderArgs) {
@@ -90,32 +97,37 @@ function DocumentLayout({ id }: { id: string }) {
     github,
   } = useDocument();
 
+  const title = fileTitle(github, id);
+
   return (
     <div className="flex h-screen flex-col">
-      <header className="flex items-stretch overflow-x-auto scrollbar-none border-b border-border">
+      <header className="flex items-stretch border-b border-border">
         <Link
           to="/"
-          className="flex items-center bg-ink px-4 py-2 font-medium text-paper transition-colors hover:bg-chartreuse hover:text-[#1a1a1a]"
+          className="flex shrink-0 items-center bg-ink px-4 py-2 font-medium text-paper transition-colors hover:bg-chartreuse hover:text-[#1a1a1a]"
         >
           mist
         </Link>
-        <div className="flex grow shrink-0 items-center px-4">
-          <span className="font-mono font-bold">{id}</span>
+        <div className="flex min-w-0 grow items-center px-4">
+          <span className="truncate font-medium" title={title}>{title}</span>
         </div>
-        <div className="flex shrink-0 items-center border-l border-border px-3">
-          <ConnectionStatus />
-        </div>
-        <div className="flex shrink-0 items-center border-l border-border">
-          <UserName />
-        </div>
-        <div className="flex shrink-0 items-stretch border-l border-border">
-          <SaveStatus />
-        </div>
-        <div className="shrink-0 border-l border-border">
-          <ShareButton />
-        </div>
-        <div className="flex shrink-0 items-center border-l border-border">
-          <ThemeSelector />
+        {/* Right group is the aside width so its left edge lines up with the body/sidebar divide */}
+        <div className="flex w-96 shrink-0 items-stretch">
+          <div className="flex min-w-0 flex-1 items-center justify-center overflow-hidden whitespace-nowrap border-l border-border px-2">
+            <ConnectionStatus />
+          </div>
+          <div className="flex shrink-0 items-center border-l border-border">
+            <UserName />
+          </div>
+          <div className="flex shrink-0 items-stretch border-l border-border">
+            <SaveStatus />
+          </div>
+          <div className="shrink-0 border-l border-border">
+            <ShareButton />
+          </div>
+          <div className="flex shrink-0 items-center border-l border-border">
+            <ThemeSelector />
+          </div>
         </div>
       </header>
       <div className="flex flex-1 overflow-hidden">

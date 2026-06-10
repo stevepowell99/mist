@@ -6,25 +6,35 @@ import { renderWithDocument } from "../../helpers/document-context";
 import ModeToggle from "~/components/ModeToggle";
 
 describe("ModeToggle", () => {
-  it("shows 'Edit mode' when mode is edit", () => {
+  it("shows both Edit and Suggest labels", () => {
     const { getByText } = renderWithDocument(createElement(ModeToggle), {
       context: { mode: "edit" },
     });
-    expect(getByText("Edit mode")).toBeTruthy();
+    expect(getByText("Edit")).toBeTruthy();
+    expect(getByText("Suggest")).toBeTruthy();
   });
 
-  it("shows 'Suggest changes' when mode is suggest", () => {
+  it("emphasizes the active side", () => {
     const { getByText } = renderWithDocument(createElement(ModeToggle), {
       context: { mode: "suggest" },
     });
-    expect(getByText("Suggest changes")).toBeTruthy();
+    expect(getByText("Suggest").className).toContain("text-ink");
+    expect(getByText("Edit").className).toContain("text-muted");
   });
 
-  it("toggle calls toggleMode", () => {
-    const { contextValue, getByLabelText } = renderWithDocument(
+  it("toggling calls toggleMode", () => {
+    const { contextValue, getByText } = renderWithDocument(
       createElement(ModeToggle),
+      { context: { mode: "edit" } },
     );
-    fireEvent.click(getByLabelText("Toggle suggest mode"));
+    fireEvent.click(getByText("Suggest"));
     expect(contextValue.toggleMode).toHaveBeenCalledOnce();
+  });
+
+  it("is hidden for suggest-link (non-edit) role", () => {
+    const { container } = renderWithDocument(createElement(ModeToggle), {
+      context: { role: "suggest" },
+    });
+    expect(container.firstChild).toBeNull();
   });
 });

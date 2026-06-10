@@ -6,32 +6,30 @@ import { renderWithDocument } from "../../helpers/document-context";
 import MobilePanel from "~/components/MobilePanel";
 
 describe("MobilePanel", () => {
-  it("renders three tab buttons", () => {
-    const { getAllByRole } = renderWithDocument(
+  it("renders the three tab buttons", () => {
+    const { getByRole } = renderWithDocument(
       createElement(MobilePanel, { className: "lg:hidden" }),
     );
-    const buttons = getAllByRole("button");
-    expect(buttons).toHaveLength(3);
-    expect(buttons[0].textContent).toBe("Editing");
-    expect(buttons[1].textContent).toBe("Comments");
-    expect(buttons[2].textContent).toBe("Preview");
+    expect(getByRole("button", { name: "Editing" })).toBeTruthy();
+    expect(getByRole("button", { name: "Comments" })).toBeTruthy();
+    expect(getByRole("button", { name: "Preview" })).toBeTruthy();
   });
 
   it("clicking a tab shows corresponding content, clicking again collapses", () => {
-    const { getByText, queryByText } = renderWithDocument(
+    const { getByRole, getByText, queryByText } = renderWithDocument(
       createElement(MobilePanel, { className: "lg:hidden" }),
       { context: { mode: "suggest" } },
     );
 
-    // Editing tab starts active, should show ModeToggle content
-    expect(queryByText("Suggest changes")).toBeTruthy();
+    // Editing tab starts active, should show the Edit/Suggest ModeToggle
+    expect(getByText("Suggest")).toBeTruthy();
 
     // Click Comments tab
-    fireEvent.click(getByText("Comments"));
+    fireEvent.click(getByRole("button", { name: "Comments" }));
     expect(queryByText("Comments (0)")).toBeTruthy();
 
     // Click Comments tab again to collapse
-    fireEvent.click(getByText("Comments"));
+    fireEvent.click(getByRole("button", { name: "Comments" }));
     expect(queryByText("Comments (0)")).toBeFalsy();
   });
 
@@ -40,10 +38,9 @@ describe("MobilePanel", () => {
       createElement(MobilePanel, { className: "lg:hidden" }),
     );
 
-    // Editing tab is active by default
-    // ModeToggle shows "Edit mode" when mode is "edit"
-    expect(getByText("Edit mode")).toBeTruthy();
-    expect(getByLabelText("Toggle suggest mode")).toBeTruthy();
+    // Editing tab is active by default; ModeToggle shows the Edit/Suggest pair
+    expect(getByText("Edit")).toBeTruthy();
+    expect(getByLabelText("Edit or Suggest")).toBeTruthy();
   });
 
   it("comments tab renders CommentInput and ThreadList", () => {

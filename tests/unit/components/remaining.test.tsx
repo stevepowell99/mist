@@ -47,9 +47,9 @@ describe("ShareButton", () => {
 });
 
 describe("ConnectionStatus", () => {
-  it("renders connection status text", () => {
-    const { getByText } = renderWithDocument(createElement(ConnectionStatus));
-    expect(getByText("Connecting")).toBeTruthy();
+  it("renders a status dot with an accessible label", () => {
+    const { getByLabelText } = renderWithDocument(createElement(ConnectionStatus));
+    expect(getByLabelText("Connection: Connecting")).toBeTruthy();
   });
 });
 

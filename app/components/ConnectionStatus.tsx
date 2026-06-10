@@ -42,13 +42,12 @@ export default function ConnectionStatus() {
   }, [socket]);
 
   return (
-    <span className="inline-flex items-baseline gap-1.5">
-      <span
-        className={`h-2 w-2 rounded-full ${display.dotClass} relative top-[-0.5px]`}
-      />
-      <span className="text-sm uppercase tracking-wider text-muted">
-        {display.text}
-      </span>
+    <span
+      className="inline-flex items-center"
+      title={display.text}
+      aria-label={`Connection: ${display.text}`}
+    >
+      <span className={`h-2.5 w-2.5 rounded-full ${display.dotClass}`} />
     </span>
   );
 }
