@@ -53,7 +53,8 @@ export function suggestModePlugin(docState: ModeSource): Plugin {
     key: pluginKey,
     props: {
       handleTextInput(view, from, to, text) {
-        const mode = docState.get("mode");
+        // Suggest is the default; only an explicit "edit" turns it off
+        const mode = docState.get("mode") ?? "suggest";
         if (mode !== "suggest") return false;
 
         const { state, dispatch } = view;
@@ -93,7 +94,8 @@ export function suggestModePlugin(docState: ModeSource): Plugin {
       },
 
       handleKeyDown(view, event) {
-        const mode = docState.get("mode");
+        // Suggest is the default; only an explicit "edit" turns it off
+        const mode = docState.get("mode") ?? "suggest";
         if (mode !== "suggest") return false;
 
         if (event.key !== "Backspace") return false;

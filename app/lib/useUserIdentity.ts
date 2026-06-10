@@ -4,12 +4,18 @@ import type { UserInfo } from "~/shared/types";
 
 const STORAGE_KEY = "mist-user";
 
-function randomUser(): UserInfo {
+interface StoredUser extends UserInfo {
+  /** True once the user has deliberately set their own name */
+  named?: boolean;
+}
+
+function randomUser(): StoredUser {
   const c = USER_COLOURS[Math.floor(Math.random() * USER_COLOURS.length)];
   return {
     name: `User ${Math.floor(Math.random() * 1000)}`,
     color: c.color,
     colorLight: c.light,
+    named: false,
   };
 }
 
@@ -23,30 +29,50 @@ const PLACEHOLDER: UserInfo = {
 
 /**
  * Persistent per-browser identity (name and colour) used for collaboration
- * cursors and comment authorship. Shared across all documents.
+ * cursors and comment authorship. Shared across all documents. `needsName` is
+ * true until the user has chosen a name, so the UI can prompt on first visit.
  */
 export function useUserIdentity() {
   const [user, setUser] = useState<UserInfo>(PLACEHOLDER);
+  const [needsName, setNeedsName] = useState(false);
 
   useEffect(() => {
-    let initial: UserInfo;
+    let initial: StoredUser;
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
-      initial = stored ? (JSON.parse(stored) as UserInfo) : randomUser();
+      initial = stored ? (JSON.parse(stored) as StoredUser) : randomUser();
     } catch {
       initial = randomUser();
     }
-    setUser(initial); // eslint-disable-line react-hooks/set-state-in-effect
+    setUser({ name: initial.name, color: initial.color, colorLight: initial.colorLight }); // eslint-disable-line react-hooks/set-state-in-effect
+    setNeedsName(!initial.named); // eslint-disable-line react-hooks/set-state-in-effect
     localStorage.setItem(STORAGE_KEY, JSON.stringify(initial));
   }, []);
 
-  const setName = useCallback((name: string) => {
-    setUser((prev) => {
-      const next = { ...prev, name: name.trim() || prev.name };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-      return next;
-    });
+  const persist = useCallback((u: UserInfo) => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...u, named: true }));
   }, []);
 
-  return { user, setName };
+  const setName = useCallback(
+    (name: string) => {
+      setUser((prev) => {
+        const next = { ...prev, name: name.trim() || prev.name };
+        persist(next);
+        return next;
+      });
+      setNeedsName(false);
+    },
+    [persist],
+  );
+
+  // Keep the generated identity but stop prompting (user dismissed the prompt)
+  const dismissNamePrompt = useCallback(() => {
+    setUser((prev) => {
+      persist(prev);
+      return prev;
+    });
+    setNeedsName(false);
+  }, [persist]);
+
+  return { user, setName, needsName, dismissNamePrompt };
 }

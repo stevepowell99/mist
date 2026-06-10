@@ -9,7 +9,7 @@ import type { DocMode } from "~/shared/types";
 export function useYjsEditor(docId: string, docKey: string | null = null) {
   const doc = useMemo(() => new Y.Doc(), []);
   const awareness = useMemo(() => new Awareness(doc), [doc]);
-  const { user, setName: setUserName } = useUserIdentity();
+  const { user, setName: setUserName, needsName, dismissNamePrompt } = useUserIdentity();
   const docState = useMemo(() => doc.getMap<string>("docState"), [doc]);
   const providerRef = useRef<YjsProvider | null>(null);
   const [synced, setSynced] = useState(false);
@@ -67,5 +67,5 @@ export function useYjsEditor(docId: string, docKey: string | null = null) {
     };
   }, [socket, doc, awareness]);
 
-  return { doc, awareness, socket, synced, user, setUserName, mode, setMode, docState, isOnboarding };
+  return { doc, awareness, socket, synced, user, setUserName, needsName, dismissNamePrompt, mode, setMode, docState, isOnboarding };
 }

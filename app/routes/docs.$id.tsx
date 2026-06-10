@@ -20,6 +20,7 @@ import ThreadList from "~/components/ThreadList";
 import ThemeSelector from "~/components/ThemeSelector";
 import MobilePanel from "~/components/MobilePanel";
 import OnboardingBanner from "~/components/OnboardingBanner";
+import NamePrompt from "~/components/NamePrompt";
 
 export function meta(_args: Route.MetaArgs) {
   return [{ title: "mist" }];
@@ -147,6 +148,7 @@ function DocumentLayout({ id }: { id: string }) {
         </aside>
       </div>
       <MobilePanel className="lg:hidden" />
+      <NamePrompt />
     </div>
   );
 }
