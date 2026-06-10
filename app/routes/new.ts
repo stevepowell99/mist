@@ -58,8 +58,9 @@ export async function action({ request, context }: Route.ActionArgs) {
       }
     }
 
+    const { editKey } = (await res.json()) as { editKey: string };
     const url = new URL(request.url);
-    return new Response(`${url.origin}/docs/${id}\n`, {
+    return new Response(`${url.origin}/docs/${id}?k=${editKey}\n`, {
       status: 201,
       headers: { "Content-Type": "text/plain" },
     });

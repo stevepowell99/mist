@@ -4,14 +4,19 @@ import { serializeThreads } from "~/lib/thread-serialization";
 import { useDocument } from "~/lib/DocumentContext";
 
 export default function ShareButton() {
-  const { docId, markdown, threads } = useDocument();
-  const [copied, setCopied] = useState(false);
+  const { docId, markdown, threads, role, docKey, suggestKey } = useDocument();
+  const [copied, setCopied] = useState<"edit" | "suggest" | null>(null);
 
-  const handleCopy = useCallback(async () => {
-    await navigator.clipboard.writeText(window.location.href);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }, []);
+  const handleCopy = useCallback(
+    async (kind: "edit" | "suggest", key: string | null) => {
+      const url = new URL(window.location.href);
+      url.search = key ? `?k=${key}` : "";
+      await navigator.clipboard.writeText(url.toString());
+      setCopied(kind);
+      setTimeout(() => setCopied(null), 2000);
+    },
+    [],
+  );
 
   const handleDownload = useCallback(() => {
     const content = serializeThreads(markdown, threads);
@@ -43,12 +48,29 @@ export default function ShareButton() {
           align="end"
           sideOffset={4}
         >
-          <DropdownMenu.Item
-            onSelect={handleCopy}
-            className="block w-full cursor-pointer px-3 py-1.5 text-left text-sm outline-none data-[highlighted]:bg-border"
-          >
-            {copied ? "\u2713 Copied" : "Copy link"}
-          </DropdownMenu.Item>
+          {role === "edit" ? (
+            <>
+              <DropdownMenu.Item
+                onSelect={() => handleCopy("edit", docKey)}
+                className="block w-full cursor-pointer px-3 py-1.5 text-left text-sm outline-none data-[highlighted]:bg-border"
+              >
+                {copied === "edit" ? "\u2713 Copied" : "Copy edit link"}
+              </DropdownMenu.Item>
+              <DropdownMenu.Item
+                onSelect={() => handleCopy("suggest", suggestKey)}
+                className="block w-full cursor-pointer px-3 py-1.5 text-left text-sm outline-none data-[highlighted]:bg-border"
+              >
+                {copied === "suggest" ? "\u2713 Copied" : "Copy suggest link"}
+              </DropdownMenu.Item>
+            </>
+          ) : (
+            <DropdownMenu.Item
+              onSelect={() => handleCopy("suggest", docKey)}
+              className="block w-full cursor-pointer px-3 py-1.5 text-left text-sm outline-none data-[highlighted]:bg-border"
+            >
+              {copied ? "\u2713 Copied" : "Copy link"}
+            </DropdownMenu.Item>
+          )}
           <DropdownMenu.Item
             onSelect={handleDownload}
             className="block w-full cursor-pointer px-3 py-1.5 text-left text-sm outline-none data-[highlighted]:bg-border"

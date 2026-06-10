@@ -70,11 +70,14 @@ describe("POST /new (action)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockAgentFetch.mockResolvedValue(
-      new Response(JSON.stringify({ ok: true }), { status: 200 }),
+      new Response(
+        JSON.stringify({ ok: true, editKey: "secretedit", suggestKey: "secretsuggest" }),
+        { status: 200 },
+      ),
     );
   });
 
-  it("returns 201 with document URL for valid markdown", async () => {
+  it("returns 201 with document URL including the edit key", async () => {
     const request = postRequest("# Hello world\n\nSome content.");
     const response = await action({ request, context } as Parameters<typeof action>[0]);
 
@@ -82,7 +85,7 @@ describe("POST /new (action)", () => {
     expect(response.headers.get("Content-Type")).toBe("text/plain");
 
     const text = await response.text();
-    expect(text).toBe("https://mist.example.com/docs/abcd1234\n");
+    expect(text).toBe("https://mist.example.com/docs/abcd1234?k=secretedit\n");
   });
 
   it("returns 201 for empty body (blank document)", async () => {

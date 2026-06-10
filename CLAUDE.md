@@ -2,6 +2,29 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Steve's fork
+
+This is Steve Powell's fork of [inanimate-tech/mist](https://github.com/inanimate-tech/mist) (Matt Webb's collaborative markdown editor). Everything below this section is upstream guidance and still applies; keep it intact so upstream merges stay easy.
+
+- Remotes: `origin` = `stevepowell99/mist`, `upstream` = `inanimate-tech/mist`. Pull upstream changes with `git fetch upstream && git merge upstream/main`.
+- Purpose of the fork: share a markdown file (or later a folder) from Steve's Google Drive or GitHub with collaborators via a secret link, for async review with CriticMarkup suggestions and comments. Collaborators need no account; only Steve's GitHub is involved. Separate from the Qualia apps.
+- Global guidance: read `C:\Users\Zoom\.claude\CLAUDE.md`. This project is registered in its Project Index.
+- Editor: Claude Code.
+
+### Roadmap
+
+1. DONE 10 June 2026: deployed to Cloudflare Workers free tier at [mist.broad-smoke-cc64.workers.dev](https://mist.broad-smoke-cc64.workers.dev) (account `hello@causalmap.app`, auth via `npx wrangler login`, no `CLOUDFLARE_ACCOUNT_ID` needed). Verified: POST `/new` creates a document and the editor renders it with a live WebSocket connection. Redeploy with `npm run deploy`.
+2. DONE 10 June 2026: removed the 99-hour expiry (alarm in `agents/document.ts`, TTL constants, header copy, demo and README copy, tests). Also centred the editor and preview columns and moved the Preview toggle to the top of the right sidebar.
+3. DONE 10 June 2026: secret capability links. Each document has an `editKey` and a `suggestKey` (stored in the Durable Object). The URL carries `?k=<key>`; the loader and the WebSocket upgrade both validate it, so a bare or wrong-key URL 404s. An edit-link holder can switch to Suggest mode; a suggest-link holder is locked to suggest and never sees the mode toggle or accept/reject actions. The Share menu offers both links to edit-role users. `POST /new` returns the edit link. Suggest enforcement is client-side (Yjs updates are opaque to the server); the server gates who can connect. Also done same day: markdown tables (aligned monospace in the editor source, real bordered table in Preview), default line length 30% wider (91ch), default body font 20% larger (1.38rem).
+4. GitHub integration: import a file (then a folder, with navigation and an image proxy) from a repo on Steve's account and commit the reviewed result back (fine-grained PAT, server-side only). See `plans/secret-links-and-github.md`.
+5. Bibliography: support a `My Library.bib` the way the Garden project does, starting simple by showing a reference list at the bottom of the rendered document.
+6. Before sharing links widely, review `npm audit` (31 inherited vulnerabilities, 2 critical, as of 10 June 2026) and consider offering changes upstream as PRs where general.
+
+### Local dev gotchas
+
+- `npm run dev` serves at `http://localhost:5173`. On a cold Vite cache, the first click on New document or drag-and-drop 504s ("Outdated Optimize Dep") because the editor route lazy-loads TipTap/Yjs and Vite re-optimises mid-navigation. Hard-reload the browser or restart the dev server; deployed builds are unaffected.
+- Scratch work goes in `_tmp/` (gitignored locally); Playwright here is the Python package, not the npm one.
+
 ## Start of Session
 
 Read project documents to load context:
@@ -13,7 +36,7 @@ Also check `plans/` for any active plan.
 
 ## Project Overview
 
-MIST is a collaborative markdown editor — a cross between GitHub Gist and Google Docs. Users can quickly share and do multiplayer editing on markdown documents in real-time. Everything is public by URL (no auth yet). Documents persist live with no save button. Documents auto-expire after 99 hours.
+MIST is a collaborative markdown editor — a cross between GitHub Gist and Google Docs. Users can quickly share and do multiplayer editing on markdown documents in real-time. Everything is public by URL (no auth yet). Documents persist live with no save button. (Upstream auto-expires documents after 99 hours; this fork removed that.)
 
 ## Tech Stack
 

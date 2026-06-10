@@ -8,7 +8,7 @@ import {
 } from "~/lib/suggestion-actions";
 
 export default function SuggestionActions() {
-  const { editorInstance: editor, mode } = useDocument();
+  const { editorInstance: editor, mode, role } = useDocument();
   const [hasSuggestions, setHasSuggestions] = useState(false);
   const [cursorInRange, setCursorInRange] = useState(false);
 
@@ -50,6 +50,9 @@ export default function SuggestionActions() {
   }, [editor]);
 
   const isSuggest = mode === "suggest";
+
+  // Accepting or rejecting applies edits, so only edit-link users see these
+  if (role !== "edit") return null;
 
   // In edit mode, hide when no suggestions. In suggest mode, always show.
   if (!isSuggest && !hasSuggestions) return null;

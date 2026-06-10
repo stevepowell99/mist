@@ -36,13 +36,14 @@ body {
 .tiptap {
   outline: none;
   min-height: 100%;
-  font-size: 1.15rem;
+  font-size: 1.38rem;
   line-height: 1.6;
   padding: 1.5rem;
+  max-width: 91ch;
+  margin-inline: auto;
 }
 
 .tiptap p {
-  max-width: 65ch;
   margin: 0;
 }
 
@@ -90,7 +91,6 @@ body {
   font-family: var(--font-mono);
   font-size: 0.9em;
   background-color: var(--color-border);
-  max-width: none;
   padding: 0 1em;
 }
 
@@ -100,6 +100,14 @@ body {
 
 .tiptap p.md-code-block-close {
   padding-bottom: 0.5em;
+}
+
+.tiptap p.md-table-row {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  line-height: 1.5;
+  white-space: pre;
+  overflow-x: auto;
 }
 
 /* Syntax highlighting tokens (sugar-high) */
@@ -255,10 +263,11 @@ body {
 
 /* Preview styles */
 .preview {
-  max-width: 65ch;
+  max-width: 91ch;
+  margin-inline: auto;
   padding: 1.5rem;
   font-family: var(--font-serif);
-  font-size: 1.15rem;
+  font-size: 1.38rem;
   line-height: 1.7;
   color: var(--color-ink);
 }
@@ -301,6 +310,23 @@ body {
 .preview pre code {
   background: none;
   padding: 0;
+}
+
+.preview table {
+  border-collapse: collapse;
+  margin: 1em 0;
+}
+
+.preview th,
+.preview td {
+  border: 1px solid var(--color-border);
+  padding: 0.35em 0.75em;
+  text-align: left;
+}
+
+.preview th {
+  font-weight: 600;
+  background-color: color-mix(in srgb, var(--color-border) 40%, transparent);
 }
 
 .preview blockquote {

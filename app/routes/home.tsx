@@ -35,12 +35,13 @@ export default function Home({ loaderData }: Route.ComponentProps) {
   async function handleNewDocument() {
     const { body, threads, onboarding } = deserializeThreads(demoDocument);
     const id = generateDocumentId();
-    await fetch(`/agents/document-agent/${id}`, {
+    const res = await fetch(`/agents/document-agent/${id}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ content: body, threads, onboarding }),
     });
-    navigate(`/docs/${id}`);
+    const { editKey } = (await res.json()) as { editKey: string };
+    navigate(`/docs/${id}?k=${editKey}`);
   }
 
   const handleUpload = useCallback(
@@ -50,13 +51,14 @@ export default function Home({ loaderData }: Route.ComponentProps) {
       const id = generateDocumentId();
 
       // Create the document with initial content + threads via POST body
-      await fetch(`/agents/document-agent/${id}`, {
+      const res = await fetch(`/agents/document-agent/${id}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content: body, threads }),
       });
+      const { editKey } = (await res.json()) as { editKey: string };
 
-      navigate(`/docs/${id}`);
+      navigate(`/docs/${id}?k=${editKey}`);
     },
     [navigate],
   );

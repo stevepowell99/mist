@@ -2,7 +2,7 @@ import { Plugin, PluginKey, TextSelection } from "@tiptap/pm/state";
 
 /* ---------- ProseMirror plugin ---------- */
 
-interface ModeSource {
+export interface ModeSource {
   get: (key: string) => string | undefined;
 }
 

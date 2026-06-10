@@ -28,6 +28,7 @@ export default tseslint.config(
       ".react-router/**",
       ".wrangler/**",
       "node_modules/**",
+      "_tmp/**",
       "*.config.js",
       "*.config.ts",
       "worker-configuration.d.ts",

@@ -2,8 +2,11 @@ import * as Switch from "@radix-ui/react-switch";
 import { useDocument } from "~/lib/DocumentContext";
 
 export default function ModeToggle() {
-  const { mode, toggleMode } = useDocument();
+  const { mode, toggleMode, role } = useDocument();
   const isSuggest = mode === "suggest";
+
+  // Suggest-link users are locked to suggest mode; no toggle
+  if (role !== "edit") return null;
 
   return (
     <div className="flex items-center justify-between px-4 py-3">

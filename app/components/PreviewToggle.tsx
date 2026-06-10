@@ -85,7 +85,7 @@ export default function PreviewToggle() {
       onClick={onToggle}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
-      className={`flex h-24 w-full cursor-pointer items-center justify-center text-sm uppercase tracking-wider transition-colors ${
+      className={`flex h-12 w-full cursor-pointer items-center justify-center text-sm uppercase tracking-wider transition-colors ${
         active
           ? "bg-ink text-paper"
           : "text-muted hover:bg-border"

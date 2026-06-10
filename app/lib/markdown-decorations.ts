@@ -88,6 +88,8 @@ export const MARKDOWN_PATTERNS: MarkdownPattern[] = [
 
 export const CODE_FENCE_REGEX = /^(`{3,})(.*)?$/;
 
+export const TABLE_ROW_REGEX = /^\s*\|.*\|\s*$/;
+
 const TOKEN_TYPE_NAMES = SugarHigh.TokenTypes as unknown as string[];
 
 // Token types that get no special colour — skip them to avoid unnecessary DOM nodes
@@ -412,6 +414,15 @@ export function markdownDecorations(): Plugin[] {
         const { decorations: codeBlockDecos, codeBlockRanges } =
           findCodeBlockDecorations(paragraphs);
         decorations.push(...codeBlockDecos);
+
+        // Table rows: monospace so pipe columns align in the source view
+        for (const { node, pos } of paragraphs) {
+          if (!TABLE_ROW_REGEX.test(node.textContent)) continue;
+          if (posInsideCodeBlock(pos, node.nodeSize, codeBlockRanges)) continue;
+          decorations.push(
+            Decoration.node(pos, pos + node.nodeSize, { class: "md-table-row" }),
+          );
+        }
 
         // Second pass: inline patterns, skipping nodes inside code blocks
         state.doc.descendants((node, pos) => {

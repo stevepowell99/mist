@@ -16,7 +16,7 @@ function randomUserInfo(): UserInfo {
   };
 }
 
-export function useYjsEditor(docId: string) {
+export function useYjsEditor(docId: string, docKey: string | null = null) {
   const doc = useMemo(() => new Y.Doc(), []);
   const awareness = useMemo(() => new Awareness(doc), [doc]);
   const user = useMemo(() => randomUserInfo(), []);
@@ -29,6 +29,7 @@ export function useYjsEditor(docId: string) {
   const socket = useAgent({
     agent: "document-agent",
     name: docId,
+    query: docKey ? { k: docKey } : undefined,
   });
 
   // Observe docState Y.Map for mode and onboarding changes from other clients

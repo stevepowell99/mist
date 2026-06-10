@@ -13,7 +13,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import * as Y from "yjs";
 import * as awarenessProtocol from "y-protocols/awareness";
-import { DOCUMENT_TTL_MS, DOC_FORMAT_VERSION } from "~/shared/constants";
+import { DOC_FORMAT_VERSION } from "~/shared/constants";
 import { YjsProvider } from "~/lib/yjs-provider";
 
 /* ------------------------------------------------------------------ */
@@ -47,9 +47,15 @@ vi.mock("agents", () => ({
       }
 
       if (query.includes("select") && query.includes("from doc_state")) {
-        const match = query.match(/key\s*=\s*'(\w+)'/);
-        if (match) {
-          const buf = mockSqlStore.get(match[1]);
+        // Literal key (e.g. WHERE key = 'state') or parameterised (WHERE key = $)
+        const literal = query.match(/key\s*=\s*'(\w+)'/);
+        const keyName = literal
+          ? literal[1]
+          : typeof values[0] === "string"
+            ? values[0]
+            : undefined;
+        if (keyName) {
+          const buf = mockSqlStore.get(keyName);
           if (buf) return [{ value: buf }];
         }
         return [];
@@ -145,6 +151,28 @@ Object.defineProperty(MockSocket.prototype, "CONNECTING", { value: 0 });
 /*  Tests                                                              */
 /* ------------------------------------------------------------------ */
 
+const TEST_EDIT_KEY = "edittestkey0000000000000";
+const TEST_SUGGEST_KEY = "suggesttestkey0000000000";
+
+/** Store a string value in the mock SQL store under a key. */
+function storeText(key: string, text: string) {
+  const bytes = new TextEncoder().encode(text);
+  mockSqlStore.set(
+    key,
+    bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+  );
+}
+
+function seedKeys() {
+  storeText("editKey", TEST_EDIT_KEY);
+  storeText("suggestKey", TEST_SUGGEST_KEY);
+}
+
+/** Connection context carrying a valid edit key in the request URL. */
+function ctxWithKey(key = TEST_EDIT_KEY) {
+  return { request: { url: `https://do/?k=${key}` } } as never;
+}
+
 describe("DocumentAgent", () => {
   let DocumentAgent: typeof import("../../../agents/document").default;
   let agent: InstanceType<typeof DocumentAgent>;
@@ -156,6 +184,9 @@ describe("DocumentAgent", () => {
     mockConnectionMap = new Map();
     mockSetAlarm = vi.fn();
     nextConnId = 1;
+
+    // Pre-seed deterministic secret keys so connections can authenticate
+    seedKeys();
 
     const mod = await import("../../../agents/document");
     DocumentAgent = mod.default;
@@ -211,8 +242,8 @@ describe("DocumentAgent", () => {
     // Register connection so getConnections() includes it
     mockConnectionMap.set(connId, connection);
 
-    // Trigger sync handshake
-    targetAgent.onConnect(connection as never, {} as never);
+    // Trigger sync handshake (valid edit key authenticates the connection)
+    targetAgent.onConnect(connection as never, ctxWithKey());
 
     return { doc, awareness, socket, connection, provider, connId };
   }
@@ -231,8 +262,10 @@ describe("DocumentAgent", () => {
   describe("GET /", () => {
     it("returns exists: false for a fresh agent", async () => {
       const res = await agent.onRequest(new Request("https://do/"));
-      const body = await res.json();
-      expect(body).toEqual({ exists: false, createdAt: null });
+      const body = (await res.json()) as { exists: boolean; createdAt: number | null; role: string | null };
+      expect(body.exists).toBe(false);
+      expect(body.createdAt).toBeNull();
+      expect(body.role).toBeNull();
     });
 
     it("returns exists: true with createdAt after POST", async () => {
@@ -253,12 +286,21 @@ describe("DocumentAgent", () => {
   /* ================================================================ */
 
   describe("POST /", () => {
-    it("returns { ok: true }", async () => {
+    it("returns { ok: true } with both secret keys", async () => {
       const res = await agent.onRequest(
         new Request("https://do/", { method: "POST" }),
       );
       expect(res.status).toBe(200);
-      expect(await res.json()).toEqual({ ok: true });
+      const body = (await res.json()) as { ok: boolean; editKey: string; suggestKey: string };
+      expect(body.ok).toBe(true);
+      expect(body.editKey).toBe(TEST_EDIT_KEY);
+      expect(body.suggestKey).toBe(TEST_SUGGEST_KEY);
+    });
+
+    it("returns 409 when the document already exists", async () => {
+      await agent.onRequest(new Request("https://do/", { method: "POST" }));
+      const res = await agent.onRequest(new Request("https://do/", { method: "POST" }));
+      expect(res.status).toBe(409);
     });
 
     it("stamps DOC_FORMAT_VERSION in Yjs meta map", async () => {
@@ -271,15 +313,10 @@ describe("DocumentAgent", () => {
       cleanup(client);
     });
 
-    it("sets auto-delete alarm at createdAt + DOCUMENT_TTL_MS", async () => {
-      const before = Date.now();
+    it("does not set an auto-delete alarm", async () => {
       await agent.onRequest(new Request("https://do/", { method: "POST" }));
-      const after = Date.now();
 
-      expect(mockSetAlarm).toHaveBeenCalledOnce();
-      const alarmTime = mockSetAlarm.mock.calls[0][0] as number;
-      expect(alarmTime).toBeGreaterThanOrEqual(before + DOCUMENT_TTL_MS);
-      expect(alarmTime).toBeLessThanOrEqual(after + DOCUMENT_TTL_MS);
+      expect(mockSetAlarm).not.toHaveBeenCalled();
     });
 
     it("imports plain text content", async () => {
@@ -374,7 +411,7 @@ describe("DocumentAgent", () => {
         }),
       );
       expect(res.status).toBe(200);
-      expect(await res.json()).toEqual({ ok: true });
+      expect(((await res.json()) as { ok: boolean }).ok).toBe(true);
 
       // Document should still exist
       const getRes = await agent.onRequest(new Request("https://do/"));
@@ -397,42 +434,58 @@ describe("DocumentAgent", () => {
   });
 
   /* ================================================================ */
-  /*  Alarm (auto-delete)                                              */
+  /*  Secret links                                                     */
   /* ================================================================ */
 
-  describe("alarm", () => {
-    it("clears all SQL data", async () => {
+  describe("secret links", () => {
+    it("GET with the edit key reports edit role and returns the suggest key", async () => {
       await agent.onRequest(new Request("https://do/", { method: "POST" }));
-      expect(mockSqlStore.size).toBeGreaterThan(0);
-
-      await agent.alarm();
-
-      expect(mockSqlStore.size).toBe(0);
+      const res = await agent.onRequest(
+        new Request(`https://do/?k=${TEST_EDIT_KEY}`),
+      );
+      const body = (await res.json()) as { role: string; suggestKey: string };
+      expect(body.role).toBe("edit");
+      expect(body.suggestKey).toBe(TEST_SUGGEST_KEY);
     });
 
-    it("closes all active connections with code 1000", async () => {
+    it("GET with the suggest key reports suggest role and withholds keys", async () => {
       await agent.onRequest(new Request("https://do/", { method: "POST" }));
-      const conn1 = createConnection();
-      const conn2 = createConnection();
-
-      await agent.alarm();
-
-      expect(conn1.closed).toBe(true);
-      expect(conn1.closeCode).toBe(1000);
-      expect(conn1.closeReason).toBe("Document expired");
-      expect(conn2.closed).toBe(true);
+      const res = await agent.onRequest(
+        new Request(`https://do/?k=${TEST_SUGGEST_KEY}`),
+      );
+      const body = (await res.json()) as { role: string; suggestKey?: string };
+      expect(body.role).toBe("suggest");
+      expect(body.suggestKey).toBeUndefined();
     });
 
-    it("resets agent to fresh state (exists: false after alarm)", async () => {
+    it("GET with a wrong key reports no role", async () => {
       await agent.onRequest(new Request("https://do/", { method: "POST" }));
-      const client = connectYjsClient();
-      cleanup(client);
+      const res = await agent.onRequest(new Request("https://do/?k=wrong"));
+      const body = (await res.json()) as { exists: boolean; role: string | null };
+      expect(body.exists).toBe(true);
+      expect(body.role).toBeNull();
+    });
 
-      await agent.alarm();
+    it("rejects a WebSocket connection with no key", async () => {
+      await agent.onRequest(new Request("https://do/", { method: "POST" }));
+      const conn = createConnection();
+      await agent.onConnect(conn as never, ctxWithKey(""));
+      expect(conn.closed).toBe(true);
+      expect(conn.closeCode).toBe(4403);
+    });
 
-      const res = await agent.onRequest(new Request("https://do/"));
-      const body = (await res.json()) as { exists: boolean };
-      expect(body.exists).toBe(false);
+    it("rejects a WebSocket connection with a wrong key", async () => {
+      await agent.onRequest(new Request("https://do/", { method: "POST" }));
+      const conn = createConnection();
+      await agent.onConnect(conn as never, ctxWithKey("nope"));
+      expect(conn.closed).toBe(true);
+    });
+
+    it("accepts a WebSocket connection with the suggest key", async () => {
+      await agent.onRequest(new Request("https://do/", { method: "POST" }));
+      const conn = createConnection();
+      await agent.onConnect(conn as never, ctxWithKey(TEST_SUGGEST_KEY));
+      expect(conn.closed).toBe(false);
     });
   });
 
@@ -536,7 +589,7 @@ describe("DocumentAgent", () => {
   describe("onMessage", () => {
     it("ignores string messages gracefully", async () => {
       const conn = createConnection();
-      await agent.onConnect(conn as never, {} as never);
+      await agent.onConnect(conn as never, ctxWithKey());
       // Should not throw
       await agent.onMessage(conn as never, "some string message");
     });
@@ -555,7 +608,7 @@ describe("DocumentAgent", () => {
 
     it("does not throw after agent is initialised", async () => {
       const conn = createConnection();
-      await agent.onConnect(conn as never, {} as never);
+      await agent.onConnect(conn as never, ctxWithKey());
       await agent.onClose(conn as never, 1000, "normal", true);
     });
   });

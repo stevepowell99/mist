@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useRef } from "react";
+import { useEffect, useCallback, useMemo, useRef } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import { Extension, getMarkRange, type Editor as TiptapEditor } from "@tiptap/core";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
@@ -10,7 +10,7 @@ import Collaboration from "@tiptap/extension-collaboration";
 import CollaborationCaret from "@tiptap/extension-collaboration-caret";
 import { CriticAddition, CriticDeletion, CriticComment, CriticHighlight, CriticDelimiters } from "~/lib/critic-marks";
 import { markdownDecorations, cleanViewKey } from "~/lib/markdown-decorations";
-import { suggestModePlugin } from "~/lib/suggest-mode";
+import { suggestModePlugin, type ModeSource } from "~/lib/suggest-mode";
 import BubbleToolbar from "~/components/BubbleToolbar";
 import type { useYjsEditor } from "~/lib/useYjsEditor";
 
@@ -21,7 +21,7 @@ const MarkdownDecorations = Extension.create({
   },
 });
 
-const SuggestMode = Extension.create<{ docState: ReturnType<typeof useYjsEditor>["docState"] | null }>({
+const SuggestMode = Extension.create<{ docState: ModeSource | null }>({
   name: "suggestMode",
   addOptions() {
     return { docState: null };
@@ -188,6 +188,7 @@ function renderCaret(user: Record<string, unknown>) {
 
 export default function Editor({
   yjs,
+  forceSuggest,
   hidden,
   onEditorReady,
   onCommentClick,
@@ -199,6 +200,7 @@ export default function Editor({
   onDeleteAtCursor,
 }: {
   yjs: YjsEditorState;
+  forceSuggest?: boolean;
   hidden?: boolean;
   onEditorReady?: (editor: TiptapEditor) => void;
   onCommentClick?: (commentText: string) => void;
@@ -210,6 +212,14 @@ export default function Editor({
   onDeleteAtCursor?: () => void;
 }) {
   const { doc, awareness, user, docState } = yjs;
+  // Suggest-role clients intercept edits as suggestions whatever the shared mode says
+  const modeSource: ModeSource = useMemo(
+    () =>
+      forceSuggest
+        ? { get: (key: string) => (key === "mode" ? "suggest" : docState.get(key)) }
+        : docState,
+    [forceSuggest, docState],
+  );
   const prevHighlightRef = useRef<{ from: number; to: number } | null>(null);
   const prevActiveRangeRef = useRef<{ from: number; to: number } | null>(null);
   const prevCleanViewRef = useRef<boolean>(false);
@@ -233,7 +243,7 @@ export default function Editor({
           render: renderCaret,
         }),
         MarkdownDecorations,
-        SuggestMode.configure({ docState }),
+        SuggestMode.configure({ docState: modeSource }),
         CommentClickHandler.configure({ onCommentClick }),
         CommentHighlight,
         ActiveCommentHighlight,

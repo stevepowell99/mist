@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useCallback, useMemo } from "react";
 import { getMarkRange, type Editor as TiptapEditor } from "@tiptap/core";
-import type { CapturedSelection, DocMode } from "~/shared/types";
+import type { CapturedSelection, DocMode, DocRole } from "~/shared/types";
 import type { MatchedThread } from "~/lib/comment-threads";
 import type { useYjsEditor } from "~/lib/useYjsEditor";
 import { useThreads } from "~/lib/useThreads";
@@ -13,6 +13,11 @@ export interface DocumentContextValue {
   yjs: ReturnType<typeof useYjsEditor>;
   editorInstance: TiptapEditor | null;
   markdown: string;
+
+  // Access role from the secret link; suggest-role users can never edit
+  role: DocRole;
+  docKey: string | null;
+  suggestKey: string | null;
 
   // Mode
   mode: DocMode;
@@ -70,11 +75,17 @@ export function DocumentProvider({
   docId,
   createdAt,
   yjs,
+  role = "edit",
+  docKey = null,
+  suggestKey = null,
   children,
 }: {
   docId: string;
   createdAt: number | null;
   yjs: ReturnType<typeof useYjsEditor>;
+  role?: DocRole;
+  docKey?: string | null;
+  suggestKey?: string | null;
   children: React.ReactNode;
 }) {
   const [markdown, setMarkdown] = useState("");
@@ -100,8 +111,9 @@ export function DocumentProvider({
   } = useThreads({ doc: yjs.doc, editor: editorInstance, user: yjs.user });
 
   const toggleMode = useCallback(() => {
+    if (role !== "edit") return;
     yjs.setMode(yjs.mode === "edit" ? "suggest" : "edit");
-  }, [yjs]);
+  }, [yjs, role]);
 
   const togglePreview = useCallback(() => {
     setPreviewToggled((v) => !v);
@@ -221,7 +233,11 @@ export function DocumentProvider({
     yjs,
     editorInstance,
     markdown,
-    mode: yjs.mode,
+    role,
+    docKey,
+    suggestKey,
+    // Suggest-role users are locked to suggest regardless of the shared mode
+    mode: role === "suggest" ? "suggest" : yjs.mode,
     toggleMode,
     showPreview,
     togglePreview,

@@ -6,6 +6,9 @@ export interface UserInfo {
 
 export type DocMode = "edit" | "suggest";
 
+/** Access level granted by the secret link used to open a document */
+export type DocRole = "edit" | "suggest";
+
 export interface ThreadReply {
   id: string;
   author: UserInfo;

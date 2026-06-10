@@ -5,7 +5,8 @@ import * as syncProtocol from "y-protocols/sync";
 import * as awarenessProtocol from "y-protocols/awareness";
 import * as encoding from "lib0/encoding";
 import * as decoding from "lib0/decoding";
-import { MSG_SYNC, MSG_AWARENESS, DOCUMENT_TTL_MS, DOC_FORMAT_VERSION } from "../app/shared/constants";
+import { MSG_SYNC, MSG_AWARENESS, DOC_FORMAT_VERSION } from "../app/shared/constants";
+import type { DocRole } from "../app/shared/types";
 
 /**
  * Durable Objects SQLite accepts Uint8Array for BLOB columns via the
@@ -14,6 +15,21 @@ import { MSG_SYNC, MSG_AWARENESS, DOCUMENT_TTL_MS, DOC_FORMAT_VERSION } from "..
  */
 function sqlBlob(data: Uint8Array): string {
   return data as unknown as string;
+}
+
+function textBlob(text: string): string {
+  return sqlBlob(new TextEncoder().encode(text));
+}
+
+const KEY_CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+const KEY_LENGTH = 24;
+
+function generateSecretKey(): string {
+  const bytes = new Uint8Array(KEY_LENGTH);
+  crypto.getRandomValues(bytes);
+  let key = "";
+  for (const b of bytes) key += KEY_CHARS[b % KEY_CHARS.length];
+  return key;
 }
 
 class DocumentAgent extends Agent {
@@ -58,8 +74,47 @@ class DocumentAgent extends Agent {
     return { doc: this.doc, awareness: this.awareness };
   }
 
-  async onConnect(connection: Connection, _ctx: ConnectionContext) {
+  private readStoredText(key: string): string | null {
+    const rows = this.sql<{ value: ArrayBuffer }>`
+      SELECT value FROM doc_state WHERE key = ${key}
+    `;
+    return rows.length > 0 ? new TextDecoder().decode(new Uint8Array(rows[0].value)) : null;
+  }
+
+  private ensureKeys(): { editKey: string; suggestKey: string } {
+    let editKey = this.readStoredText("editKey");
+    let suggestKey = this.readStoredText("suggestKey");
+    if (!editKey || !suggestKey) {
+      editKey = generateSecretKey();
+      suggestKey = generateSecretKey();
+      this.sql`
+        INSERT INTO doc_state (key, value) VALUES ('editKey', ${textBlob(editKey)})
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value
+      `;
+      this.sql`
+        INSERT INTO doc_state (key, value) VALUES ('suggestKey', ${textBlob(suggestKey)})
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value
+      `;
+    }
+    return { editKey, suggestKey };
+  }
+
+  private roleForKey(k: string | null): DocRole | null {
+    if (!k) return null;
+    const { editKey, suggestKey } = this.ensureKeys();
+    if (k === editKey) return "edit";
+    if (k === suggestKey) return "suggest";
+    return null;
+  }
+
+  async onConnect(connection: Connection, ctx: ConnectionContext) {
     const { doc, awareness } = this.ensureInitialised();
+
+    const k = new URL(ctx.request.url).searchParams.get("k");
+    if (!this.roleForKey(k)) {
+      connection.close(4403, "Invalid or missing key");
+      return;
+    }
 
     // Send SyncStep1 to the new client
     const syncEncoder = encoding.createEncoder();
@@ -148,23 +203,23 @@ class DocumentAgent extends Agent {
     }
   }
 
-  override readonly alarm = async (): Promise<void> => {
-    // Auto-delete: remove all document data
-    this.sql`DELETE FROM doc_state`;
-    // Close all active WebSocket connections
-    for (const conn of this.getConnections()) {
-      conn.close(1000, "Document expired");
-    }
-    // Clean up in-memory state
-    this.doc?.destroy();
-    this.doc = null;
-    this.awareness = null;
-  };
-
   async onRequest(request: Request) {
     if (request.method === "POST") {
       // Create / initialise the document
       const { doc } = this.ensureInitialised();
+
+      // Creation is one-shot: re-posting an existing id must not leak its keys
+      const existsRows = this.sql<{ value: ArrayBuffer }>`
+        SELECT value FROM doc_state WHERE key = 'exists'
+      `;
+      if (existsRows.length > 0) {
+        return new Response(JSON.stringify({ ok: false, error: "document already exists" }), {
+          status: 409,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      const { editKey, suggestKey } = this.ensureKeys();
       this.sql`
         INSERT INTO doc_state (key, value) VALUES ('exists', ${sqlBlob(new Uint8Array([1]))})
         ON CONFLICT(key) DO UPDATE SET value = excluded.value
@@ -176,13 +231,12 @@ class DocumentAgent extends Agent {
         meta.set("version", DOC_FORMAT_VERSION);
       }
 
-      // Store creation timestamp and set auto-delete alarm
+      // Store creation timestamp
       const now = Date.now();
       this.sql`
         INSERT INTO doc_state (key, value) VALUES ('createdAt', ${sqlBlob(new Uint8Array(new Float64Array([now]).buffer))})
         ON CONFLICT(key) DO UPDATE SET value = excluded.value
       `;
-      await this.ctx.storage.setAlarm(now + DOCUMENT_TTL_MS);
 
       // If the request has a JSON body with content, populate the Yjs doc
       const contentType = request.headers.get("Content-Type") || "";
@@ -235,7 +289,7 @@ class DocumentAgent extends Agent {
         }
       }
 
-      return new Response(JSON.stringify({ ok: true }), {
+      return new Response(JSON.stringify({ ok: true, editKey, suggestKey }), {
         headers: { "Content-Type": "application/json" },
       });
     }
@@ -256,9 +310,19 @@ class DocumentAgent extends Agent {
           ? new Float64Array(createdAtRows[0].value)[0]
           : null;
 
-      return new Response(JSON.stringify({ exists, createdAt }), {
-        headers: { "Content-Type": "application/json" },
-      });
+      const k = new URL(request.url).searchParams.get("k");
+      const role = exists ? this.roleForKey(k) : null;
+
+      return new Response(
+        JSON.stringify({
+          exists,
+          createdAt,
+          role,
+          // Edit-role callers get the suggest key so they can share suggest links
+          suggestKey: role === "edit" ? this.readStoredText("suggestKey") : undefined,
+        }),
+        { headers: { "Content-Type": "application/json" } },
+      );
     }
 
     return new Response("Not found", { status: 404 });
