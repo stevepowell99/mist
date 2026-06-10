@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useMemo } from "react";
+import { createContext, useContext, useState, useCallback, useMemo, useEffect } from "react";
 import { getMarkRange, type Editor as TiptapEditor } from "@tiptap/core";
 import type { CapturedSelection, DocMode, DocRole, GitHubMeta } from "~/shared/types";
 import type { MatchedThread } from "~/lib/comment-threads";
@@ -6,6 +6,7 @@ import type { useYjsEditor } from "~/lib/useYjsEditor";
 import { useThreads } from "~/lib/useThreads";
 import { findCommentTextAtCursor } from "~/lib/comment-threads";
 import { serializeWithCriticMarkup } from "~/lib/critic-serializer";
+import { serializeThreads } from "~/lib/thread-serialization";
 
 export interface DocumentContextValue {
   docId: string;
@@ -21,6 +22,8 @@ export interface DocumentContextValue {
 
   // GitHub source, if this doc was imported from a repo
   github: GitHubMeta | null;
+  /** Force an immediate commit of a GitHub-backed doc back to the repo */
+  commitToGitHub: () => void;
 
   // Mode
   mode: DocMode;
@@ -119,6 +122,33 @@ export function DocumentProvider({
     if (role !== "edit") return;
     yjs.setMode(yjs.mode === "edit" ? "suggest" : "edit");
   }, [yjs, role]);
+
+  // Relay the serialized document to the agent for GitHub-backed docs. The
+  // agent auto-commits on a throttle (and after the last editor disconnects),
+  // so web edits reach the repo without anyone pressing save.
+  const sendDoc = useCallback(
+    (commitNow: boolean) => {
+      if (!github) return;
+      const socket = yjs.socket as unknown as { send?: (data: string) => void } | null;
+      if (!socket?.send) return;
+      try {
+        socket.send(
+          JSON.stringify({ type: "doc", content: serializeThreads(markdown, threads), commitNow }),
+        );
+      } catch {
+        // socket not ready; the next change retries
+      }
+    },
+    [github, yjs.socket, markdown, threads],
+  );
+
+  useEffect(() => {
+    if (!github || !markdown) return;
+    const t = setTimeout(() => sendDoc(false), 5000);
+    return () => clearTimeout(t);
+  }, [github, markdown, threads, sendDoc]);
+
+  const commitToGitHub = useCallback(() => sendDoc(true), [sendDoc]);
 
   const togglePreview = useCallback(() => {
     setPreviewToggled((v) => !v);
@@ -242,6 +272,7 @@ export function DocumentProvider({
     docKey,
     suggestKey,
     github,
+    commitToGitHub,
     // Suggest-role users are locked to suggest regardless of the shared mode
     mode: role === "suggest" ? "suggest" : yjs.mode,
     toggleMode,

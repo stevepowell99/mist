@@ -45,7 +45,7 @@ export function useUserIdentity() {
       initial = randomUser();
     }
     setUser({ name: initial.name, color: initial.color, colorLight: initial.colorLight }); // eslint-disable-line react-hooks/set-state-in-effect
-    setNeedsName(!initial.named); // eslint-disable-line react-hooks/set-state-in-effect
+    setNeedsName(!initial.named);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(initial));
   }, []);
 

@@ -3,6 +3,4 @@
 interface Env {
   /** Fine-grained GitHub PAT (contents read/write on selected repos), server-side only */
   GITHUB_TOKEN?: string;
-  /** Shared admin key gating GitHub import and commit-back */
-  ADMIN_KEY?: string;
 }

@@ -7,6 +7,10 @@ import * as encoding from "lib0/encoding";
 import * as decoding from "lib0/decoding";
 import { MSG_SYNC, MSG_AWARENESS, DOC_FORMAT_VERSION } from "../app/shared/constants";
 import type { DocRole, GitHubMeta } from "../app/shared/types";
+import { commitFile } from "../app/lib/github.server";
+
+/** Throttle for auto-committing a GitHub-backed document back to the repo */
+const COMMIT_THROTTLE_MS = 90_000;
 
 /**
  * Durable Objects SQLite accepts Uint8Array for BLOB columns via the
@@ -142,7 +146,10 @@ class DocumentAgent extends Agent {
 
   async onMessage(connection: Connection, message: WSMessage) {
     if (typeof message === "string") {
-      // JSON control messages — reserved for future use
+      // JSON control messages. The connection already passed key validation in
+      // onConnect, so any connected client may relay the serialized document
+      // (it is the shared doc state everyone already sees).
+      await this.handleControl(message);
       return;
     }
 
@@ -200,6 +207,59 @@ class DocumentAgent extends Agent {
       [connection.id as unknown as number],
         null,
       );
+    }
+  }
+
+  /**
+   * Handle JSON control messages. Currently a `doc` message carrying the
+   * serialized markdown of a GitHub-backed document, which is auto-committed
+   * back to the repo on a throttle (or immediately when `commitNow` is set).
+   */
+  private async handleControl(raw: string) {
+    let msg: { type?: string; content?: string; commitNow?: boolean };
+    try {
+      msg = JSON.parse(raw) as typeof msg;
+    } catch {
+      return;
+    }
+    if (msg.type !== "doc" || typeof msg.content !== "string") return;
+    if (!this.readStoredText("github")) return; // only GitHub-backed docs
+
+    this.sql`
+      INSERT INTO doc_state (key, value) VALUES ('pendingMd', ${textBlob(msg.content)})
+      ON CONFLICT(key) DO UPDATE SET value = excluded.value
+    `;
+
+    if (msg.commitNow) {
+      await this.commitPending();
+    } else if ((await this.ctx.storage.getAlarm()) == null) {
+      // Throttle: commit at most once per window while edits keep arriving
+      await this.ctx.storage.setAlarm(Date.now() + COMMIT_THROTTLE_MS);
+    }
+  }
+
+  override readonly alarm = async (): Promise<void> => {
+    await this.commitPending();
+  };
+
+  private async commitPending(): Promise<void> {
+    const githubRaw = this.readStoredText("github");
+    const pending = this.readStoredText("pendingMd");
+    if (!githubRaw || pending == null) return;
+    if (this.readStoredText("lastCommitMd") === pending) return; // unchanged since last commit
+
+    const token = (this.env as { GITHUB_TOKEN?: string }).GITHUB_TOKEN;
+    if (!token) return; // commit-back not configured on this server
+
+    const github = JSON.parse(githubRaw) as GitHubMeta;
+    try {
+      await commitFile(token, github, pending, `Update ${github.path} via mist`);
+      this.sql`
+        INSERT INTO doc_state (key, value) VALUES ('lastCommitMd', ${textBlob(pending)})
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value
+      `;
+    } catch {
+      // Leave pending in place; the next edit or alarm retries.
     }
   }
 
