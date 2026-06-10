@@ -43,6 +43,7 @@ export function createMockDocumentContext(
       socket: null as DocumentContextValue["yjs"]["socket"],
       synced: true,
       user: { name: "Test User", color: "#000", colorLight: "#ccc" },
+      setUserName: vi.fn(),
       mode: "edit" as const,
       setMode: vi.fn(),
       docState: {} as DocumentContextValue["yjs"]["docState"],

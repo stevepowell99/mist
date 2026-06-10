@@ -3,23 +3,13 @@ import { useAgent } from "agents/react";
 import * as Y from "yjs";
 import { Awareness } from "y-protocols/awareness";
 import { YjsProvider } from "./yjs-provider";
-import { USER_COLOURS } from "~/shared/constants";
-import type { UserInfo, DocMode } from "~/shared/types";
-
-function randomUserInfo(): UserInfo {
-  const idx = Math.floor(Math.random() * USER_COLOURS.length);
-  const c = USER_COLOURS[idx];
-  return {
-    name: `User ${Math.floor(Math.random() * 1000)}`,
-    color: c.color,
-    colorLight: c.light,
-  };
-}
+import { useUserIdentity } from "./useUserIdentity";
+import type { DocMode } from "~/shared/types";
 
 export function useYjsEditor(docId: string, docKey: string | null = null) {
   const doc = useMemo(() => new Y.Doc(), []);
   const awareness = useMemo(() => new Awareness(doc), [doc]);
-  const user = useMemo(() => randomUserInfo(), []);
+  const { user, setName: setUserName } = useUserIdentity();
   const docState = useMemo(() => doc.getMap<string>("docState"), [doc]);
   const providerRef = useRef<YjsProvider | null>(null);
   const [synced, setSynced] = useState(false);
@@ -56,6 +46,11 @@ export function useYjsEditor(docId: string, docKey: string | null = null) {
     [docState],
   );
 
+  // Publish identity to awareness so cursors relabel live when the name changes
+  useEffect(() => {
+    awareness.setLocalStateField("user", user);
+  }, [awareness, user]);
+
   // Bridge socket to Yjs
   useEffect(() => {
     if (!socket) return;
@@ -71,5 +66,5 @@ export function useYjsEditor(docId: string, docKey: string | null = null) {
     };
   }, [socket, doc, awareness]);
 
-  return { doc, awareness, socket, synced, user, mode, setMode, docState, isOnboarding };
+  return { doc, awareness, socket, synced, user, setUserName, mode, setMode, docState, isOnboarding };
 }
