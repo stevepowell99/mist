@@ -40,7 +40,9 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
     throw data(null, { status: 404 });
   }
 
-  const docKey = new URL(request.url).searchParams.get("k");
+  const searchParams = new URL(request.url).searchParams;
+  const docKey = searchParams.get("k");
+  const initialPreview = searchParams.get("view") === "preview";
   const { env } = getCloudflare(context);
   const stub = await getAgentByName(env.DocumentAgent, id);
   const res = await stub.fetch(
@@ -58,11 +60,11 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
     throw data(null, { status: 404 });
   }
 
-  return { id, createdAt, role, suggestKey: suggestKey ?? null, docKey, github };
+  return { id, createdAt, role, suggestKey: suggestKey ?? null, docKey, github, initialPreview };
 }
 
 export default function DocumentPage({ loaderData }: Route.ComponentProps) {
-  const { id, createdAt, role, suggestKey, docKey, github } = loaderData;
+  const { id, createdAt, role, suggestKey, docKey, github, initialPreview } = loaderData;
   const yjs = useYjsEditor(id, docKey);
 
   return (
@@ -74,6 +76,7 @@ export default function DocumentPage({ loaderData }: Route.ComponentProps) {
       docKey={docKey}
       suggestKey={suggestKey}
       github={github}
+      initialPreview={initialPreview}
     >
       <DocumentLayout id={id} />
     </DocumentProvider>

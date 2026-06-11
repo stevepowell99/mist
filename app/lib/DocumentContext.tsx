@@ -93,6 +93,7 @@ export function DocumentProvider({
   docKey = null,
   suggestKey = null,
   github = null,
+  initialPreview = false,
   children,
 }: {
   docId: string;
@@ -102,11 +103,12 @@ export function DocumentProvider({
   docKey?: string | null;
   suggestKey?: string | null;
   github?: GitHubMeta | null;
+  initialPreview?: boolean;
   children: React.ReactNode;
 }) {
   const [markdown, setMarkdown] = useState("");
   const [editorInstance, setEditorInstance] = useState<TiptapEditor | null>(null);
-  const [previewToggled, setPreviewToggled] = useState(false);
+  const [previewToggled, setPreviewToggled] = useState(initialPreview);
   const [previewHeld, setPreviewHeld] = useState(false);
   const [commentActive, setCommentActive] = useState(false);
   const [commentSelection, setCommentSelection] = useState<CapturedSelection | null>(null);

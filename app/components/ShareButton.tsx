@@ -3,19 +3,29 @@ import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { serializeThreads } from "~/lib/thread-serialization";
 import { useDocument } from "~/lib/DocumentContext";
 
+/** Build a share URL on the current document, optionally opening in Preview. */
+export function shareLink(href: string, key: string | null, asPreview: boolean): string {
+  const url = new URL(href);
+  const params = new URLSearchParams();
+  if (key) params.set("k", key);
+  if (asPreview) params.set("view", "preview");
+  const qs = params.toString();
+  url.search = qs ? `?${qs}` : "";
+  return url.toString();
+}
+
 export default function ShareButton() {
   const { docId, markdown, threads, role, docKey, suggestKey } = useDocument();
   const [copied, setCopied] = useState<"edit" | "suggest" | null>(null);
+  const [asPreview, setAsPreview] = useState(false);
 
   const handleCopy = useCallback(
     async (kind: "edit" | "suggest", key: string | null) => {
-      const url = new URL(window.location.href);
-      url.search = key ? `?k=${key}` : "";
-      await navigator.clipboard.writeText(url.toString());
+      await navigator.clipboard.writeText(shareLink(window.location.href, key, asPreview));
       setCopied(kind);
       setTimeout(() => setCopied(null), 2000);
     },
-    [],
+    [asPreview],
   );
 
   const handleDownload = useCallback(() => {
@@ -48,6 +58,18 @@ export default function ShareButton() {
           align="end"
           sideOffset={4}
         >
+          <DropdownMenu.CheckboxItem
+            checked={asPreview}
+            onCheckedChange={setAsPreview}
+            onSelect={(e) => e.preventDefault()}
+            className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-sm outline-none data-[highlighted]:bg-border"
+          >
+            <span className="inline-flex h-3.5 w-3.5 items-center justify-center border border-ink">
+              {asPreview ? "✓" : ""}
+            </span>
+            Open as Preview
+          </DropdownMenu.CheckboxItem>
+          <div className="my-1 border-t border-border" />
           {role === "edit" ? (
             <>
               <DropdownMenu.Item
