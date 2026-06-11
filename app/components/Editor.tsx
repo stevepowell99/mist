@@ -11,10 +11,13 @@ import CollaborationCaret from "@tiptap/extension-collaboration-caret";
 import { CriticAddition, CriticDeletion, CriticComment, CriticHighlight, CriticDelimiters } from "~/lib/critic-marks";
 import { markdownDecorations, cleanViewKey, type ImageResolver } from "~/lib/markdown-decorations";
 import { suggestModePlugin, type ModeSource } from "~/lib/suggest-mode";
+import { CitationSuggest, createCitationController, type CitationController } from "~/lib/citation-suggest";
 import { resolveImageSrc, resolveObsidianEmbed } from "~/lib/github";
 import BubbleToolbar from "~/components/BubbleToolbar";
+import CitationPopup from "~/components/CitationPopup";
 import type { useYjsEditor } from "~/lib/useYjsEditor";
 import type { GitHubMeta } from "~/shared/types";
+import type { BibLibrary } from "~/lib/citations";
 
 const MarkdownDecorations = Extension.create<{ resolveImageSrc: ImageResolver | null }>({
   name: "markdownDecorations",
@@ -195,6 +198,7 @@ export default function Editor({
   yjs,
   forceSuggest,
   github,
+  bibLib,
   hidden,
   onEditorReady,
   onCommentClick,
@@ -208,6 +212,7 @@ export default function Editor({
   yjs: YjsEditorState;
   forceSuggest?: boolean;
   github?: GitHubMeta | null;
+  bibLib?: BibLibrary | null;
   hidden?: boolean;
   onEditorReady?: (editor: TiptapEditor) => void;
   onCommentClick?: (commentText: string) => void;
@@ -227,6 +232,16 @@ export default function Editor({
         : docState,
     [forceSuggest, docState],
   );
+  // Stable controller for the `@`-citation picker. The editor reads the library
+  // and mode from it, and React keeps it current via the effects below, so the
+  // editor never rebuilds when the library loads or the mode flips.
+  const citationController = useMemo<CitationController>(() => createCitationController(), []);
+  useEffect(() => {
+    citationController.setLibrary(bibLib ?? null);
+  }, [citationController, bibLib]);
+  useEffect(() => {
+    citationController.setModeGetter(() => modeSource.get("mode") ?? "suggest");
+  }, [citationController, modeSource]);
   const imageResolver: ImageResolver = useMemo(
     () => (target: string, kind: "relative" | "root") =>
       kind === "root"
@@ -258,6 +273,7 @@ export default function Editor({
         }),
         MarkdownDecorations.configure({ resolveImageSrc: imageResolver }),
         SuggestMode.configure({ docState: modeSource }),
+        CitationSuggest.configure({ controller: citationController }),
         CommentClickHandler.configure({ onCommentClick }),
         CommentHighlight,
         ActiveCommentHighlight,
@@ -327,6 +343,7 @@ export default function Editor({
       >
         <EditorContent editor={editor} />
       </div>
+      <CitationPopup controller={citationController} />
       {onNewComment && onResolveAtCursor && onDeleteAtCursor && (
         <BubbleToolbar
           editor={editor}

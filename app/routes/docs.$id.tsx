@@ -97,6 +97,7 @@ function DocumentLayout({ id }: { id: string }) {
     mode,
     role,
     github,
+    bibLib,
   } = useDocument();
 
   const title = fileTitle(github, id);
@@ -139,6 +140,7 @@ function DocumentLayout({ id }: { id: string }) {
             yjs={yjs}
             forceSuggest={role === "suggest"}
             github={github}
+            bibLib={bibLib}
             hidden={showPreview}
             onEditorReady={handleEditorReady}
             onCommentClick={handleCommentClick}

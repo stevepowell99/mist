@@ -197,11 +197,13 @@ export function DocumentProvider({
 
   const unsaved = !!github && !!currentHash && currentHash !== lastCommittedHash;
 
-  // Lazily fetch and parse the repo's BibTeX library the first time Preview opens.
+  // Fetch and parse the repo's BibTeX library once for a GitHub-backed doc.
+  // Loaded eagerly (not just on Preview) so the `@`-citation picker in the
+  // editor has references to offer.
   const [bibLib, setBibLib] = useState<BibLibrary | null>(null);
   const bibFetchedRef = useRef(false);
   useEffect(() => {
-    if (!github || !showPreview || bibFetchedRef.current) return;
+    if (!github || bibFetchedRef.current) return;
     bibFetchedRef.current = true;
     let cancelled = false;
     (async () => {
@@ -229,7 +231,7 @@ export function DocumentProvider({
     return () => {
       cancelled = true;
     };
-  }, [github, showPreview]);
+  }, [github]);
 
   const togglePreview = useCallback(() => {
     setPreviewToggled((v) => !v);
