@@ -13,6 +13,7 @@ Everything is public by URL. Documents persist live with no save button. Multipl
 - **Preview mode** — rendered markdown with click, hover, or keypress toggle
 - **CLI upload** — `curl https://your-domain/new -T file.md`
 - **Drag and drop** `.md` files to create new documents
+- **Citations**: type `@` to pick a reference from the repo's BibTeX file and insert `[@key]`, rendered to APA with a reference list in Preview ([details](docs/markdown-and-criticmarkup.md#citations-and-bibliography))
 - **Dark/light/auto themes**
 - **Documents persist indefinitely** (this fork removed the upstream 99-hour auto-expiry)
 

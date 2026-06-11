@@ -141,6 +141,31 @@ The two downloaded files should be byte-identical. If they are not, it is a bug.
 
 - **Substitution syntax** is rejected on import — it must be manually converted to `{--old--}{++new++}` before uploading.
 
+## Citations and bibliography
+
+Cite sources with Pandoc syntax in the markdown source:
+
+| Syntax | Renders in Preview as |
+|--------|-----------------------|
+| `[@smith2020]` | parenthetical, e.g. (Smith & Jones 2020) |
+| `@smith2020` | narrative, e.g. Smith & Jones (2020) |
+| `[@smith2020, p. 5]` | with a locator |
+| `[-@smith2020]` | author suppressed, year only |
+
+Preview converts these to inline APA and lists every cited work under a References heading at the foot of the document. The editor itself keeps the raw `[@key]` text.
+
+### The reference library
+
+Citations resolve against a BibTeX file in the document's GitHub repository. The first of these paths that exists is used:
+
+`assets/MyLibrary.bib`, `assets/My Library.bib`, `My Library.bib`, `MyLibrary.bib`, `references.bib`, `bibliography.bib`.
+
+A document not backed by a GitHub repo has no library, so its citations render with the key and `n.d.` in place of the author and year.
+
+### The @ picker
+
+Typing `@` in the editor opens a searchable list of the library's references (author, year, title), filtered as you type; choosing one inserts `[@key]`. It works in both edit and suggest mode, and in suggest mode the inserted citation shows as a tracked addition. The picker appears only on a document whose repository contains a `.bib`.
+
 ## References
 
 - [CriticMarkup spec](https://criticmarkup.com/)
