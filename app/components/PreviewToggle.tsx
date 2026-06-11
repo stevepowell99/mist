@@ -40,6 +40,8 @@ export default function PreviewToggle() {
       right="Preview"
       leftFill="bg-signal-red"
       rightFill="bg-signal-green"
+      leftText="text-signal-red"
+      rightText="text-signal-green"
       isRight={showPreview}
       onChange={(preview) => {
         if (preview !== showPreview) togglePreview();

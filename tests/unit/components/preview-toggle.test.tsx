@@ -14,20 +14,22 @@ describe("PreviewToggle", () => {
     expect(getByText("Preview")).toBeTruthy();
   });
 
-  it("emphasizes Preview when preview is showing", () => {
+  it("colours Preview green and bolds it when showing", () => {
     const { getByText } = renderWithDocument(createElement(PreviewToggle), {
       context: { showPreview: true },
     });
+    expect(getByText("Preview").className).toContain("text-signal-green");
+    expect(getByText("Editor").className).toContain("text-signal-red");
     expect(getByText("Preview").className).toContain("font-semibold");
-    expect(getByText("Editor").className).toContain("opacity-60");
+    expect(getByText("Editor").className).toContain("opacity-50");
   });
 
-  it("emphasizes Editor when preview is not showing", () => {
+  it("bolds Editor when preview is not showing", () => {
     const { getByText } = renderWithDocument(createElement(PreviewToggle), {
       context: { showPreview: false },
     });
     expect(getByText("Editor").className).toContain("font-semibold");
-    expect(getByText("Preview").className).toContain("opacity-60");
+    expect(getByText("Preview").className).toContain("opacity-50");
   });
 
   it("clicking Preview calls togglePreview", () => {

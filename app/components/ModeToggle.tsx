@@ -15,6 +15,8 @@ export default function ModeToggle() {
       right="Suggest"
       leftFill="bg-signal-red"
       rightFill="bg-signal-orange"
+      leftText="text-signal-red"
+      rightText="text-signal-orange"
       isRight={isSuggest}
       onChange={(suggest) => {
         if (suggest !== isSuggest) toggleMode();

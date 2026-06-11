@@ -15,6 +15,8 @@ export default function PairToggle({
   onChange,
   leftFill,
   rightFill,
+  leftText,
+  rightText,
   disabled = false,
 }: {
   left: string;
@@ -23,16 +25,18 @@ export default function PairToggle({
   onChange: (right: boolean) => void;
   leftFill: string;
   rightFill: string;
+  leftText: string;
+  rightText: string;
   disabled?: boolean;
 }) {
-  const label = (active: boolean) =>
-    `text-sm uppercase tracking-wider text-ink transition-all ${
-      active ? "font-semibold" : "font-normal opacity-60"
+  const label = (active: boolean, color: string) =>
+    `text-sm uppercase tracking-wider transition-all ${color} ${
+      active ? "font-semibold opacity-100" : "font-normal opacity-50"
     } ${disabled ? "cursor-default" : "cursor-pointer hover:opacity-100"}`;
 
   return (
     <div className={`flex h-12 items-center justify-center gap-3 px-4 ${disabled ? "opacity-40" : ""}`}>
-      <button type="button" disabled={disabled} onClick={() => onChange(false)} className={label(!isRight)}>
+      <button type="button" disabled={disabled} onClick={() => onChange(false)} className={label(!isRight, leftText)}>
         {left}
       </button>
       <Switch.Root
@@ -44,7 +48,7 @@ export default function PairToggle({
       >
         <Switch.Thumb className="pointer-events-none block h-5 w-5 rounded-full bg-paper shadow ring-0 transition-transform data-[state=checked]:translate-x-5 data-[state=unchecked]:translate-x-0.5" />
       </Switch.Root>
-      <button type="button" disabled={disabled} onClick={() => onChange(true)} className={label(isRight)}>
+      <button type="button" disabled={disabled} onClick={() => onChange(true)} className={label(isRight, rightText)}>
         {right}
       </button>
     </div>
