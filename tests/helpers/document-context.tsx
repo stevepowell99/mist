@@ -63,6 +63,7 @@ export function createMockDocumentContext(
     toggleMode: vi.fn(),
     showPreview: false,
     togglePreview: vi.fn(),
+    setPreview: vi.fn(),
     setPreviewHeld: vi.fn(),
     cleanView: true,
     toggleCleanView: vi.fn(),

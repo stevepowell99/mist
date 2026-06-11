@@ -6,13 +6,12 @@ import { renderWithDocument } from "../../helpers/document-context";
 import MobilePanel from "~/components/MobilePanel";
 
 describe("MobilePanel", () => {
-  it("renders the three tab buttons", () => {
+  it("renders the View and Comments tab buttons", () => {
     const { getByRole } = renderWithDocument(
       createElement(MobilePanel, { className: "lg:hidden" }),
     );
-    expect(getByRole("button", { name: "Editing" })).toBeTruthy();
+    expect(getByRole("button", { name: "View" })).toBeTruthy();
     expect(getByRole("button", { name: "Comments" })).toBeTruthy();
-    expect(getByRole("button", { name: "Preview" })).toBeTruthy();
   });
 
   it("clicking a tab shows corresponding content, clicking again collapses", () => {
@@ -21,7 +20,7 @@ describe("MobilePanel", () => {
       { context: { mode: "suggest" } },
     );
 
-    // Editing tab starts active, should show the Edit/Suggest ModeToggle
+    // View tab starts active, should show the three-position ViewToggle
     expect(getByText("Suggest")).toBeTruthy();
 
     // Click Comments tab
@@ -33,14 +32,14 @@ describe("MobilePanel", () => {
     expect(queryByText("Comments (0)")).toBeFalsy();
   });
 
-  it("editing tab renders ModeToggle and SuggestionActions", () => {
-    const { getByText, getByLabelText } = renderWithDocument(
+  it("View tab renders the ViewToggle and SuggestionActions", () => {
+    const { getByText, getByRole } = renderWithDocument(
       createElement(MobilePanel, { className: "lg:hidden" }),
     );
 
-    // Editing tab is active by default; ModeToggle shows the Edit/Suggest pair
+    // View tab is active by default; ViewToggle shows the three positions
     expect(getByText("Edit")).toBeTruthy();
-    expect(getByLabelText("Edit or Suggest")).toBeTruthy();
+    expect(getByRole("group", { name: "View mode" })).toBeTruthy();
   });
 
   it("comments tab renders CommentInput and ThreadList", () => {

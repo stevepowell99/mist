@@ -2,17 +2,15 @@ import { useState, useEffect, useRef } from "react";
 import CommentInput from "~/components/CommentInput";
 import ThreadList from "~/components/ThreadList";
 import SuggestionActions from "~/components/SuggestionActions";
-import ModeToggle from "~/components/ModeToggle";
-import PreviewToggle from "~/components/PreviewToggle";
+import ViewToggle from "~/components/ViewToggle";
 import OnboardingBanner from "~/components/OnboardingBanner";
 import { useDocument } from "~/lib/DocumentContext";
 
-type Tab = "editing" | "comments" | "preview";
+type Tab = "editing" | "comments";
 
 const tabs: { id: Tab; label: string }[] = [
-  { id: "editing", label: "Editing" },
+  { id: "editing", label: "View" },
   { id: "comments", label: "Comments" },
-  { id: "preview", label: "Preview" },
 ];
 
 export default function MobilePanel({ className }: { className?: string }) {
@@ -60,7 +58,7 @@ export default function MobilePanel({ className }: { className?: string }) {
           {activeTab === "editing" && (
             <>
               <OnboardingBanner />
-              <ModeToggle />
+              <ViewToggle />
               <SuggestionActions />
             </>
           )}
@@ -69,9 +67,6 @@ export default function MobilePanel({ className }: { className?: string }) {
               <CommentInput />
               <ThreadList />
             </>
-          )}
-          {activeTab === "preview" && (
-            <PreviewToggle />
           )}
         </div>
       )}

@@ -40,6 +40,7 @@ export interface DocumentContextValue {
   // Preview
   showPreview: boolean;
   togglePreview: () => void;
+  setPreview: (show: boolean) => void;
   setPreviewHeld: (held: boolean) => void;
 
   // Clean view
@@ -234,6 +235,10 @@ export function DocumentProvider({
     setPreviewToggled((v) => !v);
   }, []);
 
+  const setPreview = useCallback((show: boolean) => {
+    setPreviewToggled(show);
+  }, []);
+
   const toggleCleanView = useCallback(() => {
     setCleanView((v) => !v);
   }, []);
@@ -360,6 +365,7 @@ export function DocumentProvider({
     toggleMode,
     showPreview,
     togglePreview,
+    setPreview,
     setPreviewHeld,
     cleanView,
     toggleCleanView,

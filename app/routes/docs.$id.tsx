@@ -8,12 +8,11 @@ import { useYjsEditor } from "~/lib/useYjsEditor";
 import { DocumentProvider, useDocument } from "~/lib/DocumentContext";
 import Editor from "~/components/Editor";
 import Preview from "~/components/Preview";
-import PreviewToggle from "~/components/PreviewToggle";
+import ViewToggle from "~/components/ViewToggle";
 import ConnectionStatus from "~/components/ConnectionStatus";
 import UserName from "~/components/UserName";
 import SaveStatus from "~/components/SaveStatus";
 import ShareButton from "~/components/ShareButton";
-import ModeToggle from "~/components/ModeToggle";
 import CleanViewToggle from "~/components/CleanViewToggle";
 import SuggestionActions from "~/components/SuggestionActions";
 import CommentInput from "~/components/CommentInput";
@@ -154,11 +153,10 @@ function DocumentLayout({ id }: { id: string }) {
         </main>
         <aside className="hidden w-96 flex-col overflow-hidden lg:flex">
           <div className="shrink-0 border-b border-border">
-            <PreviewToggle />
+            <ViewToggle />
           </div>
           <div className="flex-1 overflow-y-auto">
             <OnboardingBanner />
-            <ModeToggle />
             <SuggestionActions />
             {mode === "suggest" && <CleanViewToggle />}
             <div className="border-t border-border" />
