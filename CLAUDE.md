@@ -36,6 +36,8 @@ Import: paste a `github.com/<owner>/<repo>/blob/<branch>/<path>.md` URL on the h
 
 - `npm run dev` serves at `http://localhost:5173`. On a cold Vite cache, the first click on New document or drag-and-drop 504s ("Outdated Optimize Dep") because the editor route lazy-loads TipTap/Yjs and Vite re-optimises mid-navigation. Hard-reload the browser or restart the dev server; deployed builds are unaffected.
 - Scratch work goes in `_tmp/` (gitignored locally); Playwright here is the Python package, not the npm one.
+- Keep every `@tiptap/*` package on the same version. `@tiptap/core` and `@tiptap/pm` are pinned to an exact version (not `^`) because installing a newer extension (e.g. `@tiptap/suggestion`) otherwise pulls core and pm up while the other extensions stay behind, putting two copies of ProseMirror in one editor and freezing the browser on edit. After adding any TipTap package, check `node_modules/@tiptap/*/package.json` all report one version.
+- Editor highlighting is incremental: `markdown-decorations.ts` holds the DecorationSet in plugin state, maps it per keystroke, and recomputes the whole document only on a 120ms debounce. Do not move the full `computeMarkdownDecorations` back into the `decorations` prop; that rebuilt everything on every keystroke and made long documents unusable.
 
 ## Start of Session
 
