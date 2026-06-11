@@ -13,6 +13,11 @@
   --color-coral: #e8564a;
   --color-chartreuse: #b5e636;
   --color-canary: #ffe014;
+  /* Traffic-light signals for the mode/preview toggles: edit = red (direct
+     changes), suggest = orange (tracked), preview = green (read-only). */
+  --color-signal-red: #e5484d;
+  --color-signal-orange: #f0883e;
+  --color-signal-green: #30a46c;
 }
 
 html {

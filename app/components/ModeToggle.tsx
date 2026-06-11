@@ -13,6 +13,8 @@ export default function ModeToggle() {
     <PairToggle
       left="Edit"
       right="Suggest"
+      leftFill="bg-signal-red"
+      rightFill="bg-signal-orange"
       isRight={isSuggest}
       onChange={(suggest) => {
         if (suggest !== isSuggest) toggleMode();

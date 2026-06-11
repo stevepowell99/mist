@@ -38,6 +38,8 @@ export default function PreviewToggle() {
     <PairToggle
       left="Editor"
       right="Preview"
+      leftFill="bg-signal-red"
+      rightFill="bg-signal-green"
       isRight={showPreview}
       onChange={(preview) => {
         if (preview !== showPreview) togglePreview();
