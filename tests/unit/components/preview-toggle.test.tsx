@@ -18,14 +18,16 @@ describe("PreviewToggle", () => {
     const { getByText } = renderWithDocument(createElement(PreviewToggle), {
       context: { showPreview: true },
     });
-    expect(getByText("Preview").className).toContain("text-ink");
+    expect(getByText("Preview").className).toContain("font-semibold");
+    expect(getByText("Editor").className).toContain("opacity-60");
   });
 
   it("emphasizes Editor when preview is not showing", () => {
     const { getByText } = renderWithDocument(createElement(PreviewToggle), {
       context: { showPreview: false },
     });
-    expect(getByText("Editor").className).toContain("text-ink");
+    expect(getByText("Editor").className).toContain("font-semibold");
+    expect(getByText("Preview").className).toContain("opacity-60");
   });
 
   it("clicking Preview calls togglePreview", () => {

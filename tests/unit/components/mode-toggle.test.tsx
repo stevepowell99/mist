@@ -14,12 +14,15 @@ describe("ModeToggle", () => {
     expect(getByText("Suggest")).toBeTruthy();
   });
 
-  it("emphasizes the active side", () => {
+  it("emphasizes the active side while keeping both legible", () => {
     const { getByText } = renderWithDocument(createElement(ModeToggle), {
       context: { mode: "suggest" },
     });
+    // Both labels stay full-ink (neither looks disabled); the active one is bold.
     expect(getByText("Suggest").className).toContain("text-ink");
-    expect(getByText("Edit").className).toContain("text-muted");
+    expect(getByText("Edit").className).toContain("text-ink");
+    expect(getByText("Suggest").className).toContain("font-semibold");
+    expect(getByText("Edit").className).toContain("opacity-60");
   });
 
   it("toggling calls toggleMode", () => {
