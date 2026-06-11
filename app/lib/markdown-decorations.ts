@@ -1,5 +1,7 @@
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
+import type { EditorView } from "@tiptap/pm/view";
+import type { Node as PMNode } from "@tiptap/pm/model";
 import { tokenize, SugarHigh } from "sugar-high";
 import * as presets from "sugar-high/presets";
 
@@ -367,7 +369,13 @@ export function findDecorations(
 
 export const cleanViewKey = new PluginKey<boolean>("cleanView");
 
-const markdownPluginKey = new PluginKey("markdownDecorations");
+const markdownPluginKey = new PluginKey<DecorationSet>("markdownDecorations");
+
+// Recomputing the whole document's decorations is O(document length), so on a
+// long doc it must not run on every keystroke. Typing only maps the existing
+// set (cheap); the full recompute is debounced by this many ms after the last
+// edit, by which point styling on the line being typed catches up.
+const MARKDOWN_RECOMPUTE_MS = 120;
 
 // Image syntax in editor text: markdown ![alt](url), HTML <img src="url">,
 // and Obsidian embed ![[path]] (path is relative to the repo root).
@@ -397,8 +405,51 @@ export function markdownDecorations(resolveImageSrc: ImageResolver | null = null
     },
   });
 
-  const decorationPlugin = new Plugin({
+  const buildSet = (doc: PMNode) =>
+    DecorationSet.create(doc, computeMarkdownDecorations(doc, resolveImageSrc));
+
+  const decorationPlugin = new Plugin<DecorationSet>({
     key: markdownPluginKey,
+    state: {
+      init(_config, editorState) {
+        return buildSet(editorState.doc);
+      },
+      apply(tr, set) {
+        // A debounced recompute (see view() below) delivers a fresh set via meta.
+        const meta = tr.getMeta(markdownPluginKey) as DecorationSet | undefined;
+        if (meta) return meta;
+        // Otherwise just track positions through the edit. Mapping is cheap even
+        // with thousands of decorations, so typing stays flat on long documents.
+        return tr.docChanged ? set.map(tr.mapping, tr.doc) : set;
+      },
+    },
+    view() {
+      let timer: ReturnType<typeof setTimeout> | null = null;
+      const schedule = (view: EditorView) => {
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(() => {
+          timer = null;
+          // Defer while an IME composition is active; the next edit reschedules.
+          if (view.composing) {
+            schedule(view);
+            return;
+          }
+          view.dispatch(
+            view.state.tr
+              .setMeta(markdownPluginKey, buildSet(view.state.doc))
+              .setMeta("addToHistory", false),
+          );
+        }, MARKDOWN_RECOMPUTE_MS);
+      };
+      return {
+        update(view, prevState) {
+          if (!view.state.doc.eq(prevState.doc)) schedule(view);
+        },
+        destroy() {
+          if (timer) clearTimeout(timer);
+        },
+      };
+    },
     props: {
       handleClick(_view, _pos, event) {
         const target = event.target as HTMLElement;
@@ -414,78 +465,86 @@ export function markdownDecorations(resolveImageSrc: ImageResolver | null = null
         return false;
       },
       decorations(state) {
-        const decorations: Decoration[] = [];
-
-        // First pass: collect paragraphs and find code blocks
-        const paragraphs: ParagraphInfo[] = [];
-        state.doc.descendants((node, pos) => {
-          if (node.type.name === "paragraph") {
-            paragraphs.push({ node, pos });
-          }
-        });
-
-        const { decorations: codeBlockDecos, codeBlockRanges } =
-          findCodeBlockDecorations(paragraphs);
-        decorations.push(...codeBlockDecos);
-
-        // Table rows: monospace so pipe columns align in the source view
-        for (const { node, pos } of paragraphs) {
-          if (!TABLE_ROW_REGEX.test(node.textContent)) continue;
-          if (posInsideCodeBlock(pos, node.nodeSize, codeBlockRanges)) continue;
-          decorations.push(
-            Decoration.node(pos, pos + node.nodeSize, { class: "md-table-row" }),
-          );
-        }
-
-        // Second pass: inline patterns, skipping nodes inside code blocks
-        state.doc.descendants((node, pos) => {
-          if (!node.isText || !node.text) return;
-          if (posInsideCodeBlock(pos, node.nodeSize, codeBlockRanges)) return;
-          for (const pattern of MARKDOWN_PATTERNS) {
-            decorations.push(...findDecorations(node.text, pos, pattern));
-          }
-
-          // Inline image preview: render the picture below its source line so
-          // it can be seen (and its source text commented on) while editing.
-          // Handles both markdown ![alt](url) and HTML <img src="url">.
-          if (resolveImageSrc) {
-            const text = node.text;
-            const found: Array<{ raw: string; alt: string; end: number; kind: "relative" | "root" }> = [];
-            for (const [re, urlGroup, altGroup, kind] of [
-              [INLINE_IMAGE_RE, 2, 1, "relative"],
-              [INLINE_HTML_IMAGE_RE, 1, 0, "relative"],
-              [INLINE_OBSIDIAN_RE, 1, 0, "root"],
-            ] as const) {
-              re.lastIndex = 0;
-              let m: RegExpExecArray | null;
-              while ((m = re.exec(text)) !== null) {
-                found.push({ raw: m[urlGroup], alt: altGroup ? m[altGroup] : "", end: pos + m.index + m[0].length, kind });
-              }
-            }
-            for (const { raw, alt, end, kind } of found) {
-              const src = resolveImageSrc(raw, kind);
-              if (!src) continue;
-              decorations.push(
-                Decoration.widget(
-                  end,
-                  () => {
-                    const img = document.createElement("img");
-                    img.src = src;
-                    img.alt = alt;
-                    img.className = "md-inline-image";
-                    return img;
-                  },
-                  { side: 1, key: `img:${end}:${src}` },
-                ),
-              );
-            }
-          }
-        });
-
-        return DecorationSet.create(state.doc, decorations);
+        return markdownPluginKey.getState(state);
       },
     },
   });
 
   return [cleanViewPlugin, decorationPlugin];
+}
+
+/** Full-document markdown decorations. O(document length); callers debounce it. */
+function computeMarkdownDecorations(
+  doc: PMNode,
+  resolveImageSrc: ImageResolver | null,
+): Decoration[] {
+  const decorations: Decoration[] = [];
+
+  // First pass: collect paragraphs and find code blocks
+  const paragraphs: ParagraphInfo[] = [];
+  doc.descendants((node, pos) => {
+    if (node.type.name === "paragraph") {
+      paragraphs.push({ node, pos });
+    }
+  });
+
+  const { decorations: codeBlockDecos, codeBlockRanges } =
+    findCodeBlockDecorations(paragraphs);
+  decorations.push(...codeBlockDecos);
+
+  // Table rows: monospace so pipe columns align in the source view
+  for (const { node, pos } of paragraphs) {
+    if (!TABLE_ROW_REGEX.test(node.textContent)) continue;
+    if (posInsideCodeBlock(pos, node.nodeSize, codeBlockRanges)) continue;
+    decorations.push(
+      Decoration.node(pos, pos + node.nodeSize, { class: "md-table-row" }),
+    );
+  }
+
+  // Second pass: inline patterns, skipping nodes inside code blocks
+  doc.descendants((node, pos) => {
+    if (!node.isText || !node.text) return;
+    if (posInsideCodeBlock(pos, node.nodeSize, codeBlockRanges)) return;
+    for (const pattern of MARKDOWN_PATTERNS) {
+      decorations.push(...findDecorations(node.text, pos, pattern));
+    }
+
+    // Inline image preview: render the picture below its source line so
+    // it can be seen (and its source text commented on) while editing.
+    // Handles both markdown ![alt](url) and HTML <img src="url">.
+    if (resolveImageSrc) {
+      const text = node.text;
+      const found: Array<{ raw: string; alt: string; end: number; kind: "relative" | "root" }> = [];
+      for (const [re, urlGroup, altGroup, kind] of [
+        [INLINE_IMAGE_RE, 2, 1, "relative"],
+        [INLINE_HTML_IMAGE_RE, 1, 0, "relative"],
+        [INLINE_OBSIDIAN_RE, 1, 0, "root"],
+      ] as const) {
+        re.lastIndex = 0;
+        let m: RegExpExecArray | null;
+        while ((m = re.exec(text)) !== null) {
+          found.push({ raw: m[urlGroup], alt: altGroup ? m[altGroup] : "", end: pos + m.index + m[0].length, kind });
+        }
+      }
+      for (const { raw, alt, end, kind } of found) {
+        const src = resolveImageSrc(raw, kind);
+        if (!src) continue;
+        decorations.push(
+          Decoration.widget(
+            end,
+            () => {
+              const img = document.createElement("img");
+              img.src = src;
+              img.alt = alt;
+              img.className = "md-inline-image";
+              return img;
+            },
+            { side: 1, key: `img:${end}:${src}` },
+          ),
+        );
+      }
+    }
+  });
+
+  return decorations;
 }
