@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useEffect, useState } from "react";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 import { useDocument } from "~/lib/DocumentContext";
@@ -31,7 +31,14 @@ const PUBLISHED_SITES: Record<string, string> = {
 export default function Preview() {
   const { markdown, github, bibLib } = useDocument();
 
+  // DOMPurify needs a DOM, which the Cloudflare Worker has none of, so the
+  // markdown render only runs after hydration. With a Preview share link the
+  // page can mount with Preview already showing, hence the client-only gate.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []); // eslint-disable-line react-hooks/set-state-in-effect
+
   const html = useMemo(() => {
+    if (!mounted) return "";
     const resolved = github ? rewriteImageUrls(stripMistBanner(markdown), github) : stripMistBanner(markdown);
     const siteBase = github ? PUBLISHED_SITES[github.repo] ?? null : null;
     const withLinks = stripPandocAttrs(renderWikiLinks(resolved, siteBase));
@@ -45,7 +52,7 @@ export default function Preview() {
     const withCritic = renderCriticMarkup(body);
     const raw = (marked.parse(withCritic, { async: false }) as string) + references;
     return DOMPurify.sanitize(raw);
-  }, [markdown, github, bibLib]);
+  }, [mounted, markdown, github, bibLib]);
 
   return (
     <div
