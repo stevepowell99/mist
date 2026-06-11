@@ -1,4 +1,5 @@
 import { data, Link } from "react-router";
+import { useRef, useCallback, useEffect, useLayoutEffect } from "react";
 import type { Route } from "./+types/docs.$id";
 import { getAgentByName } from "agents";
 import { isValidDocumentId } from "~/shared/constants";
@@ -21,6 +22,11 @@ import ThemeSelector from "~/components/ThemeSelector";
 import MobilePanel from "~/components/MobilePanel";
 import OnboardingBanner from "~/components/OnboardingBanner";
 import NamePrompt from "~/components/NamePrompt";
+
+// useLayoutEffect on the client (so scroll is restored before paint, no flash),
+// useEffect on the server (avoids the SSR warning).
+const useIsomorphicLayoutEffect =
+  typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
 function fileTitle(github: GitHubMeta | null, fallback: string): string {
   if (!github) return fallback;
@@ -102,6 +108,62 @@ function DocumentLayout({ id }: { id: string }) {
 
   const title = fileTitle(github, id);
 
+  // The editor and Preview share this scroll container, so swapping between
+  // them would otherwise jump to the top. Track the scroll fraction and restore
+  // it when the view flips, re-applying as Preview's content settles (it mounts
+  // empty then fills in, which changes the scroll height).
+  const mainRef = useRef<HTMLElement>(null);
+  const scrollFraction = useRef(0);
+  const restoring = useRef(false);
+
+  const applyFraction = useCallback(() => {
+    const m = mainRef.current;
+    if (!m) return;
+    const max = m.scrollHeight - m.clientHeight;
+    m.scrollTop = max > 0 ? scrollFraction.current * max : 0;
+  }, []);
+
+  const handleScroll = useCallback(() => {
+    if (restoring.current) return;
+    const m = mainRef.current;
+    if (!m) return;
+    const max = m.scrollHeight - m.clientHeight;
+    scrollFraction.current = max > 0 ? m.scrollTop / max : 0;
+  }, []);
+
+  useIsomorphicLayoutEffect(() => {
+    const main = mainRef.current;
+    if (!main) return;
+    // Preview mounts empty then renders its markdown (and images) over several
+    // frames, so a one-shot restore lands at the wrong height. Re-apply the
+    // fraction each frame until the scroll height holds steady, then stop.
+    restoring.current = true;
+    let raf = 0;
+    let lastHeight = -1;
+    let stableFrames = 0;
+    const start = performance.now();
+    const tick = () => {
+      applyFraction();
+      const h = main.scrollHeight;
+      if (h === lastHeight) {
+        stableFrames += 1;
+      } else {
+        stableFrames = 0;
+        lastHeight = h;
+      }
+      if (stableFrames < 4 && performance.now() - start < 700) {
+        raf = requestAnimationFrame(tick);
+      } else {
+        restoring.current = false;
+      }
+    };
+    raf = requestAnimationFrame(tick);
+    return () => {
+      cancelAnimationFrame(raf);
+      restoring.current = false;
+    };
+  }, [showPreview, applyFraction]);
+
   return (
     <div className="flex h-screen flex-col">
       <header className="flex items-stretch border-b border-border">
@@ -135,7 +197,11 @@ function DocumentLayout({ id }: { id: string }) {
         </div>
       </header>
       <div className="flex flex-1 overflow-hidden">
-        <main className="flex-1 overflow-y-auto pb-[33vh] lg:border-r lg:border-border lg:pb-0">
+        <main
+          ref={mainRef}
+          onScroll={handleScroll}
+          className="flex-1 overflow-y-auto pb-[33vh] lg:border-r lg:border-border lg:pb-0"
+        >
           <Editor
             yjs={yjs}
             forceSuggest={role === "suggest"}
