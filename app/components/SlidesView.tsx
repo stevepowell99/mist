@@ -211,6 +211,9 @@ function extractCssPaths(frontmatter: string): string[] {
       }
     } else {
       for (let j = i + 1; j < lines.length; j++) {
+        // The editor serializes each line as its own paragraph, so the YAML
+        // arrives double-spaced; skip blank lines rather than stop on them.
+        if (lines[j].trim() === "") continue;
         const item = lines[j].match(/^\s*-\s*(.+)$/);
         if (!item) break;
         paths.push(item[1].trim().replace(/['"]/g, ""));
@@ -220,20 +223,28 @@ function extractCssPaths(frontmatter: string): string[] {
   return paths;
 }
 
-/** Resolve a deck CSS entry to a URL. Absolute URLs work for any deck; a
- * relative path needs a folder backend (a GitHub repo today) to resolve against.
- * GitHub files are served through jsDelivr, not raw.githubusercontent.com, which
- * sends CSS as text/plain with nosniff so the browser refuses to apply it. */
-function cssUrl(path: string, github: GitHubMeta | null): string | null {
-  if (/^https?:\/\//.test(path)) return path;
-  if (!github || path.startsWith("/") || path.toLowerCase().endsWith(".scss")) return null;
-  const resolved = resolveAssetPath(github.path, path);
-  const enc = resolved.split("/").map(encodeURIComponent).join("/");
+/** jsDelivr URL for a repo-relative path. jsDelivr serves correct MIME and CORS,
+ * unlike raw.githubusercontent.com (text/plain + nosniff blocks CSS; no CORS for
+ * fetch). */
+function ghJsdelivr(github: GitHubMeta, repoPath: string): string {
+  const enc = repoPath.split("/").map(encodeURIComponent).join("/");
   return `https://cdn.jsdelivr.net/gh/${github.owner}/${github.repo}@${github.branch}/${enc}`;
 }
 
-function buildHtml(md: string, github: GitHubMeta | null, bust: string): string {
-  const { frontmatter, body: rawBody } = stripFrontmatter(md);
+/** Resolve a deck CSS entry to a URL. Absolute URLs work for any deck; a
+ * relative path needs a folder backend (a GitHub repo today) to resolve against. */
+function cssUrl(path: string, github: GitHubMeta | null): string | null {
+  if (/^https?:\/\//.test(path)) return path;
+  if (!github || path.startsWith("/") || path.toLowerCase().endsWith(".scss")) return null;
+  return ghJsdelivr(github, resolveAssetPath(github.path, path));
+}
+
+function buildHtml(md: string, github: GitHubMeta | null, bust: string, fileFrontmatter: string): string {
+  const { frontmatter: editorFm, body: rawBody } = stripFrontmatter(md);
+  // mist strips YAML frontmatter on import, so the editor content usually has
+  // none; the original file (fetched separately) is the reliable source of
+  // theme: and css:.
+  const frontmatter = fileFrontmatter || editorFm;
   let body = stripCritic(rawBody);
   if (github) body = rewriteImageUrls(body, github); // relative images -> raw GitHub URLs
   const sections = splitSlides(body)
@@ -280,7 +291,30 @@ export default function SlidesView() {
     setBust(Date.now().toString(36)); // eslint-disable-line react-hooks/set-state-in-effect
   }, []);
 
-  const html = useMemo(() => buildHtml(debounced, github, bust), [debounced, github, bust]);
+  // The editor content lost its YAML frontmatter on import, so fetch the original
+  // file from GitHub to recover theme: and css:.
+  const [fileFrontmatter, setFileFrontmatter] = useState("");
+  useEffect(() => {
+    if (!github) {
+      setFileFrontmatter(""); // eslint-disable-line react-hooks/set-state-in-effect
+      return;
+    }
+    let cancelled = false;
+    fetch(ghJsdelivr(github, github.path))
+      .then((r) => (r.ok ? r.text() : ""))
+      .then((t) => {
+        if (!cancelled) setFileFrontmatter(stripFrontmatter(t).frontmatter);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [github]);
+
+  const html = useMemo(
+    () => buildHtml(debounced, github, bust, fileFrontmatter),
+    [debounced, github, bust, fileFrontmatter],
+  );
 
   return (
     <iframe
