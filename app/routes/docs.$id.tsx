@@ -1,5 +1,5 @@
 import { data, Link } from "react-router";
-import { useRef, useCallback, useEffect, useLayoutEffect } from "react";
+import { useRef, useCallback, useEffect, useLayoutEffect, useState, type MouseEvent as ReactMouseEvent } from "react";
 import type { Route } from "./+types/docs.$id";
 import { getAgentByName } from "agents";
 import { isValidDocumentId } from "~/shared/constants";
@@ -110,7 +110,43 @@ function DocumentLayout({ id }: { id: string }) {
   } = useDocument();
 
   const title = fileTitle(github, id);
-  const slidesMode = showPreview && isSlideDeck(markdown, github);
+  const deck = isSlideDeck(markdown, github);
+  const slidesMode = showPreview && deck;
+
+  // Desktop-only draggable split: drag the gutter left to put the editor on the
+  // left and a live preview on the right. editorPct is the editor's width; at
+  // 100 there is no split. Mobile keeps the full-swap Preview toggle.
+  const [isDesktop, setIsDesktop] = useState(false);
+  const [editorPct, setEditorPct] = useState(100);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const splitOpen = isDesktop && editorPct <= 95;
+
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const update = () => setIsDesktop(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+
+  const startDrag = useCallback((e: ReactMouseEvent) => {
+    e.preventDefault();
+    const el = contentRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const onMove = (ev: MouseEvent) => {
+      const pct = ((ev.clientX - rect.left) / rect.width) * 100;
+      setEditorPct(Math.min(100, Math.max(20, pct)));
+    };
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      document.body.style.userSelect = "";
+    };
+    document.body.style.userSelect = "none";
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }, []);
 
   // The editor and Preview share this scroll container, so swapping between
   // them would otherwise jump to the top. Track the scroll fraction and restore
@@ -202,30 +238,49 @@ function DocumentLayout({ id }: { id: string }) {
         </div>
       </header>
       <div className="flex flex-1 overflow-hidden">
-        <main
-          ref={mainRef}
-          onScroll={handleScroll}
-          className={`flex-1 lg:border-r lg:border-border ${
-            slidesMode ? "overflow-hidden" : "overflow-y-auto pb-[33vh] lg:pb-0"
-          }`}
-        >
-          <Editor
-            yjs={yjs}
-            forceSuggest={role === "suggest"}
-            github={github}
-            bibLib={bibLib}
-            hidden={showPreview}
-            onEditorReady={handleEditorReady}
-            onCommentClick={handleCommentClick}
-            commentHighlight={commentHighlight}
-            activeCommentRange={activeCommentRange}
-            cleanView={cleanView}
-            onNewComment={openCommentInput}
-            onResolveAtCursor={handleResolveAtCursor}
-            onDeleteAtCursor={handleDeleteAtCursor}
-          />
-          {showPreview && (slidesMode ? <SlidesView /> : <Preview />)}
-        </main>
+        <div ref={contentRef} className="flex flex-1 overflow-hidden">
+          <main
+            ref={mainRef}
+            onScroll={handleScroll}
+            className={`lg:border-r lg:border-border ${
+              splitOpen
+                ? "shrink-0 overflow-y-auto"
+                : `flex-1 ${slidesMode ? "overflow-hidden" : "overflow-y-auto pb-[33vh] lg:pb-0"}`
+            }`}
+            style={splitOpen ? { width: `${editorPct}%` } : undefined}
+          >
+            <Editor
+              yjs={yjs}
+              forceSuggest={role === "suggest"}
+              github={github}
+              bibLib={bibLib}
+              hidden={splitOpen ? false : showPreview}
+              onEditorReady={handleEditorReady}
+              onCommentClick={handleCommentClick}
+              commentHighlight={commentHighlight}
+              activeCommentRange={activeCommentRange}
+              cleanView={cleanView}
+              onNewComment={openCommentInput}
+              onResolveAtCursor={handleResolveAtCursor}
+              onDeleteAtCursor={handleDeleteAtCursor}
+            />
+            {!splitOpen && showPreview && (slidesMode ? <SlidesView /> : <Preview />)}
+          </main>
+          {isDesktop && (
+            <div
+              role="separator"
+              aria-orientation="vertical"
+              onMouseDown={startDrag}
+              title="Drag to split editor and preview"
+              className="w-1.5 shrink-0 cursor-col-resize bg-border transition-colors hover:bg-chartreuse"
+            />
+          )}
+          {splitOpen && (
+            <section className="flex-1 overflow-hidden">
+              {deck ? <SlidesView /> : <div className="h-full overflow-y-auto"><Preview /></div>}
+            </section>
+          )}
+        </div>
         <aside className="hidden w-96 flex-col overflow-hidden lg:flex">
           <div className="shrink-0 border-b border-border">
             <ViewToggle />
