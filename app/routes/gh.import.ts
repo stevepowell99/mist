@@ -33,8 +33,9 @@ export async function action({ request, context }: Route.ActionArgs) {
   if (!file) {
     return json({ error: "not a GitHub file URL (expected .../blob/<branch>/<path>)" }, 400);
   }
-  if (!file.path.toLowerCase().endsWith(".md")) {
-    return json({ error: "only .md files can be imported" }, 400);
+  const lower = file.path.toLowerCase();
+  if (!lower.endsWith(".md") && !lower.endsWith(".qmd")) {
+    return json({ error: "only .md or .qmd files can be imported" }, 400);
   }
 
   let content: string;

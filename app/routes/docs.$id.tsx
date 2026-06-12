@@ -22,6 +22,8 @@ import ThemeSelector from "~/components/ThemeSelector";
 import MobilePanel from "~/components/MobilePanel";
 import OnboardingBanner from "~/components/OnboardingBanner";
 import NamePrompt from "~/components/NamePrompt";
+import FolderSidebar from "~/components/FolderSidebar";
+import SlidesPreview from "~/components/SlidesPreview";
 
 // useLayoutEffect on the client (so scroll is restored before paint, no flash),
 // useEffect on the server (avoids the SSR warning).
@@ -173,6 +175,7 @@ function DocumentLayout({ id }: { id: string }) {
         >
           mist
         </Link>
+        <FolderSidebar />
         <div className="flex min-w-0 grow items-center px-4">
           <span className="truncate font-medium" title={title}>{title}</span>
         </div>
@@ -185,6 +188,7 @@ function DocumentLayout({ id }: { id: string }) {
           <div className="hidden shrink-0 items-center border-l border-border lg:flex">
             <UserName />
           </div>
+          <SlidesPreview />
           <div className="flex shrink-0 items-stretch border-l border-border">
             <SaveStatus />
           </div>
