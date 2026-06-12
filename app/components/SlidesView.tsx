@@ -78,9 +78,34 @@ function parseHeading(line: string, github: GitHubMeta | null): { heading: strin
   return { heading, classAttr: classes.length ? ` class="${classes.join(" ")}"` : "", bgAttr: bg.join(" ") };
 }
 
-/** Turn Quarto `::: {.columns}` fenced divs into real div/aside elements.
- * Every line that begins with `:::` is consumed, so no fence markers leak as
- * literal colons; a stack keeps nested cells balanced. */
+/** Parse a Pandoc attribute spec: .classes, #id, and key="value" pairs,
+ * translating width/height keyvals into the style. This is what carries the
+ * deck's component+colour+modifier classes plus style= (used by .place and a
+ * custom .scale) through to the rendered HTML. */
+function parseAttrs(attr: string): { classes: string[]; id: string | null; style: string } {
+  const classes = [...attr.matchAll(/\.([\w-]+)/g)].map((m) => m[1]);
+  const idM = attr.match(/#([\w-]+)/);
+  const styles: string[] = [];
+  const styleM = attr.match(/\bstyle="([^"]*)"/);
+  if (styleM) styles.push(styleM[1].replace(/;\s*$/, ""));
+  const wM = attr.match(/\bwidth="?([\d.]+(?:%|px|em|rem|vw)?)"?/);
+  if (wM && !/\bwidth\s*:/.test(styles.join(";"))) styles.push(`width:${wM[1]}`);
+  const hM = attr.match(/\bheight="?([\d.]+(?:%|px|em|rem|vh)?)"?/);
+  if (hM && !/\bheight\s*:/.test(styles.join(";"))) styles.push(`height:${hM[1]}`);
+  return { classes, id: idM ? idM[1] : null, style: styles.join(";") };
+}
+
+function attrString(classes: string[], id: string | null, style: string): string {
+  return (
+    (classes.length ? ` class="${classes.join(" ")}"` : "") +
+    (id ? ` id="${id}"` : "") +
+    (style ? ` style="${style}"` : "")
+  );
+}
+
+/** Turn Quarto `::: {...}` fenced divs into real div/aside elements, carrying
+ * classes, id and style. Every line beginning with `:::` is consumed, so no
+ * fence markers leak; a stack keeps nested cells balanced. */
 function convertDivs(md: string): string {
   const out: string[] = [];
   const stack: string[] = [];
@@ -94,13 +119,12 @@ function convertDivs(md: string): string {
     const bare = t.match(/^:::+\s+(\S.*)$/);
     if (braced || bare) {
       const attr = (braced ? braced[1] : bare![1]) ?? "";
-      let classes = classesFrom(attr);
+      const parsed = parseAttrs(attr);
+      let classes = parsed.classes;
       if (!classes.length) classes = attr.split(/\s+/).filter((w) => /^[\w-]+$/.test(w));
       const tag = classes.includes("notes") ? "aside" : "div";
-      const width = attr.match(/width="?([\d.]+%?)"?/);
-      const style = width ? ` style="width:${width[1]}"` : "";
       stack.push(tag);
-      out.push("", `<${tag} class="${classes.join(" ")}"${style}>`, "");
+      out.push("", `<${tag}${attrString(classes, parsed.id, parsed.style)}>`, "");
     } else if (stack.length) {
       out.push("", `</${stack.pop()}>`, "");
     }
@@ -110,11 +134,23 @@ function convertDivs(md: string): string {
   return out.join("\n");
 }
 
-/** Inline `[text]{.fragment}` spans. */
+/** Markdown images carrying Pandoc attributes, e.g. `![](logo.png){.brand}`. */
+function convertImages(md: string): string {
+  return md.replace(
+    /!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)\{([^}]*)\}/g,
+    (_w, alt: string, url: string, attr: string) => {
+      const { classes, id, style } = parseAttrs(attr);
+      return `<img src="${url}" alt="${alt}"${attrString(classes, id, style)}>`;
+    },
+  );
+}
+
+/** Inline `[text]{.flare .blue}` spans, carrying classes, id and style. */
 function convertSpans(md: string): string {
   return md.replace(/\[([^\]]+)\]\{([^}]*)\}/g, (_w, text: string, attr: string) => {
-    const cls = classesFrom(attr).join(" ");
-    return cls ? `<span class="${cls}">${text}</span>` : text;
+    const { classes, id, style } = parseAttrs(attr);
+    if (!classes.length && !id && !style) return text;
+    return `<span${attrString(classes, id, style)}>${text}</span>`;
   });
 }
 
@@ -129,7 +165,7 @@ function buildSection(slideMd: string, github: GitHubMeta | null): string {
     bgAttr = parsed.bgAttr;
     body = [parsed.heading, ...lines.slice(1)].join("\n");
   }
-  const inner = convertDivs(convertSpans(body)).replace(/<\/textarea>/gi, "&lt;/textarea&gt;");
+  const inner = convertDivs(convertImages(convertSpans(body))).replace(/<\/textarea>/gi, "&lt;/textarea&gt;");
   return `<section${classAttr}${bgAttr ? " " + bgAttr : ""} data-markdown><textarea data-template>\n${inner}\n</textarea></section>`;
 }
 
