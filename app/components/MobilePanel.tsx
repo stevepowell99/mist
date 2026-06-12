@@ -27,6 +27,9 @@ export default function MobilePanel({ className }: { className?: string }) {
   }, [activeThreadId]);
 
   const collapsed = activeTab === null;
+  // Only the comments tab (a scrolling thread list) needs the fixed-tall panel.
+  // The view tab is short, so it sizes to its content and leaves no empty band.
+  const tall = activeTab === "comments";
 
   const handleTabPress = (id: Tab) => {
     setActiveTab(activeTab === id ? null : id);
@@ -35,7 +38,7 @@ export default function MobilePanel({ className }: { className?: string }) {
   return (
     <div
       className={`fixed bottom-0 left-0 right-0 bg-paper ${className ?? ""}`}
-      style={collapsed ? undefined : { height: "33vh" }}
+      style={tall ? { height: "33vh" } : undefined}
     >
       <div className={`flex gap-2 px-3 pt-3 ${collapsed ? "pb-8" : "pb-2"}`}>
         {tabs.map((tab) => (
@@ -52,8 +55,8 @@ export default function MobilePanel({ className }: { className?: string }) {
       </div>
       {!collapsed && (
         <div
-          className="overflow-y-auto"
-          style={{ height: "calc(33vh - 48px)" }}
+          className="overflow-y-auto pb-2"
+          style={tall ? { height: "calc(33vh - 48px)" } : { maxHeight: "50vh" }}
         >
           {activeTab === "editing" && (
             <>
