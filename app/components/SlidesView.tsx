@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useDocument } from "~/lib/DocumentContext";
-import { rewriteImageUrls, resolveImageSrc, resolveAssetPath, rawAssetUrl } from "~/lib/github";
+import { rewriteImageUrls, resolveImageSrc, resolveAssetPath } from "~/lib/github";
 import type { GitHubMeta } from "~/shared/types";
 
 /**
@@ -221,11 +221,15 @@ function extractCssPaths(frontmatter: string): string[] {
 }
 
 /** Resolve a deck CSS entry to a URL. Absolute URLs work for any deck; a
- * relative path needs a folder backend (a GitHub repo today) to resolve against. */
+ * relative path needs a folder backend (a GitHub repo today) to resolve against.
+ * GitHub files are served through jsDelivr, not raw.githubusercontent.com, which
+ * sends CSS as text/plain with nosniff so the browser refuses to apply it. */
 function cssUrl(path: string, github: GitHubMeta | null): string | null {
   if (/^https?:\/\//.test(path)) return path;
   if (!github || path.startsWith("/") || path.toLowerCase().endsWith(".scss")) return null;
-  return rawAssetUrl(github, resolveAssetPath(github.path, path));
+  const resolved = resolveAssetPath(github.path, path);
+  const enc = resolved.split("/").map(encodeURIComponent).join("/");
+  return `https://cdn.jsdelivr.net/gh/${github.owner}/${github.repo}@${github.branch}/${enc}`;
 }
 
 function buildHtml(md: string, github: GitHubMeta | null, bust: string): string {
