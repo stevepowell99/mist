@@ -27,28 +27,40 @@ Assessed June 2026. Peerdraft (GPL, has a web link and cursors, but persistence 
 
    ```
    interface DocBackend {
-     read(ref): { text, version }                  // version = Drive etag or GitHub sha
-     write(ref, text, version, msg): { version }    // conditional on version; rejects on mismatch
-     list?(folderRef): Array<{ name, ref, isFolder }>   // Drive only
-     parent?(ref): folderRef | null                     // Drive only
-     canAccess?(ref, userEmail): boolean                // Drive only
+     read(): { text, version }                       // version = Drive etag or GitHub sha
+     write(text, expectedVersion, msg): { version }  // conditional on version; rejects on mismatch
+
+     folderRef?(): string                            // the folder holding this doc
+     list?(folderRef?): Array<{ name, isFolder, ref }>   // entries, folders first
+     parentRef?(folderRef): string | null            // parent folder, null at the shared root
+
+     canAccess?(userEmail): boolean                  // Drive only
    }
    ```
 
+   Folder refs are opaque strings: a repo-relative path for GitHub, a folder id for Drive. The sidebar passes them back to `list()` and `parentRef()` without interpreting them.
+
    - `DriveBackend` (default) implements all of it through the Drive API.
-   - `GitHubBackend` (preserved) implements `read` and `write` only. It is the `fetchPublicText` plus `fetchSha` plus `commitFile` helpers already shipped, refactored behind the interface. Folder navigation and Drive auth do not apply to it; it keeps secret-link auth.
+   - `GitHubBackend` implements `read`, `write` and the folder methods (public directory listing over the contents API): `fetchPublicText` plus `fetchPublicDir` plus `commitFile`, behind the interface. It has no `canAccess`; GitHub docs keep secret-link auth. Building the sidebar against `GitHubBackend.list()` is the auth-free way to get folder navigation real before the Drive credential exists, and it doubles as the long-deferred GitHub folder feature.
 
 4. **Cloud bridge** (in the relay):
-   - On write: serialise the `Y.Text` and call `write(ref, text, version)` conditionally. If the backend reports the file changed underneath (Drive 412, GitHub sha mismatch), re-read and diff-merge rather than overwrite. This is the guard the current commit-back lacks.
+   - On write: serialise the `Y.Text` and call `write(text, expectedVersion, msg)` conditionally. If the backend reports the file changed underneath (Drive 412, GitHub sha mismatch), re-read and diff-merge rather than overwrite. This is the guard the current commit-back lacks.
    - On external change: poll the backend (Drive `files.get` etag, or the changes feed) every few seconds. When the file has moved, read it and diff-merge into the `Y.Text` with diff-match-patch as positioned inserts and deletes, so an editor's save and the live edits combine instead of clobbering.
    - Normalise line endings and trailing whitespace before diffing, so a CRLF-versus-LF editor or an "add final newline" setting does not look like a real edit.
 
 5. **Auth.**
    - Google sign-in returns the user's email (a non-sensitive scope: no Drive consent, no Google restricted-scope verification).
-   - The relay calls `canAccess(ref, email)` (Drive `permissions.list` on the file or its folder) and admits edit or suggest by what the ACL and the link role allow.
+   - The relay calls `canAccess(email)` (Drive `permissions.list` on the file or its folder) and admits edit or suggest by what the ACL and the link role allow.
    - Secret links keep working unchanged for outsiders: one file, no sidebar.
 
-6. **Folder sidebar.** For signed-in users: `list(parent(currentFile))` shows siblings and subfolders, with a step up to the parent. Clicking a file opens or lazily creates its room, seeded from the backend file, gated by the same `canAccess` check. Drive's permission inheritance is the navigation boundary: you cannot go above the shared folder, because the check fails there.
+6. **Folder sidebar.** A panel sliding in from the left, toggled by a header icon (mirror the existing right-side Preview toggle). Top to bottom: the current folder name with an up control to `parentRef(current)`; then `list(current)`, folders first then `.md` files, the open file highlighted. Folder rows re-list into that folder; file rows open that document's room. It only shows when the backend offers `list()`. On Drive, navigation is bounded by `canAccess`, so you cannot climb above the shared folder. It binds to the `DocBackend` folder methods, so it works against `GitHubBackend.list()` now and `DriveBackend` later with no UI change.
+
+## Folder sidebar UI and the /open entry point
+
+The sidebar (architecture point 6) and external callers both open a document by a backend ref rather than by minting a link per file.
+
+- **Opening a file from the sidebar:** a route resolves `(backend kind, doc ref)` to a room, get-or-create, seeded from the backend file on first open, then navigates. Access is the signed-in path's single check, not a per-file key.
+- **TagFox entry point.** TagFox shows folder rows for local markdown folders. Add a hover-revealed icon that calls `shell.openExternal(<mist-host>/open?path=<folder-relative-to-the-shared-root>)`, plus a configurable mist base URL in TagFox settings. The contract is **path-based**: TagFox passes a path relative to the shared vault root, and mist resolves path to Drive folder to room server-side, where the Drive credential already lives. TagFox needs no Drive access of its own. The icon and `openExternal` are buildable now; the resolving `/open` endpoint waits for `DriveBackend`.
 
 ## Access model
 
@@ -84,10 +96,16 @@ Build: the plain-`Y.Text` document core and the editor changes for it; the `DocB
 1. **Document core to plain `Y.Text` plus CriticMarkup**, with a per-user Edit/Suggest toggle. Prove live multi-client web editing and suggesting on the new core, and refactor the existing GitHub path onto `DocBackend` so nothing regresses.
 2. **`DriveBackend` read and write**, plus the cloud-bridge write-guard and polling diff-merge. Prove a Drive file round-trips: open it from Drive, edit on the web, see it land in the Drive file and back out to a desktop editor; edit in the desktop editor, see it merge into the web doc.
 3. **Google sign-in and the ACL check.** Prove a colleague in the share gets in, one who is not is refused, and the secret link still works as fallback.
-4. **Folder sidebar:** siblings, parent, lazy room open, bounded by the ACL.
+4. **Folder sidebar:** the slide-out panel UI, the `/open?path=` route that opens a file by ref (get-or-create its room), and the TagFox hover icon. The `list`/`parentRef` data layer is done (`GitHubBackend`); on Drive it is bounded by the ACL.
 5. **Idle auto-close and the resume banner.**
 
 Each step is web-testable in the same fast loop that built the current app.
+
+Progress, 12 June 2026 (auth-free work, done on mobile):
+
+- Step 1 backend seam: `DocBackend` interface and `GitHubBackend`, with the GitHub read, write and import paths routed through it. Committed, unit-tested.
+- Step 4 data layer: `GitHubBackend.list()`, `folderRef()` and `parentRef()` over the public contents API, unit-tested. The folder sidebar can now bind to a real backend without the Drive credential.
+- Still needing a desktop or the Drive credential: the `Y.Text` core rewrite (browser testing), `DriveBackend` and the cloud bridge (Drive auth), and the visible sidebar panel plus `/open` route and TagFox icon (your eyes, plus `/open` waits for Drive).
 
 ## Open decisions
 

@@ -47,4 +47,51 @@ describe("GitHubBackend", () => {
       /commit-back not configured/,
     );
   });
+
+  it("folderRef() is the directory holding the document", () => {
+    expect(new GitHubBackend(META).folderRef()).toBe("docs");
+    expect(new GitHubBackend({ ...META, path: "top.md" }).folderRef()).toBe("");
+  });
+
+  it("parentRef() climbs to the repo root then stops", () => {
+    const b = new GitHubBackend(META);
+    expect(b.parentRef("docs/sub")).toBe("docs");
+    expect(b.parentRef("docs")).toBe("");
+    expect(b.parentRef("")).toBeNull();
+  });
+
+  it("list() returns folders first then .md files, skipping other files", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify([
+          { name: "b.md", path: "docs/b.md", type: "file" },
+          { name: "notes.txt", path: "docs/notes.txt", type: "file" },
+          { name: "a.md", path: "docs/a.md", type: "file" },
+          { name: "img", path: "docs/img", type: "dir" },
+        ]),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const entries = await new GitHubBackend(META).list();
+
+    expect(entries).toEqual([
+      { name: "img", isFolder: true, ref: "docs/img" },
+      { name: "a.md", isFolder: false, ref: "docs/a.md" },
+      { name: "b.md", isFolder: false, ref: "docs/b.md" },
+    ]);
+    const url = fetchMock.mock.calls[0][0] as string;
+    expect(url).toBe("https://api.github.com/repos/o/r/contents/docs?ref=main");
+  });
+
+  it("list(folderRef) lists the requested folder, not the document's", async () => {
+    const fetchMock = vi.fn(async () => new Response("[]", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await new GitHubBackend(META).list("docs/sub");
+
+    const url = fetchMock.mock.calls[0][0] as string;
+    expect(url).toBe("https://api.github.com/repos/o/r/contents/docs/sub?ref=main");
+  });
 });
