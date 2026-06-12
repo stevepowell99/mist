@@ -7,7 +7,7 @@ import * as encoding from "lib0/encoding";
 import * as decoding from "lib0/decoding";
 import { MSG_SYNC, MSG_AWARENESS, DOC_FORMAT_VERSION, COMMIT_THROTTLE_MS } from "../app/shared/constants";
 import type { DocRole, GitHubMeta } from "../app/shared/types";
-import { commitFile } from "../app/lib/github.server";
+import { GitHubBackend } from "../app/lib/backend.server";
 import { quickHash } from "../app/shared/hash";
 import { withMistBanner } from "../app/shared/mist-banner";
 
@@ -253,7 +253,8 @@ class DocumentAgent extends Agent {
     const github = JSON.parse(githubRaw) as GitHubMeta;
     try {
       // The committed file carries the Obsidian banner; the live doc never does.
-      await commitFile(token, github, withMistBanner(pending), `Update ${github.path} via mist`);
+      const backend = new GitHubBackend(github, token);
+      await backend.write(withMistBanner(pending), null, `Update ${github.path} via mist`);
       this.sql`
         INSERT INTO doc_state (key, value) VALUES ('lastCommitMd', ${textBlob(pending)})
         ON CONFLICT(key) DO UPDATE SET value = excluded.value

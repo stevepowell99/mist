@@ -3,7 +3,8 @@ import type { Route } from "./+types/gh.import";
 import { generateDocumentId } from "~/shared/constants";
 import { getCloudflare } from "~/lib/cloudflare.server";
 import { deserializeThreads } from "~/lib/thread-serialization";
-import { parseGitHubFileUrl, fetchPublicText } from "~/lib/github.server";
+import { parseGitHubFileUrl } from "~/lib/github.server";
+import { GitHubBackend } from "~/lib/backend.server";
 import { stripMistBanner } from "~/shared/mist-banner";
 
 function json(body: unknown, status = 200) {
@@ -38,7 +39,8 @@ export async function action({ request, context }: Route.ActionArgs) {
 
   let content: string;
   try {
-    content = stripMistBanner(await fetchPublicText(file));
+    const { text } = await new GitHubBackend(file).read();
+    content = stripMistBanner(text);
   } catch (err) {
     return json({ error: err instanceof Error ? err.message : "fetch failed" }, 502);
   }
