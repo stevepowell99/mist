@@ -220,10 +220,11 @@ function extractCssPaths(frontmatter: string): string[] {
   return paths;
 }
 
-/** Resolve a deck-relative CSS path to a raw GitHub URL (skip scss and root paths). */
-function cssUrl(path: string, github: GitHubMeta): string | null {
+/** Resolve a deck CSS entry to a URL. Absolute URLs work for any deck; a
+ * relative path needs a folder backend (a GitHub repo today) to resolve against. */
+function cssUrl(path: string, github: GitHubMeta | null): string | null {
   if (/^https?:\/\//.test(path)) return path;
-  if (path.startsWith("/") || path.toLowerCase().endsWith(".scss")) return null;
+  if (!github || path.startsWith("/") || path.toLowerCase().endsWith(".scss")) return null;
   return rawAssetUrl(github, resolveAssetPath(github.path, path));
 }
 
@@ -236,16 +237,12 @@ function buildHtml(md: string, github: GitHubMeta | null, bust: string): string 
     .join("\n");
 
   const theme = extractTheme(frontmatter);
-  let deckCss = "";
-  if (github) {
-    const gh = github;
-    deckCss = extractCssPaths(frontmatter)
-      .map((p) => cssUrl(p, gh))
-      .filter((u): u is string => u !== null)
-      // cache-bust so an edited stylesheet is re-fetched rather than served stale
-      .map((u) => `<link rel="stylesheet" href="${u}${u.includes("?") ? "&" : "?"}cb=${bust}">`)
-      .join("\n");
-  }
+  const deckCss = extractCssPaths(frontmatter)
+    .map((p) => cssUrl(p, github))
+    .filter((u): u is string => u !== null)
+    // cache-bust so an edited stylesheet is re-fetched rather than served stale
+    .map((u) => `<link rel="stylesheet" href="${u}${u.includes("?") ? "&" : "?"}cb=${bust}">`)
+    .join("\n");
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/reveal.css">
