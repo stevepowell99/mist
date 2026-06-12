@@ -114,6 +114,11 @@ Progress, 12 June 2026 (auth-free work, done on mobile):
 - **Idle threshold:** exact value.
 - **Attribution:** all Drive writes show as the relay's identity, Steve or the service account, not the individual colleague. Acceptable, noted.
 
+## Known issues to fix properly (not leave as workarounds)
+
+- **Import strips the YAML frontmatter.** When a `.qmd` (or any front-mattered markdown) is imported, the leading `---...---` block does not reach the editor, so the document loses `format`, `theme`, `css`, `navigation` and the rest. Two consequences: the slides preview had no `theme:`/`css:` to work from, and a commit-back would write the file without its frontmatter, corrupting the deck's configuration. The slides preview currently works around this by fetching the original file from GitHub and reading `theme:`/`css:` from its frontmatter (`SlidesView`, 12 June 2026). That is a stopgap. The real fix is to preserve the frontmatter through the document model so it round-trips: keep it in the doc (editable or pinned), have the preview read it locally rather than refetching, and have commit-back re-emit it. Until then, do not let anyone edit a `.qmd` in mist and commit it back.
+- **The editor double-spaces serialized markdown.** Every source line becomes its own paragraph, so the round-tripped markdown gains blank lines between lines. Harmless for slide rendering, but it breaks YAML (blank lines inside a mapping) and changes the committed file more than the user's edits did. Fix alongside the frontmatter work, so commit-back writes faithful markdown.
+
 ## Effort
 
 The foundation (relay, links, CriticMarkup, deploy, GitHub helpers) is built and working. The real work is the plain-text core rewrite and the cloud bridge (write-guard, polling, diff-merge), with sign-in and the sidebar as bounded additions on top. Several focused days, low architectural risk because nothing underneath is speculative; the one fiddly routine is the text diff-merge.
