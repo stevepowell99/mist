@@ -191,7 +191,7 @@ function cssUrl(path: string, github: GitHubMeta): string | null {
   return rawAssetUrl(github, resolveAssetPath(github.path, path));
 }
 
-function buildHtml(md: string, github: GitHubMeta | null): string {
+function buildHtml(md: string, github: GitHubMeta | null, bust: string): string {
   const { frontmatter, body: rawBody } = stripFrontmatter(md);
   let body = stripCritic(rawBody);
   if (github) body = rewriteImageUrls(body, github); // relative images -> raw GitHub URLs
@@ -206,7 +206,8 @@ function buildHtml(md: string, github: GitHubMeta | null): string {
     deckCss = extractCssPaths(frontmatter)
       .map((p) => cssUrl(p, gh))
       .filter((u): u is string => u !== null)
-      .map((u) => `<link rel="stylesheet" href="${u}">`)
+      // cache-bust so an edited stylesheet is re-fetched rather than served stale
+      .map((u) => `<link rel="stylesheet" href="${u}${u.includes("?") ? "&" : "?"}cb=${bust}">`)
       .join("\n");
   }
 
@@ -234,7 +235,15 @@ export default function SlidesView() {
     return () => clearTimeout(t);
   }, [markdown]);
 
-  const html = useMemo(() => buildHtml(debounced, github), [debounced, github]);
+  // Cache-bust token, set after mount (avoids an SSR/hydration mismatch). A fresh
+  // token each time the preview opens re-fetches the deck's CSS rather than using
+  // a stale copy.
+  const [bust, setBust] = useState("");
+  useEffect(() => {
+    setBust(Date.now().toString(36)); // eslint-disable-line react-hooks/set-state-in-effect
+  }, []);
+
+  const html = useMemo(() => buildHtml(debounced, github, bust), [debounced, github, bust]);
 
   return (
     <iframe
