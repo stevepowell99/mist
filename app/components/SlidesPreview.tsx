@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useDocument } from "~/lib/DocumentContext";
-import { rewriteImageUrls, resolveImageSrc } from "~/lib/github";
+import { rewriteImageUrls, resolveImageSrc, resolveAssetPath, rawAssetUrl } from "~/lib/github";
 import type { GitHubMeta } from "~/shared/types";
 
 /**
@@ -130,23 +130,85 @@ function buildSection(slideMd: string, github: GitHubMeta | null): string {
 const PREVIEW_CSS = `
 html,body{margin:0;height:100%}
 .columns{display:flex;gap:1em;align-items:flex-start}
-.column{flex:1}
+.column{flex:1;min-width:0}
+.columns .columns{width:100%}
 .callout{border:1px solid #ccc;border-radius:6px;padding:.5em .75em;margin:.5em 0;text-align:left}
 .callout-note{border-left:4px solid #4a90d9}
 .callout-tip{border-left:4px solid #3aa76d}
 .callout-warning,.callout-important{border-left:4px solid #e0a800}
+.no-title h1,.no-title h2,.no-title h3{display:none}
 `;
 
+const REVEAL_THEMES = new Set([
+  "white", "black", "league", "beige", "night", "serif", "simple", "solarized", "blood", "moon", "dracula", "sky",
+]);
+
+function extractTheme(frontmatter: string): string {
+  const m = frontmatter.match(/^\s*theme:\s*(.+)$/m);
+  if (!m) return "white";
+  let t = m[1].trim();
+  if (t.startsWith("[")) t = t.replace(/[[\]]/g, "").split(",")[0]?.trim() ?? "white";
+  t = t.replace(/['"]/g, "");
+  if (t === "default") return "white";
+  return REVEAL_THEMES.has(t) ? t : "white";
+}
+
+/** Pull the deck's `css:` entries from the frontmatter (inline or list form). */
+function extractCssPaths(frontmatter: string): string[] {
+  const lines = frontmatter.split("\n");
+  const paths: string[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(/^\s*css:\s*(.*)$/);
+    if (!m) continue;
+    const inline = m[1].trim();
+    if (inline) {
+      const items = inline.startsWith("[") ? inline.replace(/[[\]]/g, "").split(",") : [inline];
+      for (const it of items) {
+        const v = it.trim().replace(/['"]/g, "");
+        if (v) paths.push(v);
+      }
+    } else {
+      for (let j = i + 1; j < lines.length; j++) {
+        const item = lines[j].match(/^\s*-\s*(.+)$/);
+        if (!item) break;
+        paths.push(item[1].trim().replace(/['"]/g, ""));
+      }
+    }
+  }
+  return paths;
+}
+
+/** Resolve a deck-relative CSS path to a raw GitHub URL (skip scss and root paths). */
+function cssUrl(path: string, github: GitHubMeta): string | null {
+  if (/^https?:\/\//.test(path)) return path;
+  if (path.startsWith("/") || path.toLowerCase().endsWith(".scss")) return null;
+  return rawAssetUrl(github, resolveAssetPath(github.path, path));
+}
+
 function buildHtml(md: string, github: GitHubMeta | null): string {
-  let body = stripCritic(stripFrontmatter(md).body);
+  const { frontmatter, body: rawBody } = stripFrontmatter(md);
+  let body = stripCritic(rawBody);
   if (github) body = rewriteImageUrls(body, github); // relative images -> raw GitHub URLs
   const sections = splitSlides(body)
     .map((s) => buildSection(s, github))
     .join("\n");
+
+  const theme = extractTheme(frontmatter);
+  let deckCss = "";
+  if (github) {
+    const gh = github;
+    deckCss = extractCssPaths(frontmatter)
+      .map((p) => cssUrl(p, gh))
+      .filter((u): u is string => u !== null)
+      .map((u) => `<link rel="stylesheet" href="${u}">`)
+      .join("\n");
+  }
+
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/reveal.css">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/theme/white.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/theme/${theme}.css">
 <style>${PREVIEW_CSS}</style>
+${deckCss}
 </head><body>
 <div class="reveal"><div class="slides">${sections}</div></div>
 <script src="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/reveal.js"></script>
