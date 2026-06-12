@@ -13,6 +13,12 @@ function stripPandocAttrs(text: string): string {
   return text.replace(/[ \t]*\{[#.][^}]*\}[ \t]*$/gm, "");
 }
 
+/** Remove Quarto fenced-div markers (`:::`, `::: {.columns}`) so they do not
+ * render as stray colons in the document preview. */
+function stripFencedDivs(text: string): string {
+  return text.replace(/^[ \t]*:::+.*$/gm, "");
+}
+
 /** Replace CriticMarkup delimiters with styled HTML spans before markdown rendering */
 function renderCriticMarkup(text: string): string {
   return text
@@ -41,7 +47,7 @@ export default function Preview() {
     if (!mounted) return "";
     const resolved = github ? rewriteImageUrls(stripMistBanner(markdown), github) : stripMistBanner(markdown);
     const siteBase = github ? PUBLISHED_SITES[github.repo] ?? null : null;
-    const withLinks = stripPandocAttrs(renderWikiLinks(resolved, siteBase));
+    const withLinks = stripFencedDivs(stripPandocAttrs(renderWikiLinks(resolved, siteBase)));
     let body = withLinks;
     let references = "";
     if (bibLib) {

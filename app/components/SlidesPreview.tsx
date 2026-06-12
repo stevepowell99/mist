@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
 import { useDocument } from "~/lib/DocumentContext";
+import { rewriteImageUrls, resolveImageSrc } from "~/lib/github";
+import type { GitHubMeta } from "~/shared/types";
 
 /**
  * Browser slides preview for `.qmd` / RevealJS decks. Presentational, not a
@@ -53,7 +55,7 @@ function classesFrom(attr: string): string[] {
 }
 
 /** A leading `# Heading {.cls background-color="..."}` becomes section attributes. */
-function parseHeading(line: string): { heading: string; classAttr: string; bgAttr: string } {
+function parseHeading(line: string, github: GitHubMeta | null): { heading: string; classAttr: string; bgAttr: string } {
   const m = line.match(/^(#{1,6})\s*(.*?)\s*\{([^}]*)\}\s*$/);
   if (!m) return { heading: line, classAttr: "", bgAttr: "" };
   const [, hashes, text, attr] = m;
@@ -61,32 +63,42 @@ function parseHeading(line: string): { heading: string; classAttr: string; bgAtt
   const bg: string[] = [];
   for (const key of ["background-color", "background-image", "background-size", "background-position"]) {
     const v = attr.match(new RegExp(`${key}="([^"]+)"`));
-    if (v) bg.push(`data-${key}="${v[1]}"`);
+    if (!v) continue;
+    let val = v[1];
+    if (key === "background-image" && github) val = resolveImageSrc(val, github) ?? val;
+    bg.push(`data-${key}="${val}"`);
   }
   const heading = text ? `${hashes} ${text}` : ""; // drop empty (e.g. .no-title) headings
   return { heading, classAttr: classes.length ? ` class="${classes.join(" ")}"` : "", bgAttr: bg.join(" ") };
 }
 
-/** Turn Quarto `::: {.columns}` fenced divs into real div/aside elements. */
+/** Turn Quarto `::: {.columns}` fenced divs into real div/aside elements.
+ * Every line that begins with `:::` is consumed, so no fence markers leak as
+ * literal colons. */
 function convertDivs(md: string): string {
   const out: string[] = [];
   const stack: string[] = [];
   for (const line of md.split("\n")) {
-    const open = line.match(/^:::+\s*\{([^}]*)\}\s*$/);
-    const close = /^:::+\s*$/.test(line);
-    if (open) {
-      const classes = classesFrom(open[1]);
-      const isNotes = classes.includes("notes");
-      const tag = isNotes ? "aside" : "div";
-      const width = open[1].match(/width="?([\d.]+%?)"?/);
+    const t = line.trim();
+    if (!/^:::+/.test(t)) {
+      out.push(line);
+      continue;
+    }
+    const braced = t.match(/^:::+\s*\{([^}]*)\}\s*$/);
+    const bare = t.match(/^:::+\s+(\S.*)$/);
+    if (braced || bare) {
+      const attr = (braced ? braced[1] : bare![1]) ?? "";
+      let classes = classesFrom(attr);
+      if (!classes.length) classes = attr.split(/\s+/).filter((w) => /^[\w-]+$/.test(w));
+      const tag = classes.includes("notes") ? "aside" : "div";
+      const width = attr.match(/width="?([\d.]+%?)"?/);
       const style = width ? ` style="width:${width[1]}"` : "";
       stack.push(tag);
       out.push("", `<${tag} class="${classes.join(" ")}"${style}>`, "");
-    } else if (close && stack.length) {
+    } else if (stack.length) {
       out.push("", `</${stack.pop()}>`, "");
-    } else {
-      out.push(line);
     }
+    // a stray closer with nothing open is simply swallowed
   }
   while (stack.length) out.push(`</${stack.pop()}>`);
   return out.join("\n");
@@ -100,13 +112,13 @@ function convertSpans(md: string): string {
   });
 }
 
-function buildSection(slideMd: string): string {
+function buildSection(slideMd: string, github: GitHubMeta | null): string {
   const lines = slideMd.split("\n");
   let classAttr = "";
   let bgAttr = "";
   let body = slideMd;
   if (/^#{1,6}\s/.test(lines[0] ?? "")) {
-    const parsed = parseHeading(lines[0]);
+    const parsed = parseHeading(lines[0], github);
     classAttr = parsed.classAttr;
     bgAttr = parsed.bgAttr;
     body = [parsed.heading, ...lines.slice(1)].join("\n");
@@ -125,9 +137,12 @@ html,body{margin:0;height:100%}
 .callout-warning,.callout-important{border-left:4px solid #e0a800}
 `;
 
-function buildHtml(md: string): string {
-  const body = stripCritic(stripFrontmatter(md).body);
-  const sections = splitSlides(body).map(buildSection).join("\n");
+function buildHtml(md: string, github: GitHubMeta | null): string {
+  let body = stripCritic(stripFrontmatter(md).body);
+  if (github) body = rewriteImageUrls(body, github); // relative images -> raw GitHub URLs
+  const sections = splitSlides(body)
+    .map((s) => buildSection(s, github))
+    .join("\n");
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/reveal.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/theme/white.css">
@@ -150,7 +165,7 @@ export default function SlidesPreview() {
     return stripFrontmatter(markdown).frontmatter.toLowerCase().includes("revealjs");
   }, [github, markdown]);
 
-  const html = useMemo(() => (open ? buildHtml(markdown) : ""), [open, markdown]);
+  const html = useMemo(() => (open ? buildHtml(markdown, github) : ""), [open, markdown, github]);
 
   if (!isDeck) return null;
 
