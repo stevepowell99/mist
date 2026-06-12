@@ -60,12 +60,13 @@ describe("GitHubBackend", () => {
     expect(b.parentRef("")).toBeNull();
   });
 
-  it("list() returns folders first then .md files, skipping other files", async () => {
+  it("list() returns folders first then .md/.qmd files, skipping other files", async () => {
     const fetchMock = vi.fn(async () =>
       new Response(
         JSON.stringify([
           { name: "b.md", path: "docs/b.md", type: "file" },
           { name: "notes.txt", path: "docs/notes.txt", type: "file" },
+          { name: "deck.qmd", path: "docs/deck.qmd", type: "file" },
           { name: "a.md", path: "docs/a.md", type: "file" },
           { name: "img", path: "docs/img", type: "dir" },
         ]),
@@ -80,6 +81,7 @@ describe("GitHubBackend", () => {
       { name: "img", isFolder: true, ref: "docs/img" },
       { name: "a.md", isFolder: false, ref: "docs/a.md" },
       { name: "b.md", isFolder: false, ref: "docs/b.md" },
+      { name: "deck.qmd", isFolder: false, ref: "docs/deck.qmd" },
     ]);
     const url = fetchMock.mock.calls[0][0] as string;
     expect(url).toBe("https://api.github.com/repos/o/r/contents/docs?ref=main");

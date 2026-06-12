@@ -1,20 +1,26 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useDocument } from "~/lib/DocumentContext";
 import { rewriteImageUrls, resolveImageSrc, resolveAssetPath, rawAssetUrl } from "~/lib/github";
 import type { GitHubMeta } from "~/shared/types";
 
 /**
- * Browser slides preview for `.qmd` / RevealJS decks. Presentational, not a
- * Quarto render: it translates the common Quarto layout syntax (column fenced
- * divs, fragments, slide background/class attributes, notes, callouts) into
- * reveal.js HTML and shows it with real reveal.js (from a CDN) in a sandboxed
- * iframe. Deliberately simple: it uses default styling rather than loading a
- * deck's own CSS, and executed code or Quarto-specific features do not appear.
+ * Inline slides renderer for `.qmd` / RevealJS decks. It is the Preview for a
+ * deck: when Preview is on and the source is a deck, this renders instead of the
+ * document Preview. Presentational, not a Quarto render. It translates the
+ * common Quarto layout syntax into reveal.js HTML, loads the deck's own theme
+ * and CSS for GitHub-backed decks, and shows it with real reveal.js (from a CDN)
+ * in a sandboxed iframe. Executed code and Quarto-specific features do not appear.
  */
 
 function stripFrontmatter(md: string): { frontmatter: string; body: string } {
   const m = md.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
   return m ? { frontmatter: m[1], body: md.slice(m[0].length) } : { frontmatter: "", body: md };
+}
+
+/** True when the document should render as slides rather than a flowing document. */
+export function isSlideDeck(markdown: string, github: GitHubMeta | null): boolean {
+  if (github?.path?.toLowerCase().endsWith(".qmd")) return true;
+  return stripFrontmatter(markdown).frontmatter.toLowerCase().includes("revealjs");
 }
 
 function stripCritic(md: string): string {
@@ -74,7 +80,7 @@ function parseHeading(line: string, github: GitHubMeta | null): { heading: strin
 
 /** Turn Quarto `::: {.columns}` fenced divs into real div/aside elements.
  * Every line that begins with `:::` is consumed, so no fence markers leak as
- * literal colons. */
+ * literal colons; a stack keeps nested cells balanced. */
 function convertDivs(md: string): string {
   const out: string[] = [];
   const stack: string[] = [];
@@ -218,40 +224,24 @@ ${deckCss}
 </body></html>`;
 }
 
-export default function SlidesPreview() {
+export default function SlidesView() {
   const { markdown, github } = useDocument();
-  const [open, setOpen] = useState(false);
+  // Rebuilding the iframe reloads reveal, so debounce: refresh ~0.8s after edits
+  // settle rather than on every keystroke.
+  const [debounced, setDebounced] = useState(markdown);
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(markdown), 800);
+    return () => clearTimeout(t);
+  }, [markdown]);
 
-  const isDeck = useMemo(() => {
-    if (github?.path?.toLowerCase().endsWith(".qmd")) return true;
-    return stripFrontmatter(markdown).frontmatter.toLowerCase().includes("revealjs");
-  }, [github, markdown]);
-
-  const html = useMemo(() => (open ? buildHtml(markdown, github) : ""), [open, markdown, github]);
-
-  if (!isDeck) return null;
+  const html = useMemo(() => buildHtml(debounced, github), [debounced, github]);
 
   return (
-    <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        title="Slides preview"
-        className="flex shrink-0 items-center border-l border-border px-3 text-sm font-medium transition-colors hover:bg-chartreuse hover:text-[#1a1a1a]"
-      >
-        Slides
-      </button>
-      {open && (
-        <div className="fixed inset-0 z-50 flex flex-col bg-paper">
-          <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-2">
-            <span className="font-medium">Slides preview (presentational, not a Quarto render)</span>
-            <button type="button" onClick={() => setOpen(false)} className="px-2 text-lg leading-none" aria-label="Close slides">
-              &times;
-            </button>
-          </div>
-          <iframe title="Slides preview" sandbox="allow-scripts" srcDoc={html} className="flex-1 border-0" />
-        </div>
-      )}
-    </>
+    <iframe
+      title="Slides preview"
+      sandbox="allow-scripts"
+      srcDoc={html}
+      className="block h-full w-full border-0"
+    />
   );
 }

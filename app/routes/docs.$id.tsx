@@ -23,7 +23,7 @@ import MobilePanel from "~/components/MobilePanel";
 import OnboardingBanner from "~/components/OnboardingBanner";
 import NamePrompt from "~/components/NamePrompt";
 import FolderSidebar from "~/components/FolderSidebar";
-import SlidesPreview from "~/components/SlidesPreview";
+import SlidesView, { isSlideDeck } from "~/components/SlidesView";
 
 // useLayoutEffect on the client (so scroll is restored before paint, no flash),
 // useEffect on the server (avoids the SSR warning).
@@ -106,9 +106,11 @@ function DocumentLayout({ id }: { id: string }) {
     role,
     github,
     bibLib,
+    markdown,
   } = useDocument();
 
   const title = fileTitle(github, id);
+  const slidesMode = showPreview && isSlideDeck(markdown, github);
 
   // The editor and Preview share this scroll container, so swapping between
   // them would otherwise jump to the top. Track the scroll fraction and restore
@@ -188,7 +190,6 @@ function DocumentLayout({ id }: { id: string }) {
           <div className="hidden shrink-0 items-center border-l border-border lg:flex">
             <UserName />
           </div>
-          <SlidesPreview />
           <div className="flex shrink-0 items-stretch border-l border-border">
             <SaveStatus />
           </div>
@@ -204,7 +205,9 @@ function DocumentLayout({ id }: { id: string }) {
         <main
           ref={mainRef}
           onScroll={handleScroll}
-          className="flex-1 overflow-y-auto pb-[33vh] lg:border-r lg:border-border lg:pb-0"
+          className={`flex-1 lg:border-r lg:border-border ${
+            slidesMode ? "overflow-hidden" : "overflow-y-auto pb-[33vh] lg:pb-0"
+          }`}
         >
           <Editor
             yjs={yjs}
@@ -221,7 +224,7 @@ function DocumentLayout({ id }: { id: string }) {
             onResolveAtCursor={handleResolveAtCursor}
             onDeleteAtCursor={handleDeleteAtCursor}
           />
-          {showPreview && <Preview />}
+          {showPreview && (slidesMode ? <SlidesView /> : <Preview />)}
         </main>
         <aside className="hidden w-96 flex-col overflow-hidden lg:flex">
           <div className="shrink-0 border-b border-border">

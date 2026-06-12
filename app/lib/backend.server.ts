@@ -93,7 +93,7 @@ export class GitHubBackend implements DocBackend {
     const dir = folderRef ?? this.folderRef();
     const entries = await fetchPublicDir(this.meta, dir);
     return entries
-      .filter((e) => e.type === "dir" || e.name.toLowerCase().endsWith(".md"))
+      .filter((e) => e.type === "dir" || /\.(md|qmd)$/i.test(e.name))
       .map((e) => ({ name: e.name, isFolder: e.type === "dir", ref: e.path }))
       .sort(byFolderThenName);
   }
