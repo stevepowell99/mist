@@ -292,7 +292,17 @@ ${inlineStyles}
 <script src="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/reveal.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/reveal.js@5/plugin/markdown/markdown.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/reveal.js@5/plugin/notes/notes.js"></script>
-<script>Reveal.initialize({plugins:[RevealMarkdown,RevealNotes],hash:false});</script>
+<script>
+Reveal.initialize({plugins:[RevealMarkdown,RevealNotes],hash:false}).then(function(){
+  // The preview pane resizes (drag split) and the iframe reloads once for cache
+  // busting; re-run reveal's layout on any size change so slide content is
+  // scaled to the real container instead of vanishing. ResizeObserver also
+  // fires once on observe, fixing a layout that ran before the final size.
+  Reveal.layout();
+  if (window.ResizeObserver) new ResizeObserver(function(){ Reveal.layout(); }).observe(document.body);
+  window.addEventListener("resize", function(){ Reveal.layout(); });
+});
+</script>
 </body></html>`;
 }
 
