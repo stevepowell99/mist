@@ -181,6 +181,8 @@ function DocumentLayout({ id }: { id: string }) {
   // it when the view flips, re-applying as Preview's content settles (it mounts
   // empty then fills in, which changes the scroll height).
   const mainRef = useRef<HTMLElement>(null);
+  const previewScrollRef = useRef<HTMLDivElement>(null);
+  const syncingScroll = useRef(false);
   const scrollFraction = useRef(0);
   const restoring = useRef(false);
 
@@ -231,6 +233,34 @@ function DocumentLayout({ id }: { id: string }) {
       restoring.current = false;
     };
   }, [showPreview, applyFraction]);
+
+  // In the desktop split with the document preview, sync the two panes'
+  // y-scroll proportionally so they track each other. Slides do not scroll, so
+  // skip them. A flag breaks the feedback loop between the two listeners.
+  useEffect(() => {
+    if (!splitOpen || slidesMode) return;
+    const ed = mainRef.current;
+    const pv = previewScrollRef.current;
+    if (!ed || !pv) return;
+    const sync = (from: HTMLElement, to: HTMLElement) => {
+      if (syncingScroll.current) return;
+      syncingScroll.current = true;
+      const fromMax = from.scrollHeight - from.clientHeight;
+      const toMax = to.scrollHeight - to.clientHeight;
+      to.scrollTop = fromMax > 0 ? (from.scrollTop / fromMax) * toMax : 0;
+      requestAnimationFrame(() => {
+        syncingScroll.current = false;
+      });
+    };
+    const onEd = () => sync(ed, pv);
+    const onPv = () => sync(pv, ed);
+    ed.addEventListener("scroll", onEd);
+    pv.addEventListener("scroll", onPv);
+    return () => {
+      ed.removeEventListener("scroll", onEd);
+      pv.removeEventListener("scroll", onPv);
+    };
+  }, [splitOpen, slidesMode]);
 
   return (
     <div className="flex h-screen flex-col">
@@ -305,7 +335,7 @@ function DocumentLayout({ id }: { id: string }) {
           )}
           {splitOpen && (
             <section className="flex-1 overflow-hidden">
-              {deck ? <SlidesView /> : <div className="h-full overflow-y-auto"><Preview /></div>}
+              {deck ? <SlidesView /> : <div ref={previewScrollRef} className="h-full overflow-y-auto"><Preview /></div>}
             </section>
           )}
         </div>

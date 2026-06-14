@@ -10,6 +10,8 @@ import { serializeThreads } from "~/lib/thread-serialization";
 import { quickHash } from "~/shared/hash";
 import { RELAY_DEBOUNCE_MS } from "~/shared/constants";
 import { rawAssetUrl } from "~/lib/github";
+import { driveAssetUrl } from "~/lib/asset-urls";
+import { getDriveKey } from "~/lib/drive-key";
 import { parseBib, type BibLibrary } from "~/lib/citations";
 
 export interface DocumentContextValue {
@@ -220,13 +222,13 @@ export function DocumentProvider({
 
   const unsaved = backed && !!currentHash && currentHash !== lastCommittedHash;
 
-  // Fetch and parse the repo's BibTeX library once for a GitHub-backed doc.
-  // Loaded eagerly (not just on Preview) so the `@`-citation picker in the
-  // editor has references to offer.
+  // Fetch and parse the backend's BibTeX library once, so the `@`-citation
+  // picker and rendering work for both GitHub repos and Drive folders. The same
+  // candidate names are tried; Drive resolves them through the asset proxy.
   const [bibLib, setBibLib] = useState<BibLibrary | null>(null);
   const bibFetchedRef = useRef(false);
   useEffect(() => {
-    if (!github || bibFetchedRef.current) return;
+    if ((!github && !drive) || bibFetchedRef.current) return;
     bibFetchedRef.current = true;
     let cancelled = false;
     (async () => {
@@ -238,9 +240,14 @@ export function DocumentProvider({
         "references.bib",
         "bibliography.bib",
       ];
+      const token = drive ? getDriveKey() ?? "" : "";
+      const urlFor = (path: string) =>
+        github
+          ? rawAssetUrl(github, path)
+          : driveAssetUrl(drive!, window.location.origin, path, token);
       for (const path of candidates) {
         try {
-          const res = await fetch(rawAssetUrl(github, path));
+          const res = await fetch(urlFor(path));
           if (res.ok) {
             const text = await res.text();
             if (!cancelled) setBibLib(parseBib(text));
@@ -254,7 +261,7 @@ export function DocumentProvider({
     return () => {
       cancelled = true;
     };
-  }, [github]);
+  }, [github, drive]);
 
   const togglePreview = useCallback(() => {
     setPreviewToggled((v) => !v);
