@@ -155,6 +155,53 @@ export async function driveDownload(token: string, fileId: string): Promise<Arra
   return res.arrayBuffer();
 }
 
+export interface DriveSearchEntry {
+  id: string;
+  name: string;
+  mimeType: string;
+  isFolder: boolean;
+  webViewLink: string | null;
+}
+
+async function driveQuery(token: string, q: string, orderBy: string): Promise<DriveSearchEntry[]> {
+  const params = new URLSearchParams({
+    q,
+    fields: "files(id,name,mimeType,webViewLink)",
+    pageSize: "25",
+    orderBy,
+    supportsAllDrives: "true",
+    includeItemsFromAllDrives: "true",
+  });
+  const res = await fetch(`${DRIVE}/files?${params.toString()}`, { headers: authHeaders(token) });
+  if (!res.ok) throw new Error(`Drive search failed (${res.status})`);
+  const body = (await res.json()) as {
+    files: { id: string; name: string; mimeType: string; webViewLink?: string }[];
+  };
+  return body.files.map((f) => ({
+    id: f.id,
+    name: f.name,
+    mimeType: f.mimeType,
+    isFolder: f.mimeType === FOLDER_MIME,
+    webViewLink: f.webViewLink ?? null,
+  }));
+}
+
+/** Files and folders whose name contains the query, recent first. */
+export function driveSearch(token: string, query: string): Promise<DriveSearchEntry[]> {
+  const q = `name contains '${query.replace(/['\\]/g, "\\$&")}' and trashed=false`;
+  return driveQuery(token, q, "modifiedTime desc");
+}
+
+/** Recently viewed files and folders, as the default search list. */
+export function driveRecent(token: string): Promise<DriveSearchEntry[]> {
+  return driveQuery(token, "trashed=false", "viewedByMeTime desc");
+}
+
+/** Immediate children of a folder, with web links, for drilling in. */
+export function driveFolderChildren(token: string, folderId: string): Promise<DriveSearchEntry[]> {
+  return driveQuery(token, `'${folderId}' in parents and trashed=false`, "folder,name");
+}
+
 /** Emails on a file's sharing list (for the later ACL check). */
 export async function driveListPermissions(token: string, fileId: string): Promise<string[]> {
   const res = await fetch(

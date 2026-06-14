@@ -7,6 +7,7 @@ import {
   driveResolvePath,
   driveDownload,
 } from "~/lib/google.server";
+import { driveKeyOk, driveUnauthorized } from "~/lib/drive-auth.server";
 
 const MIME: Record<string, string> = {
   css: "text/css",
@@ -39,6 +40,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   if (!deck || !path) return new Response("missing deck or path", { status: 400 });
 
   const { env } = getCloudflare(context);
+  if (!driveKeyOk(request, env)) return driveUnauthorized();
   if (!driveConfigured(env)) return new Response("Drive not configured", { status: 501 });
 
   try {

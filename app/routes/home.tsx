@@ -3,6 +3,7 @@ import { useNavigate } from "react-router";
 import type { Route } from "./+types/home";
 import { APP_NAME, generateDocumentId } from "~/shared/constants";
 import { deserializeThreads } from "~/lib/thread-serialization";
+import { ensureDriveKey, clearDriveKey } from "~/lib/drive-key";
 import ThemeSelector from "~/components/ThemeSelector";
 import demoDocument from "./demo.md?raw";
 
@@ -115,14 +116,21 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 
   const handleDriveOpen = useCallback(async () => {
     if (driveOpening || !driveUrl.trim()) return;
+    const key = ensureDriveKey();
+    if (!key) return;
     setDriveOpening(true);
     setDriveError("");
     try {
       const res = await fetch("/drive/import", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "X-Drive-Key": key },
         body: JSON.stringify({ url: driveUrl.trim() }),
       });
+      if (res.status === 401) {
+        clearDriveKey();
+        setDriveError("wrong passphrase, try again");
+        return;
+      }
       const body = (await res.json()) as { url?: string; error?: string };
       if (res.ok && body.url) {
         navigate(body.url);

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useDocument } from "~/lib/DocumentContext";
 import { rewriteImageUrls, resolveImageSrc, resolveAssetPath } from "~/lib/github";
+import { getDriveKey } from "~/lib/drive-key";
 import type { DriveMeta, GitHubMeta } from "~/shared/types";
 
 /**
@@ -245,9 +246,10 @@ function ghJsdelivr(github: GitHubMeta, repoPath: string): string {
 }
 
 /** Build a /drive/asset proxy URL for a deck-relative path (CSS, image, font).
- *  The relay streams the private-Drive file, resolved against the deck's folder. */
-function driveAssetUrl(drive: DriveMeta, origin: string, relPath: string): string {
-  return `${origin}/drive/asset?deck=${encodeURIComponent(drive.fileId)}&path=${encodeURIComponent(relPath)}`;
+ *  The relay streams the private-Drive file, resolved against the deck's folder.
+ *  The passphrase rides as ?token= since the iframe cannot set a header. */
+function driveAssetUrl(drive: DriveMeta, origin: string, relPath: string, token: string): string {
+  return `${origin}/drive/asset?deck=${encodeURIComponent(drive.fileId)}&path=${encodeURIComponent(relPath)}&token=${encodeURIComponent(token)}`;
 }
 
 /** Resolve a deck CSS entry to a URL. Absolute URLs work for any deck; a
@@ -258,11 +260,12 @@ function cssUrl(
   github: GitHubMeta | null,
   drive: DriveMeta | null,
   origin: string,
+  driveToken: string,
 ): string | null {
   if (/^https?:\/\//.test(path)) return path;
   if (path.startsWith("/") || path.toLowerCase().endsWith(".scss")) return null;
   if (github) return ghJsdelivr(github, resolveAssetPath(github.path, path));
-  if (drive) return driveAssetUrl(drive, origin, path);
+  if (drive && driveToken) return driveAssetUrl(drive, origin, path, driveToken);
   return null;
 }
 
@@ -282,6 +285,7 @@ function buildHtml(
   github: GitHubMeta | null,
   drive: DriveMeta | null,
   origin: string,
+  driveToken: string,
   bust: string,
   docFrontmatter: string,
 ): string {
@@ -298,7 +302,7 @@ function buildHtml(
 
   const theme = extractTheme(frontmatter);
   const deckCss = extractCssPaths(frontmatter)
-    .map((p) => cssUrl(p, github, drive, origin))
+    .map((p) => cssUrl(p, github, drive, origin, driveToken))
     .filter((u): u is string => u !== null)
     // cache-bust so an edited stylesheet is re-fetched rather than served stale
     .map((u) => `<link rel="stylesheet" href="${u}${u.includes("?") ? "&" : "?"}cb=${bust}">`)
@@ -332,6 +336,7 @@ Reveal.initialize({plugins:[RevealMarkdown,RevealNotes],hash:false}).then(functi
 export default function SlidesView() {
   const { markdown, github, drive, frontmatter } = useDocument();
   const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const driveToken = drive ? getDriveKey() ?? "" : "";
   // Rebuilding the iframe reloads reveal, so debounce: refresh ~0.8s after edits
   // settle rather than on every keystroke.
   const [debounced, setDebounced] = useState(markdown);
@@ -349,8 +354,8 @@ export default function SlidesView() {
   }, []);
 
   const html = useMemo(
-    () => buildHtml(debounced, github, drive, origin, bust, frontmatter),
-    [debounced, github, drive, origin, bust, frontmatter],
+    () => buildHtml(debounced, github, drive, origin, driveToken, bust, frontmatter),
+    [debounced, github, drive, origin, driveToken, bust, frontmatter],
   );
 
   return (

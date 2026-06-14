@@ -9,4 +9,6 @@ interface Env {
   GOOGLE_CLIENT_SECRET?: string;
   /** Google OAuth refresh token for the Drive relay identity, server-side only */
   GOOGLE_REFRESH_TOKEN?: string;
+  /** Shared passphrase gating the /drive/* endpoints until Google sign-in lands */
+  DRIVE_ACCESS_KEY?: string;
 }

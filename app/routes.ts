@@ -8,4 +8,5 @@ export default [
   route("gh/import", "routes/gh.import.ts"),
   route("drive/import", "routes/drive.import.ts"),
   route("drive/asset", "routes/drive.asset.ts"),
+  route("drive/search", "routes/drive.search.ts"),
 ] satisfies RouteConfig;
