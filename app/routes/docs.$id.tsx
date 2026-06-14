@@ -96,6 +96,7 @@ export default function DocumentPage({ loaderData }: Route.ComponentProps) {
 function DocumentLayout({ id }: { id: string }) {
   const {
     yjs,
+    editorInstance,
     showPreview,
     handleEditorReady,
     handleCommentClick,
@@ -114,6 +115,7 @@ function DocumentLayout({ id }: { id: string }) {
     markdown,
     frontmatter,
     togglePreview,
+    threads,
   } = useDocument();
 
   const title = fileTitle(github, drive, id);
@@ -127,6 +129,19 @@ function DocumentLayout({ id }: { id: string }) {
   const [editorPct, setEditorPct] = useState(100);
   const contentRef = useRef<HTMLDivElement>(null);
   const splitOpen = isDesktop && editorPct <= 95;
+
+  // Collapsible right panel: a thin strip when collapsed, peeking on hover as an
+  // overlay so the editor does not reflow. Persisted per browser.
+  const [asideCollapsed, setAsideCollapsed] = useState(false);
+  const [asidePeek, setAsidePeek] = useState(false);
+  useEffect(() => {
+    setAsideCollapsed(localStorage.getItem("mistAsideCollapsed") === "1"); // eslint-disable-line react-hooks/set-state-in-effect
+  }, []);
+  const setAsideCollapsedPersist = useCallback((v: boolean) => {
+    setAsideCollapsed(v);
+    setAsidePeek(false);
+    localStorage.setItem("mistAsideCollapsed", v ? "1" : "0");
+  }, []);
 
   useEffect(() => {
     const mq = window.matchMedia("(min-width: 1024px)");
@@ -235,32 +250,71 @@ function DocumentLayout({ id }: { id: string }) {
   }, [showPreview, applyFraction]);
 
   // In the desktop split with the document preview, sync the two panes'
-  // y-scroll proportionally so they track each other. Slides do not scroll, so
-  // skip them. A flag breaks the feedback loop between the two listeners.
+  // y-scroll. Pure proportional drifts on long docs because headings/images
+  // expand differently, so anchor on headings (which exist in both) and
+  // interpolate between them, falling back to proportional when they do not
+  // line up. A flag breaks the feedback loop between the two listeners.
   useEffect(() => {
     if (!splitOpen || slidesMode) return;
     const ed = mainRef.current;
     const pv = previewScrollRef.current;
-    if (!ed || !pv) return;
-    const sync = (from: HTMLElement, to: HTMLElement) => {
+    const edRoot = editorInstance?.view.dom as HTMLElement | undefined;
+    if (!ed || !pv || !edRoot) return;
+
+    const offsetIn = (el: Element, container: HTMLElement) =>
+      el.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop;
+
+    // Anchor pairs (editorTop, previewTop), bracketed by the scroll extremes.
+    const anchors = (): { from: number; to: number }[] | null => {
+      const edHeads = Array.from(edRoot.children).filter((c) =>
+        /^#{1,6}\s/.test((c.textContent ?? "").trimStart()),
+      );
+      const pvHeads = Array.from(pv.querySelectorAll("h1,h2,h3,h4,h5,h6"));
+      if (edHeads.length < 1 || edHeads.length !== pvHeads.length) return null;
+      const pairs = edHeads.map((e, i) => ({ from: offsetIn(e, ed), to: offsetIn(pvHeads[i], pv) }));
+      return [{ from: 0, to: 0 }, ...pairs];
+    };
+
+    const interp = (top: number, pairs: { from: number; to: number }[], toMax: number) => {
+      for (let i = pairs.length - 1; i >= 0; i--) {
+        if (top >= pairs[i].from) {
+          const next = pairs[i + 1];
+          if (!next) return Math.min(pairs[i].to + (top - pairs[i].from), toMax);
+          const span = next.from - pairs[i].from || 1;
+          const frac = (top - pairs[i].from) / span;
+          return pairs[i].to + frac * (next.to - pairs[i].to);
+        }
+      }
+      return top;
+    };
+
+    const sync = (from: HTMLElement, to: HTMLElement, dir: "fromEd" | "fromPv") => {
       if (syncingScroll.current) return;
       syncingScroll.current = true;
-      const fromMax = from.scrollHeight - from.clientHeight;
       const toMax = to.scrollHeight - to.clientHeight;
-      to.scrollTop = fromMax > 0 ? (from.scrollTop / fromMax) * toMax : 0;
+      const pairs = anchors();
+      let target: number;
+      if (pairs) {
+        const mapped = dir === "fromEd" ? pairs : pairs.map((p) => ({ from: p.to, to: p.from }));
+        target = interp(from.scrollTop, mapped, toMax);
+      } else {
+        const fromMax = from.scrollHeight - from.clientHeight;
+        target = fromMax > 0 ? (from.scrollTop / fromMax) * toMax : 0;
+      }
+      to.scrollTop = Math.max(0, Math.min(target, toMax));
       requestAnimationFrame(() => {
         syncingScroll.current = false;
       });
     };
-    const onEd = () => sync(ed, pv);
-    const onPv = () => sync(pv, ed);
+    const onEd = () => sync(ed, pv, "fromEd");
+    const onPv = () => sync(pv, ed, "fromPv");
     ed.addEventListener("scroll", onEd);
     pv.addEventListener("scroll", onPv);
     return () => {
       ed.removeEventListener("scroll", onEd);
       pv.removeEventListener("scroll", onPv);
     };
-  }, [splitOpen, slidesMode]);
+  }, [splitOpen, slidesMode, editorInstance]);
 
   return (
     <div className="flex h-screen flex-col">
@@ -295,7 +349,7 @@ function DocumentLayout({ id }: { id: string }) {
           </div>
         </div>
       </header>
-      <div className="flex flex-1 overflow-hidden">
+      <div className="relative flex flex-1 overflow-hidden">
         <div ref={contentRef} className="flex flex-1 overflow-hidden">
           <main
             ref={mainRef}
@@ -339,19 +393,63 @@ function DocumentLayout({ id }: { id: string }) {
             </section>
           )}
         </div>
-        <aside className="hidden w-96 flex-col overflow-hidden lg:flex">
-          <div className="shrink-0 border-b border-border">
-            <ViewToggle />
+        {/* Collapsed strip: essentials only (expand control + comment count). */}
+        {asideCollapsed && !asidePeek && (
+          <div
+            onMouseEnter={() => setAsidePeek(true)}
+            className="hidden w-9 shrink-0 flex-col items-center gap-3 border-l border-border py-2 lg:flex"
+          >
+            <button
+              type="button"
+              onClick={() => setAsideCollapsedPersist(false)}
+              title="Expand panel"
+              aria-label="Expand panel"
+              className="cursor-pointer p-1 text-muted hover:text-ink"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+            {threads.length > 0 && (
+              <span className="rounded bg-coral/20 px-1 text-xs text-coral" title={`${threads.length} comments`}>
+                {threads.length}
+              </span>
+            )}
           </div>
-          <div className="flex-1 overflow-y-auto">
-            <OnboardingBanner />
-            <SuggestionActions />
-            {mode === "suggest" && <CleanViewToggle />}
-            <div className="border-t border-border" />
-            <CommentInput />
-            <ThreadList />
-          </div>
-        </aside>
+        )}
+        {(!asideCollapsed || asidePeek) && (
+          <aside
+            onMouseLeave={() => asidePeek && setAsidePeek(false)}
+            className={`hidden w-96 flex-col overflow-hidden border-l border-border bg-paper lg:flex ${
+              asidePeek ? "absolute right-0 top-0 z-30 h-full shadow-lg" : ""
+            }`}
+          >
+            <div className="flex shrink-0 items-stretch border-b border-border">
+              <button
+                type="button"
+                onClick={() => setAsideCollapsedPersist(true)}
+                title="Collapse panel"
+                aria-label="Collapse panel"
+                className="flex cursor-pointer items-center px-2 text-muted hover:text-ink"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="m9 18 6-6-6-6" />
+                </svg>
+              </button>
+              <div className="min-w-0 flex-1">
+                <ViewToggle />
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              <OnboardingBanner />
+              <SuggestionActions />
+              {mode === "suggest" && <CleanViewToggle />}
+              <div className="border-t border-border" />
+              <CommentInput />
+              <ThreadList />
+            </div>
+          </aside>
+        )}
       </div>
       <MobilePanel className="lg:hidden" />
       <NamePrompt />

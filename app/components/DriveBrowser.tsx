@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ensureDriveKey, getDriveKey, clearDriveKey } from "~/lib/drive-key";
 import type { DriveKind } from "~/lib/google.server";
 import type { SearchResult } from "~/routes/drive.search";
@@ -83,10 +83,12 @@ export default function DriveBrowser({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const reqId = useRef(0); // guards against out-of-order responses racing
 
   const refresh = useCallback(async () => {
     const key = ensureDriveKey();
     if (!key) return;
+    const mine = ++reqId.current;
     setLoading(true);
     setError(null);
     try {
@@ -105,14 +107,17 @@ export default function DriveBrowser({
         folder?: { trail: Crumb[] } | null;
         error?: string;
       };
+      if (mine !== reqId.current) return; // a newer request superseded this one
       if (!res.ok) throw new Error(body.error ?? "load failed");
       const items: Item[] = (body.results ?? []).map((r) => ({ ...r, isFolder: r.kind === "folder" }));
       setData({ items, trail: q ? [] : body.folder?.trail ?? [], isSearch: !!q });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "could not load");
+      if (mine === reqId.current) setError(e instanceof Error ? e.message : "could not load");
     } finally {
-      setLoading(false);
-      setBusy(false);
+      if (mine === reqId.current) {
+        setLoading(false);
+        setBusy(false);
+      }
     }
   }, [folderRef, query, types]);
 

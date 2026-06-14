@@ -285,18 +285,17 @@ export async function driveFiles(
     files: { id: string; name: string; mimeType: string; webViewLink?: string; parents?: string[] }[];
   };
 
+  // The markdown clause (name contains '.md') over-matches (e.g. "x.md.json"),
+  // so re-check the classified kind against the requested types and drop misses.
+  const wanted = opts.types && opts.types.length ? new Set(opts.types) : null;
   const cache = new Map<string, { name: string; parent?: string }>();
   const entries: DriveSearchEntry[] = [];
   for (const f of body.files) {
+    const kind = driveKind(f.mimeType, f.name);
+    if (wanted && !wanted.has(kind)) continue;
     const path = await resolveFolderPath(token, f.parents, cache);
     if (isSludge(f.name, path)) continue; // drop generated/build directories
-    entries.push({
-      id: f.id,
-      name: f.name,
-      kind: driveKind(f.mimeType, f.name),
-      webViewLink: f.webViewLink ?? null,
-      path,
-    });
+    entries.push({ id: f.id, name: f.name, kind, webViewLink: f.webViewLink ?? null, path });
   }
   return entries;
 }

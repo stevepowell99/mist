@@ -314,26 +314,31 @@ ${inlineStyles}
 <script src="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/reveal.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/reveal.js@5/plugin/markdown/markdown.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/reveal.js@5/plugin/notes/notes.js"></script>
-<script type="module">
-import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
-mermaid.initialize({ startOnLoad: false, theme: "neutral" });
-await Reveal.initialize({ plugins: [RevealMarkdown, RevealNotes], hash: false });
-// reveal's markdown plugin renders \`\`\`mermaid as code.language-mermaid; turn
-// those into mermaid diagrams.
-document.querySelectorAll("code.language-mermaid").forEach(function (c) {
-  const d = document.createElement("div");
-  d.className = "mermaid";
-  d.textContent = c.textContent || "";
-  (c.closest("pre") || c).replaceWith(d);
+<script>
+Reveal.initialize({plugins:[RevealMarkdown,RevealNotes],hash:false}).then(async function(){
+  // The preview pane resizes (drag split) and the iframe reloads once for cache
+  // busting; re-run reveal's layout on any size change so slide content is scaled
+  // to the real container instead of vanishing. ResizeObserver fires once on
+  // observe, fixing a layout that ran before the final size.
+  Reveal.layout();
+  if (window.ResizeObserver) new ResizeObserver(function(){ Reveal.layout(); }).observe(document.body);
+  window.addEventListener("resize", function(){ Reveal.layout(); });
+  // Mermaid is best-effort and must never block reveal: load it after init and
+  // ignore failures. Its markdown plugin renders \`\`\`mermaid as
+  // code.language-mermaid; turn those into diagrams.
+  try {
+    const m = await import("https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs");
+    m.default.initialize({ startOnLoad: false, theme: "neutral" });
+    document.querySelectorAll("code.language-mermaid").forEach(function (c) {
+      const d = document.createElement("div");
+      d.className = "mermaid";
+      d.textContent = c.textContent || "";
+      (c.closest("pre") || c).replaceWith(d);
+    });
+    await m.default.run({ querySelector: ".mermaid" });
+    Reveal.layout();
+  } catch (e) { /* slides render fine without mermaid */ }
 });
-try { await mermaid.run({ querySelector: ".mermaid" }); } catch (e) {}
-// The preview pane resizes (drag split) and the iframe reloads once for cache
-// busting; re-run reveal's layout on any size change so slide content is scaled
-// to the real container instead of vanishing. ResizeObserver fires once on
-// observe, fixing a layout that ran before the final size.
-Reveal.layout();
-if (window.ResizeObserver) new ResizeObserver(function(){ Reveal.layout(); }).observe(document.body);
-window.addEventListener("resize", function(){ Reveal.layout(); });
 </script>
 </body></html>`;
 }
