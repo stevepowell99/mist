@@ -87,7 +87,28 @@ export default function DriveBrowser({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [recentHeight, setRecentHeight] = useState(180);
+  const rootRef = useRef<HTMLDivElement>(null);
   const reqId = useRef(0); // guards against out-of-order responses racing
+
+  // Drag the divider above the recent list to resize it against the list above.
+  const startRecentDrag = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    const root = rootRef.current;
+    if (!root) return;
+    const rect = root.getBoundingClientRect();
+    const onMove = (ev: MouseEvent) => {
+      setRecentHeight(Math.max(40, Math.min(rect.height - 140, rect.bottom - ev.clientY)));
+    };
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      document.body.style.userSelect = "";
+    };
+    document.body.style.userSelect = "none";
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }, []);
 
   // Recently-opened files (localStorage) for an instant list on open and a
   // pinned quick-access section at the bottom. Read after mount (no SSR).
@@ -188,7 +209,7 @@ export default function DriveBrowser({
   );
 
   return (
-    <div className={`flex min-h-0 flex-col ${className}`}>
+    <div ref={rootRef} className={`flex min-h-0 flex-col ${className}`}>
       {busy && (
         <div className="fixed inset-x-0 bottom-0 top-[var(--header-h,0px)] z-[60] flex items-center justify-center bg-paper/70 text-ink">
           <Spinner />
@@ -283,9 +304,15 @@ export default function DriveBrowser({
         )}
       </div>
       {recent.length > 0 && (
-        <div className="shrink-0 border-t border-border">
-          <div className="px-3 py-1 text-xs uppercase tracking-wide opacity-50">Recently opened</div>
-          <ul className="max-h-44 overflow-y-auto text-sm">
+        <div className="flex shrink-0 flex-col" style={{ height: recentHeight }}>
+          <div
+            onMouseDown={startRecentDrag}
+            title="Drag to resize"
+            className="cursor-row-resize border-t-2 border-border transition-colors hover:border-chartreuse"
+          >
+            <div className="px-3 py-1 text-xs uppercase tracking-wide opacity-50">Recently opened</div>
+          </div>
+          <ul className="flex-1 overflow-y-auto text-sm">
             {recent.map((r) => (
               <li key={r.id}>
                 <button
