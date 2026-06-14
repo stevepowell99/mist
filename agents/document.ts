@@ -6,8 +6,9 @@ import * as awarenessProtocol from "y-protocols/awareness";
 import * as encoding from "lib0/encoding";
 import * as decoding from "lib0/decoding";
 import { MSG_SYNC, MSG_AWARENESS, DOC_FORMAT_VERSION, COMMIT_THROTTLE_MS } from "../app/shared/constants";
-import type { DocRole, GitHubMeta } from "../app/shared/types";
-import { GitHubBackend } from "../app/lib/backend.server";
+import type { DocRole, DriveMeta, GitHubMeta } from "../app/shared/types";
+import { type DocBackend, GitHubBackend, DriveBackend } from "../app/lib/backend.server";
+import { type DriveEnv, driveConfigured } from "../app/lib/google.server";
 import { quickHash } from "../app/shared/hash";
 import { withMistBanner } from "../app/shared/mist-banner";
 
@@ -222,7 +223,8 @@ class DocumentAgent extends Agent {
       return;
     }
     if (msg.type !== "doc" || typeof msg.content !== "string") return;
-    if (!this.readStoredText("github")) return; // only GitHub-backed docs
+    // only backend-bound docs (GitHub or Drive) commit back
+    if (!this.readStoredText("github") && !this.readStoredText("drive")) return;
 
     this.sql`
       INSERT INTO doc_state (key, value) VALUES ('pendingMd', ${textBlob(msg.content)})
@@ -241,20 +243,37 @@ class DocumentAgent extends Agent {
     await this.commitPending();
   };
 
-  private async commitPending(): Promise<void> {
+  /** The storage backend this doc is bound to (Drive preferred), with a label
+   *  for the commit message. Null if none is bound or it is unconfigured. */
+  private backendFor(): { backend: DocBackend; label: string } | null {
+    const driveRaw = this.readStoredText("drive");
+    if (driveRaw) {
+      const env = this.env as unknown as DriveEnv;
+      if (!driveConfigured(env)) return null;
+      const drive = JSON.parse(driveRaw) as DriveMeta;
+      return { backend: new DriveBackend(drive, env), label: drive.name ?? drive.fileId };
+    }
     const githubRaw = this.readStoredText("github");
+    if (githubRaw) {
+      const token = (this.env as { GITHUB_TOKEN?: string }).GITHUB_TOKEN;
+      if (!token) return null;
+      const github = JSON.parse(githubRaw) as GitHubMeta;
+      return { backend: new GitHubBackend(github, token), label: github.path };
+    }
+    return null;
+  }
+
+  private async commitPending(): Promise<void> {
     const pending = this.readStoredText("pendingMd");
-    if (!githubRaw || pending == null) return;
+    if (pending == null) return;
     if (this.readStoredText("lastCommitMd") === pending) return; // unchanged since last commit
 
-    const token = (this.env as { GITHUB_TOKEN?: string }).GITHUB_TOKEN;
-    if (!token) return; // commit-back not configured on this server
+    const bound = this.backendFor();
+    if (!bound) return; // commit-back not configured on this server
 
-    const github = JSON.parse(githubRaw) as GitHubMeta;
     try {
       // The committed file carries the Obsidian banner; the live doc never does.
-      const backend = new GitHubBackend(github, token);
-      await backend.write(withMistBanner(pending), null, `Update ${github.path} via mist`);
+      await bound.backend.write(withMistBanner(pending), null, `Update ${bound.label} via mist`);
       this.sql`
         INSERT INTO doc_state (key, value) VALUES ('lastCommitMd', ${textBlob(pending)})
         ON CONFLICT(key) DO UPDATE SET value = excluded.value
@@ -313,7 +332,7 @@ class DocumentAgent extends Agent {
       const contentType = request.headers.get("Content-Type") || "";
       if (contentType.includes("application/json")) {
         try {
-          const body = await request.json() as { content?: string; threads?: unknown[]; onboarding?: boolean; github?: GitHubMeta; frontmatter?: string };
+          const body = await request.json() as { content?: string; threads?: unknown[]; onboarding?: boolean; github?: GitHubMeta; drive?: DriveMeta; frontmatter?: string };
           if (body.frontmatter) {
             // The file's own YAML frontmatter (theme, css, format, title...),
             // kept in the doc so it round-trips on commit-back rather than being
@@ -324,6 +343,13 @@ class DocumentAgent extends Agent {
             const g = body.github;
             this.sql`
               INSERT INTO doc_state (key, value) VALUES ('github', ${textBlob(JSON.stringify({ owner: g.owner, repo: g.repo, branch: g.branch, path: g.path }))})
+              ON CONFLICT(key) DO UPDATE SET value = excluded.value
+            `;
+          }
+          if (body.drive) {
+            const d = body.drive;
+            this.sql`
+              INSERT INTO doc_state (key, value) VALUES ('drive', ${textBlob(JSON.stringify({ fileId: d.fileId, name: d.name, folderId: d.folderId }))})
               ON CONFLICT(key) DO UPDATE SET value = excluded.value
             `;
           }
@@ -399,6 +425,8 @@ class DocumentAgent extends Agent {
 
       const githubRaw = role ? this.readStoredText("github") : null;
       const github = githubRaw ? (JSON.parse(githubRaw) as GitHubMeta) : null;
+      const driveRaw = role ? this.readStoredText("drive") : null;
+      const drive = driveRaw ? (JSON.parse(driveRaw) as DriveMeta) : null;
 
       return new Response(
         JSON.stringify({
@@ -408,6 +436,7 @@ class DocumentAgent extends Agent {
           // Edit-role callers get the suggest key so they can share suggest links
           suggestKey: role === "edit" ? this.readStoredText("suggestKey") : undefined,
           github,
+          drive,
         }),
         { headers: { "Content-Type": "application/json" } },
       );

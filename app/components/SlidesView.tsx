@@ -250,12 +250,24 @@ function cssUrl(path: string, github: GitHubMeta | null): string | null {
   return ghJsdelivr(github, resolveAssetPath(github.path, path));
 }
 
+/** Pull raw `<style>...</style>` blocks out of the body so reveal does not show
+ *  them as text; Quarto hoists such inline CSS to the page head, so do the same. */
+function extractStyleBlocks(md: string): { body: string; styles: string } {
+  const blocks: string[] = [];
+  const body = md.replace(/<style\b[^>]*>([\s\S]*?)<\/style>/gi, (_m, css: string) => {
+    blocks.push(css);
+    return "";
+  });
+  return { body, styles: blocks.length ? `<style>${blocks.join("\n")}</style>` : "" };
+}
+
 function buildHtml(md: string, github: GitHubMeta | null, bust: string, docFrontmatter: string): string {
   const { frontmatter: editorFm, body: rawBody } = stripFrontmatter(md);
   // The doc carries its own frontmatter (theme:/css:); fall back to any the
   // editor text happens to include.
   const frontmatter = docFrontmatter || editorFm;
-  let body = stripCritic(rawBody);
+  const { body: bodyNoStyles, styles: inlineStyles } = extractStyleBlocks(rawBody);
+  let body = stripCritic(bodyNoStyles);
   if (github) body = rewriteImageUrls(body, github); // relative images -> raw GitHub URLs
   const sections = splitSlides(body)
     .map((s) => buildSection(s, github))
@@ -274,6 +286,7 @@ function buildHtml(md: string, github: GitHubMeta | null, bust: string, docFront
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/theme/${theme}.css">
 <style>${PREVIEW_CSS}</style>
 ${deckCss}
+${inlineStyles}
 </head><body>
 <div class="reveal"><div class="slides">${sections}</div></div>
 <script src="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/reveal.js"></script>

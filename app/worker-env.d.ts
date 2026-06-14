@@ -3,4 +3,10 @@
 interface Env {
   /** Fine-grained GitHub PAT (contents read/write on selected repos), server-side only */
   GITHUB_TOKEN?: string;
+  /** Google OAuth client id for the Drive relay identity, server-side only */
+  GOOGLE_CLIENT_ID?: string;
+  /** Google OAuth client secret, server-side only */
+  GOOGLE_CLIENT_SECRET?: string;
+  /** Google OAuth refresh token for the Drive relay identity, server-side only */
+  GOOGLE_REFRESH_TOKEN?: string;
 }

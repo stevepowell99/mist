@@ -10,9 +10,18 @@
  * for GitHub, a folder id for Drive. The sidebar passes them back to list() and
  * parentRef() without interpreting them.
  */
-import type { GitHubMeta } from "~/shared/types";
+import type { DriveMeta, GitHubMeta } from "~/shared/types";
 import { fetchPublicText, fetchPublicDir, commitFile } from "./github.server";
 import { dirOf } from "./github";
+import {
+  type DriveEnv,
+  getDriveAccessToken,
+  driveRead,
+  driveWrite,
+  driveGetMeta,
+  driveListFolder,
+  driveListPermissions,
+} from "./google.server";
 
 /** One entry in a folder listing. */
 export interface BackendEntry {
@@ -101,5 +110,63 @@ export class GitHubBackend implements DocBackend {
   parentRef(folderRef: string): string | null {
     // "" is the repo root; there is nothing above it.
     return folderRef === "" ? null : dirOf(folderRef);
+  }
+}
+
+/**
+ * Drive-backed document. The relay reads and writes through one fixed identity
+ * (the stored refresh token), so every method mints an access token from env.
+ * Folder refs are Drive folder ids. The document's parent folder id is stored in
+ * the meta at open, so folderRef() needs no call.
+ */
+export class DriveBackend implements DocBackend {
+  constructor(
+    private readonly meta: DriveMeta,
+    private readonly env: DriveEnv,
+  ) {}
+
+  private token(): Promise<string> {
+    return getDriveAccessToken(this.env);
+  }
+
+  async read(): Promise<{ text: string; version: string | null }> {
+    return driveRead(await this.token(), this.meta.fileId);
+  }
+
+  async write(
+    text: string,
+    expectedVersion: string | null,
+    _message: string,
+  ): Promise<{ version: string | null }> {
+    const token = await this.token();
+    // Conditional guard: if the file moved underneath us, reject so the caller
+    // re-reads and merges rather than clobbering. Full diff-merge is the cloud
+    // bridge (plans/live-collab.md, step 2); this is the no-clobber floor.
+    if (expectedVersion) {
+      const current = await driveGetMeta(token, this.meta.fileId);
+      if (current.version && current.version !== expectedVersion) {
+        throw new Error("file changed upstream; reload and retry");
+      }
+    }
+    return driveWrite(token, this.meta.fileId, text);
+  }
+
+  folderRef(): string {
+    return this.meta.folderId ?? "";
+  }
+
+  async list(folderRef?: string): Promise<BackendEntry[]> {
+    const folder = folderRef ?? this.folderRef();
+    if (!folder) return [];
+    const entries = await driveListFolder(await this.token(), folder);
+    return entries
+      .filter((e) => e.isFolder || /\.(md|qmd)$/i.test(e.name))
+      .map((e) => ({ name: e.name, isFolder: e.isFolder, ref: e.id }))
+      .sort(byFolderThenName);
+  }
+
+  async canAccess(userEmail: string): Promise<boolean> {
+    const emails = await driveListPermissions(await this.token(), this.meta.fileId);
+    return emails.some((e) => e.toLowerCase() === userEmail.toLowerCase());
   }
 }

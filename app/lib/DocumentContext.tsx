@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { getMarkRange, type Editor as TiptapEditor } from "@tiptap/core";
-import type { CapturedSelection, DocMode, DocRole, GitHubMeta } from "~/shared/types";
+import type { CapturedSelection, DocMode, DocRole, DriveMeta, GitHubMeta } from "~/shared/types";
 import type { MatchedThread } from "~/lib/comment-threads";
 import type { useYjsEditor } from "~/lib/useYjsEditor";
 import { useThreads } from "~/lib/useThreads";
@@ -97,6 +97,7 @@ export function DocumentProvider({
   docKey = null,
   suggestKey = null,
   github = null,
+  drive = null,
   initialPreview = false,
   children,
 }: {
@@ -107,9 +108,12 @@ export function DocumentProvider({
   docKey?: string | null;
   suggestKey?: string | null;
   github?: GitHubMeta | null;
+  drive?: DriveMeta | null;
   initialPreview?: boolean;
   children: React.ReactNode;
 }) {
+  // Either backend means edits are relayed for write-back to the source file.
+  const backed = !!github || !!drive;
   const [markdown, setMarkdown] = useState("");
   const [frontmatter, setFrontmatter] = useState("");
   const [editorInstance, setEditorInstance] = useState<TiptapEditor | null>(null);
@@ -154,7 +158,7 @@ export function DocumentProvider({
   // so web edits reach the repo without anyone pressing save.
   const sendDoc = useCallback(
     (commitNow: boolean) => {
-      if (!github) return;
+      if (!backed) return;
       const socket = yjs.socket as unknown as { send?: (data: string) => void } | null;
       if (!socket?.send) return;
       try {
@@ -165,14 +169,14 @@ export function DocumentProvider({
         // socket not ready; the next change retries
       }
     },
-    [github, yjs.socket, markdown, threads, frontmatter],
+    [backed, yjs.socket, markdown, threads, frontmatter],
   );
 
   useEffect(() => {
-    if (!github || !markdown) return;
+    if (!backed || !markdown) return;
     const t = setTimeout(() => sendDoc(false), RELAY_DEBOUNCE_MS);
     return () => clearTimeout(t);
-  }, [github, markdown, threads, sendDoc]);
+  }, [backed, markdown, threads, sendDoc]);
 
   const commitToGitHub = useCallback(() => sendDoc(true), [sendDoc]);
 
@@ -180,16 +184,16 @@ export function DocumentProvider({
   const [lastCommittedHash, setLastCommittedHash] = useState<string | null>(null);
   const baselineSetRef = useRef(false);
   const currentHash = useMemo(
-    () => (github ? quickHash(serializeThreads(markdown, threads, frontmatter)) : null),
-    [github, markdown, threads, frontmatter],
+    () => (backed ? quickHash(serializeThreads(markdown, threads, frontmatter)) : null),
+    [backed, markdown, threads, frontmatter],
   );
 
-  // The freshly imported content came from GitHub, so treat it as already saved.
+  // The freshly opened content came from the backend, so treat it as already saved.
   useEffect(() => {
-    if (!github || baselineSetRef.current || !markdown) return;
+    if (!backed || baselineSetRef.current || !markdown) return;
     baselineSetRef.current = true;
     setLastCommittedHash(currentHash); // eslint-disable-line react-hooks/set-state-in-effect
-  }, [github, markdown, currentHash]);
+  }, [backed, markdown, currentHash]);
 
   // Clear the unsaved state when the agent confirms a commit.
   useEffect(() => {
@@ -210,7 +214,7 @@ export function DocumentProvider({
     return () => socket.removeEventListener("message", onMsg);
   }, [yjs.socket]);
 
-  const unsaved = !!github && !!currentHash && currentHash !== lastCommittedHash;
+  const unsaved = backed && !!currentHash && currentHash !== lastCommittedHash;
 
   // Fetch and parse the repo's BibTeX library once for a GitHub-backed doc.
   // Loaded eagerly (not just on Preview) so the `@`-citation picker in the

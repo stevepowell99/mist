@@ -26,6 +26,9 @@ export default function Home({ loaderData }: Route.ComponentProps) {
   const [ghUrl, setGhUrl] = useState("");
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState("");
+  const [driveUrl, setDriveUrl] = useState("");
+  const [driveOpening, setDriveOpening] = useState(false);
+  const [driveError, setDriveError] = useState("");
 
   const curlCommand = `curl ${origin}/new -T file.md`;
 
@@ -110,6 +113,29 @@ export default function Home({ loaderData }: Route.ComponentProps) {
     }
   }, [importing, ghUrl, navigate]);
 
+  const handleDriveOpen = useCallback(async () => {
+    if (driveOpening || !driveUrl.trim()) return;
+    setDriveOpening(true);
+    setDriveError("");
+    try {
+      const res = await fetch("/drive/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: driveUrl.trim() }),
+      });
+      const body = (await res.json()) as { url?: string; error?: string };
+      if (res.ok && body.url) {
+        navigate(body.url);
+      } else {
+        setDriveError(body.error ?? "could not open file");
+      }
+    } catch {
+      setDriveError("could not open file");
+    } finally {
+      setDriveOpening(false);
+    }
+  }, [driveOpening, driveUrl, navigate]);
+
   return (
     <>
       <div
@@ -167,6 +193,29 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           </button>
         </div>
         {importError && <p className="mt-2 text-sm text-coral">{importError}</p>}
+
+        <p className="mt-8 text-muted">Or open a Google Drive markdown file</p>
+        <div className="mt-2 flex w-full max-w-xl items-center gap-2">
+          <input
+            type="url"
+            value={driveUrl}
+            onChange={(e) => setDriveUrl(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleDriveOpen();
+            }}
+            placeholder="https://drive.google.com/file/d/<id>/view"
+            className="min-w-0 flex-1 border border-border bg-transparent px-3 py-2 text-sm outline-none focus:border-ink"
+            aria-label="Google Drive file URL"
+          />
+          <button
+            onClick={handleDriveOpen}
+            disabled={driveOpening || !driveUrl.trim()}
+            className="shrink-0 cursor-pointer whitespace-nowrap border border-border px-4 py-2 text-sm text-muted transition-colors hover:border-ink hover:text-ink disabled:cursor-default disabled:opacity-40"
+          >
+            {driveOpening ? "Opening…" : "Open"}
+          </button>
+        </div>
+        {driveError && <p className="mt-2 text-sm text-coral">{driveError}</p>}
 
         <p className="mt-8 text-muted">Or from your terminal</p>
         <div className="mt-2 flex max-w-full items-center gap-1.5">

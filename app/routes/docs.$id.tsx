@@ -3,7 +3,7 @@ import { useRef, useCallback, useEffect, useLayoutEffect, useState, type MouseEv
 import type { Route } from "./+types/docs.$id";
 import { getAgentByName } from "agents";
 import { isValidDocumentId } from "~/shared/constants";
-import type { DocRole, GitHubMeta } from "~/shared/types";
+import type { DocRole, DriveMeta, GitHubMeta } from "~/shared/types";
 import { getCloudflare } from "~/lib/cloudflare.server";
 import { useYjsEditor } from "~/lib/useYjsEditor";
 import { DocumentProvider, useDocument } from "~/lib/DocumentContext";
@@ -55,23 +55,24 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
   const res = await stub.fetch(
     new Request(`https://do/?k=${encodeURIComponent(docKey ?? "")}`),
   );
-  const { exists, createdAt, role, suggestKey, github } = (await res.json()) as {
+  const { exists, createdAt, role, suggestKey, github, drive } = (await res.json()) as {
     exists: boolean;
     createdAt: number | null;
     role: DocRole | null;
     suggestKey?: string;
     github: GitHubMeta | null;
+    drive: DriveMeta | null;
   };
 
   if (!exists || !role) {
     throw data(null, { status: 404 });
   }
 
-  return { id, createdAt, role, suggestKey: suggestKey ?? null, docKey, github, initialPreview };
+  return { id, createdAt, role, suggestKey: suggestKey ?? null, docKey, github, drive, initialPreview };
 }
 
 export default function DocumentPage({ loaderData }: Route.ComponentProps) {
-  const { id, createdAt, role, suggestKey, docKey, github, initialPreview } = loaderData;
+  const { id, createdAt, role, suggestKey, docKey, github, drive, initialPreview } = loaderData;
   const yjs = useYjsEditor(id, docKey);
 
   return (
@@ -83,6 +84,7 @@ export default function DocumentPage({ loaderData }: Route.ComponentProps) {
       docKey={docKey}
       suggestKey={suggestKey}
       github={github}
+      drive={drive}
       initialPreview={initialPreview}
     >
       <DocumentLayout id={id} />

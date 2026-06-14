@@ -17,6 +17,14 @@ export interface GitHubMeta {
   path: string;
 }
 
+/** Google Drive source a document is bound to, for read and write-back */
+export interface DriveMeta {
+  fileId: string;
+  name?: string;
+  /** Parent folder id, stored at open so folderRef() is available without a call */
+  folderId?: string;
+}
+
 export interface ThreadReply {
   id: string;
   author: UserInfo;
