@@ -264,6 +264,13 @@ class DocumentAgent extends Agent {
   }
 
   private async commitPending(): Promise<void> {
+    // KILL-SWITCH (14 June 2026): commit-back is disabled by default after it
+    // corrupted source files in the 19aCMgarden vault (one doc's content written
+    // into another file, plus banner/serialization changes). Re-enable only by
+    // setting the COMMIT_BACK_ENABLED Worker secret, and only once the document
+    // model is proven to round-trip safely and writes cannot cross documents.
+    if (!(this.env as { COMMIT_BACK_ENABLED?: string }).COMMIT_BACK_ENABLED) return;
+
     const pending = this.readStoredText("pendingMd");
     if (pending == null) return;
     if (this.readStoredText("lastCommitMd") === pending) return; // unchanged since last commit
