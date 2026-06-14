@@ -10,7 +10,6 @@ import type { DocRole, DriveMeta, GitHubMeta } from "../app/shared/types";
 import { type DocBackend, DriveBackend } from "../app/lib/backend.server";
 import { type DriveEnv, driveConfigured } from "../app/lib/google.server";
 import { quickHash } from "../app/shared/hash";
-import { withMistBanner } from "../app/shared/mist-banner";
 
 /**
  * Durable Objects SQLite accepts Uint8Array for BLOB columns via the
@@ -258,10 +257,9 @@ class DocumentAgent extends Agent {
 
   private async commitPending(): Promise<void> {
     // Only ever reached via an explicit save (handleControl requires commitNow).
-    // The doc now resets per id (keyed provider + SPA nav), so a save writes this
-    // doc's own content. NOTE: a save still injects the mist banner and reformats
-    // YAML/spacing until the Y.Text document core lands; only save files you are
-    // happy for mist to reformat.
+    // The doc resets per id (keyed provider + SPA nav), so a save writes this
+    // doc's own content, and the frontmatter round-trips verbatim. No banner is
+    // injected, to keep saved files faithful.
     const pending = this.readStoredText("pendingMd");
     if (pending == null) return;
     if (this.readStoredText("lastCommitMd") === pending) return; // unchanged since last commit
@@ -270,8 +268,7 @@ class DocumentAgent extends Agent {
     if (!bound) return; // commit-back not configured on this server
 
     try {
-      // The committed file carries the Obsidian banner; the live doc never does.
-      await bound.backend.write(withMistBanner(pending), null, `Update ${bound.label} via mist`);
+      await bound.backend.write(pending, null, `Update ${bound.label} via mist`);
       this.sql`
         INSERT INTO doc_state (key, value) VALUES ('lastCommitMd', ${textBlob(pending)})
         ON CONFLICT(key) DO UPDATE SET value = excluded.value

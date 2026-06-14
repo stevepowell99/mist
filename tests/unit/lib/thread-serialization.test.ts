@@ -110,6 +110,13 @@ describe("serializeThreads", () => {
     expect(result).not.toContain("mist:");
   });
 
+  it("preserves frontmatter verbatim (quotes, key order) with no threads", () => {
+    const fm = 'pagetitle: "Causal Map features"\nauthor: "Steve Powell"\ndate: "21 May 2026"\n';
+    const result = serializeThreads("# Slide\n\nBody", [], fm);
+    expect(result).toBe(`---\n${fm}---\n\n# Slide\n\nBody`);
+    expect(result).toContain('pagetitle: "Causal Map features"'); // quotes not stripped
+  });
+
   it("baseFrontmatter plus threads → both deck config and mist kept", () => {
     const fm = "title: Deck\n";
     const result = serializeThreads("text {>>A comment<<}", [makeThread({ commentText: "A comment" })], fm);
@@ -378,6 +385,13 @@ describe("roundtrip", () => {
     const round2 = deserializeThreads(result);
     expect(round2.body).toBe(body);
     expect(round2.threads).toHaveLength(1);
+  });
+
+  it("import then commit-back keeps quoted YAML byte-for-byte", () => {
+    const file = '---\npagetitle: "Causal Map features"\nfooter: "a ?? b"\n---\n\n## Slide\n\nBody';
+    const { body, frontmatter } = deserializeThreads(file);
+    const committed = serializeThreads(body, [], frontmatter);
+    expect(committed).toBe(file); // exact round-trip, no quote-stripping or reorder
   });
 
   it("deck frontmatter survives import then commit-back via the doc", () => {

@@ -22,6 +22,20 @@ export function stripFrontmatter(markdown: string): string {
   return markdown.replace(FRONTMATTER_RE, "");
 }
 
+/** The exact inner YAML text of the frontmatter (between the --- fences), or "". */
+function rawFrontmatter(markdown: string): string {
+  const m = FRONTMATTER_RE.exec(markdown);
+  return m ? m[1] : "";
+}
+
+/** Remove a top-level `mist:` block from raw frontmatter text, leaving the rest
+ *  verbatim. mist threads are managed separately; everything else round-trips
+ *  unchanged (no quote-stripping or reordering). */
+function stripMistKey(raw: string): string {
+  const cleaned = raw.replace(/^mist:[^\n]*\n(?:[ \t]+[^\n]*\n?)*/m, "");
+  return cleaned.trim() === "" ? "" : cleaned;
+}
+
 interface SerializedThread {
   comment: string;
   highlight?: string;
@@ -49,16 +63,21 @@ export function serializeThreads(
   threads: ThreadData[],
   baseFrontmatter = "",
 ): string {
-  // The editor text carries no frontmatter; the doc-level frontmatter is the
-  // reliable source, but honour any the markdown happens to include too.
-  const existing = { ...parseYaml(baseFrontmatter), ...parseFrontmatter(markdown) };
   const body = stripFrontmatter(markdown);
+  // The editor body carries no frontmatter; the doc-level frontmatter is the
+  // reliable source. Keep it verbatim (the raw text) so a commit-back does not
+  // strip quotes or reorder keys, so the file round-trips faithfully.
+  const raw = baseFrontmatter || rawFrontmatter(markdown);
 
   if (threads.length === 0) {
-    return Object.keys(existing).length === 0
-      ? body
-      : `---\n${stringify(existing, { lineWidth: 0 })}---\n\n${body}`;
+    if (!raw.trim()) return body;
+    const fmText = raw.endsWith("\n") ? raw : `${raw}\n`;
+    return `---\n${fmText}---\n\n${body}`;
   }
+
+  // Comment threads need a `mist:` key, so this path parses and re-emits (which
+  // may reformat). It only runs when the doc actually has comments.
+  const existing = { ...parseYaml(raw) };
 
   const serialized: SerializedThread[] = threads.map((t) => {
     const entry: SerializedThread = {
@@ -104,12 +123,9 @@ export function deserializeThreads(markdown: string): {
   const body = stripFrontmatter(markdown);
   const fm = parseFrontmatter(markdown);
 
-  // Everything except mist (threads/onboarding are handled separately) is the
-  // file's own config that must survive the round-trip.
-  const { mist: mistKey, ...rest } = fm;
-  const frontmatter =
-    Object.keys(rest).length > 0 ? stringify(rest, { lineWidth: 0 }) : "";
-  void mistKey;
+  // Keep the file's own frontmatter VERBATIM (raw text, only the mist block
+  // removed) so theme/css/quotes/key-order survive the round-trip unchanged.
+  const frontmatter = stripMistKey(rawFrontmatter(markdown));
 
   const mist = fm.mist as Record<string, unknown> | undefined;
   const onboarding = mist?.onboarding === true;
