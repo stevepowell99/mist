@@ -11,6 +11,10 @@ This is Steve Powell's fork of [inanimate-tech/mist](https://github.com/inanimat
 - Global guidance: read `C:\Users\Zoom\.claude\CLAUDE.md`. This project is registered in its Project Index.
 - Editor: Claude Code.
 
+### Current state (14 June 2026). READ THIS FIRST.
+
+mist is now **Google Drive only, explicit-save only, with all GitHub/git writing disabled**, after a corruption incident where auto-commit-on-open wrote one document's content into another file and double-synced (it commits via the GitHub API to files that also live in Drive). Full incident report, the recovery (garden `content/` is a separate nested git repo recovered to baseline `4d9a2d4`), the safety model, the long Drive-era feature list, and the remaining work are in **`plans/live-collab.md`** ("CORRUPTION INCIDENT and current safety model", at the top). Do NOT re-enable GitHub commit-back or auto-save without solving double-sync and proving the document model round-trips faithfully. Active interim auth is a shared passphrase (`DRIVE_ACCESS_KEY`); the real auth (Google sign-in + ACL) is still TODO. The roadmap below is the older upstream/GitHub-era history; treat `plans/live-collab.md` as the current truth.
+
 ### Roadmap
 
 1. DONE 10 June 2026: deployed to Cloudflare Workers free tier at [mist.broad-smoke-cc64.workers.dev](https://mist.broad-smoke-cc64.workers.dev) (account `hello@causalmap.app`, auth via `npx wrangler login`, no `CLOUDFLARE_ACCOUNT_ID` needed). Verified: POST `/new` creates a document and the editor renders it with a live WebSocket connection. Redeploy with `npm run deploy`.

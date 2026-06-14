@@ -114,12 +114,25 @@ Progress, 14 June 2026 (Drive credential now set as Worker secrets):
 - Drive quick-open search box (`/drive/search`): recent by default, name search, opens markdown in mist, drills into folders, opens other Drive files in a new tab.
 - **Interim auth:** all `/drive/*` endpoints gated by a shared passphrase (`DRIVE_ACCESS_KEY` secret, `X-Drive-Key` header or `?token=`), fail-closed. This is a stopgap for the proper Google sign-in + per-file ACL, which remains the real auth (and would replace the passphrase, give named cursors, and bound folder navigation).
 
-### Next
+## CORRUPTION INCIDENT and current safety model (14 June 2026, evening). READ FIRST.
 
-- **Drive folder sidebar (siblings).** The existing `FolderSidebar` and `/docs/:id/folder` are GitHub-only; generalise to Drive (construct the right backend; make `parentRef` allow async for Drive) so opening a Drive file shows its siblings as it does for GitHub.
-- **Drive images in slides and document preview.** Relative image paths in Drive decks/docs do not resolve yet; route them through `/drive/asset` like CSS.
-- **PDF printing.** Reveal supports print-to-PDF via the `?print-pdf` query and the browser print dialog; add a Print/PDF control to the slides view that opens the deck in that mode so a clean PDF can be produced from the browser. Check our component+colour CSS (which uses `zoom`/`scale`) prints faithfully.
-- **Replace the passphrase with Google sign-in + ACL** (the deferred real auth).
+**What happened.** mist's auto-commit-on-open corrupted source files in two vaults. Two root causes: (1) the editor's Yjs doc did not reset when navigating between files (now fixed: `DocumentProvider` is keyed by id plus SPA navigation), so one document's content was written into another file (the "Causal Map features" deck was written into the `bundle` glossary); (2) mist auto-committed back to the file shortly after it was opened, with no manual edit, on a throttle. It commits via the GitHub API, and these files also live in Drive, so it was double-syncing. Every write also injected the mist banner and reformatted YAML (stripped quotes, reordered keys).
+
+**Recovery done.** 19c-slides: `git restore` of 4 tracked `.qmd`. 19aCMgarden: its `content/` is a SEPARATE nested git repo (`content/.git`), and mist had been committing "Update ... via mist" there since 10 June; recovered with `git checkout 4d9a2d4 -- .` (the clean "Garden content vault" baseline before the first mist commit, no legitimate edits after it) and committed. Garden rebuilt (`python build_static_site.py --clean`) and `dist/` pushed. Cleared `desktop.ini` files Drive injected into `.git/refs`. LEFTOVER manual cleanup for Steve (not deleted, his data): `800 Case studies/Copy of World Food Programme...md`, `cp-coffee-break-2026/slides (1).qmd`, about 41 stray `img/*` duplicates.
+
+**Current safety model (deployed).**
+- **Drive only.** All GitHub/git is disabled in mist: the relay never commits to GitHub (`backendFor` returns Drive only), `/gh/import` returns 410, the GitHub box is gone from home. Re-enable later only when the doc model is proven and double-sync is solved.
+- **Explicit save only.** No auto-commit on open/typing. The relay writes back ONLY on an explicit save (`commitNow`); the client auto-commit effect and the throttled alarm are removed.
+- **Faithful writes.** Frontmatter round-trips VERBATIM (raw text, only the `mist:` block removed) so quotes and key order survive; no banner is injected. A save of an unedited file is byte-for-byte identical (unit-tested in `thread-serialization.test.ts`). The parse/re-emit path runs only when the doc has comment threads.
+- Still imperfect: body soft/hard-break fidelity for edited prose awaits the Y.Text core (#13). Until then, do not lean on saving heavily-edited garden `content/` files from mist.
+
+## Shipped (Drive era, 12 to 14 June 2026)
+
+Drive backend (read/write/list/permissions); open-by-link; folder sidebar for Drive (siblings, breadcrumb, hover-peek, cached reopen, opens below the header); unified search plus browse panel on the home page and sidebar (recent default from localStorage plus Drive recency, type filter, breadcrumb paths, sludge-dir exclusion, race-guarded, draggable recent divider); SPA navigation so the top bar persists on open; mode switches (Edit/Suggest/Preview/Split) in the navbar plus keyboard shortcuts (mod+alt E/S/V/backslash); collapsible right comment panel; slides preview fixes (deck CSS/images via `/drive/asset` proxy, inline `<style>` hoist, reveal `scrollActivationWidth:null` so the narrow split pane is not blank, 16:9 widescreen, mermaid best-effort); server-rendered `/slides/:id?print-pdf` route plus PDF button; document-preview mermaid plus Drive images; Drive BibTeX via `/drive/bib` so the `@`-picker works; Drive file ops via `/drive/op` (create, rename, duplicate, trash-recoverable) with a "+ New" button and per-row hover action icons.
+
+## Remaining (tracked in the task list)
+
+Google sign-in plus per-file ACL to replace the passphrase (#7); external-change sync so Obsidian/desktop edits merge into open sessions (#9, cloud-bridge poll plus diff-merge); TagFox open-in-mist icon (#11); idle auto-close (#12, lower value now save is explicit); the plain `Y.Text` document core (#13, the foundational fidelity fix). Drive write ops (#10/#18) shipped but need Steve's passphrase to verify end to end.
 
 ## Open decisions
 
