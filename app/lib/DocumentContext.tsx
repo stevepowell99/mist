@@ -29,9 +29,11 @@ export interface DocumentContextValue {
 
   // GitHub source, if this doc was imported from a repo
   github: GitHubMeta | null;
-  /** Force an immediate commit of a GitHub-backed doc back to the repo */
-  commitToGitHub: () => void;
-  /** True when the document has edits not yet committed to GitHub */
+  /** True when the doc is bound to a backend (GitHub or Drive) and writes back */
+  backed: boolean;
+  /** Force an immediate write of the doc back to its backend (GitHub or Drive) */
+  saveNow: () => void;
+  /** True when the document has edits not yet written back to its backend */
   unsaved: boolean;
   /** Parsed BibTeX library for citation rendering, if found in the repo */
   bibLib: BibLibrary | null;
@@ -178,7 +180,7 @@ export function DocumentProvider({
     return () => clearTimeout(t);
   }, [backed, markdown, threads, sendDoc]);
 
-  const commitToGitHub = useCallback(() => sendDoc(true), [sendDoc]);
+  const saveNow = useCallback(() => sendDoc(true), [sendDoc]);
 
   // Track whether the shown document matches what was last committed to GitHub.
   const [lastCommittedHash, setLastCommittedHash] = useState<string | null>(null);
@@ -379,7 +381,8 @@ export function DocumentProvider({
     docKey,
     suggestKey,
     github,
-    commitToGitHub,
+    backed,
+    saveNow,
     unsaved,
     bibLib,
     // Suggest-role users are locked to suggest regardless of the shared mode

@@ -3,14 +3,14 @@ import { useDocument } from "~/lib/DocumentContext";
 import { SAVE_WINDOW_MS } from "~/shared/constants";
 
 /**
- * Header indicator for GitHub-backed documents. While edits are uncommitted it
- * shows "Unsaved" with a bar that fills over the auto-commit window, so the bar
- * reaching the right edge means the save is landing. Clicking commits now and
- * shows instant "Saving…" feedback. Also warns before closing the tab with
- * uncommitted edits.
+ * Header indicator for backend-bound documents (GitHub or Drive). While edits
+ * are unsaved it shows "Unsaved" with a bar that fills over the auto-save
+ * window, so the bar reaching the right edge means the save is landing. Clicking
+ * saves now and shows instant "Saving…" feedback. Also warns before closing the
+ * tab with unsaved edits.
  */
 export default function SaveStatus() {
-  const { github, unsaved, commitToGitHub } = useDocument();
+  const { backed, unsaved, saveNow } = useDocument();
   const [saving, setSaving] = useState(false);
   const barRef = useRef<HTMLSpanElement>(null);
 
@@ -41,10 +41,10 @@ export default function SaveStatus() {
     el.style.width = "100%";
   }, [unsaved]);
 
-  if (!github) return null;
+  if (!backed) return null;
 
   function handleClick() {
-    commitToGitHub();
+    saveNow();
     setSaving(true);
   }
 
@@ -56,10 +56,10 @@ export default function SaveStatus() {
       }`}
       title={
         unsaved
-          ? "Unsaved changes. Click to save to GitHub now."
-          : "All changes saved to GitHub"
+          ? "Unsaved changes. Click to save now."
+          : "All changes saved"
       }
-      aria-label={unsaved ? "Unsaved changes, save to GitHub now" : "Saved to GitHub"}
+      aria-label={unsaved ? "Unsaved changes, save now" : "Saved"}
     >
       {unsaved ? (
         <>
