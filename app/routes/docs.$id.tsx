@@ -106,12 +106,14 @@ function DocumentLayout({ id }: { id: string }) {
     handleResolveAtCursor,
     handleDeleteAtCursor,
     mode,
+    toggleMode,
     role,
     github,
     drive,
     bibLib,
     markdown,
     frontmatter,
+    togglePreview,
   } = useDocument();
 
   const title = fileTitle(github, drive, id);
@@ -133,6 +135,27 @@ function DocumentLayout({ id }: { id: string }) {
     mq.addEventListener("change", update);
     return () => mq.removeEventListener("change", update);
   }, []);
+
+  // Keyboard shortcuts (mod+alt+key): E edit, S suggest, V preview, \ split.
+  // One handler keeps it DRY; mod+alt avoids clashing with typing and browser keys.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || !e.altKey) return;
+      const actions: Record<string, () => void> = {
+        e: () => role === "edit" && mode !== "edit" && toggleMode(),
+        s: () => mode !== "suggest" && role === "edit" && toggleMode(),
+        v: () => togglePreview(),
+        "\\": () => isDesktop && setEditorPct((p) => (p > 95 ? 50 : 100)),
+      };
+      const action = actions[e.key.toLowerCase()];
+      if (action) {
+        e.preventDefault();
+        action();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [role, mode, toggleMode, togglePreview, isDesktop]);
 
   const startDrag = useCallback((e: ReactMouseEvent) => {
     e.preventDefault();

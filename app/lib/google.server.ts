@@ -146,6 +146,25 @@ export async function driveResolvePath(
   return current;
 }
 
+/** The folder trail from the top down to (and including) the given folder, for
+ *  a clickable breadcrumb. Capped in depth; drops the "My Drive" root. */
+export async function driveTrail(token: string, folderId: string): Promise<{ id: string; name: string }[]> {
+  const trail: { id: string; name: string }[] = [];
+  let id: string | undefined = folderId;
+  let guard = 0;
+  while (id && guard++ < 8) {
+    let meta: { name: string; parents?: string[] };
+    try {
+      meta = await driveGetMeta(token, id);
+    } catch {
+      break;
+    }
+    if (meta.name && meta.name !== "My Drive") trail.unshift({ id, name: meta.name });
+    id = meta.parents?.[0];
+  }
+  return trail;
+}
+
 /** Raw bytes of a Drive file (for asset proxying). */
 export async function driveDownload(token: string, fileId: string): Promise<ArrayBuffer> {
   const res = await fetch(`${DRIVE}/files/${fileId}?alt=media&${COMMON}`, {
