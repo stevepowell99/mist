@@ -9,7 +9,6 @@ import { useYjsEditor } from "~/lib/useYjsEditor";
 import { DocumentProvider, useDocument } from "~/lib/DocumentContext";
 import Editor from "~/components/Editor";
 import Preview from "~/components/Preview";
-import ViewToggle from "~/components/ViewToggle";
 import ConnectionStatus from "~/components/ConnectionStatus";
 import UserName from "~/components/UserName";
 import SaveStatus from "~/components/SaveStatus";
@@ -347,6 +346,45 @@ function DocumentLayout({ id }: { id: string }) {
         <div className="flex min-w-0 grow items-center px-4">
           <span className="truncate font-medium" title={title}>{title}</span>
         </div>
+        {/* Mode switches live in the navbar. Suggest is the default; only an
+            edit-link user can switch to Edit. */}
+        <div className="hidden shrink-0 items-stretch border-l border-border text-sm uppercase tracking-wider lg:flex">
+          <button
+            type="button"
+            onClick={() => role === "edit" && mode !== "edit" && toggleMode()}
+            disabled={role !== "edit"}
+            title="Edit (Ctrl/Cmd+Alt+E)"
+            className={`flex items-center px-3 transition-colors ${mode === "edit" ? "bg-coral text-paper" : "text-muted hover:bg-border hover:text-ink"} ${role !== "edit" ? "opacity-40" : "cursor-pointer"}`}
+          >
+            Edit
+          </button>
+          <button
+            type="button"
+            onClick={() => mode !== "suggest" && role === "edit" && toggleMode()}
+            title="Suggest (Ctrl/Cmd+Alt+S)"
+            className={`flex cursor-pointer items-center border-l border-border px-3 transition-colors ${mode === "suggest" ? "bg-amber-500 text-paper" : "text-muted hover:bg-border hover:text-ink"}`}
+          >
+            Suggest
+          </button>
+          <button
+            type="button"
+            onClick={() => togglePreview()}
+            title="Preview (Ctrl/Cmd+Alt+V)"
+            className={`flex cursor-pointer items-center border-l border-border px-3 transition-colors ${showPreview ? "bg-emerald-600 text-paper" : "text-muted hover:bg-border hover:text-ink"}`}
+          >
+            Preview
+          </button>
+          {isDesktop && (
+            <button
+              type="button"
+              onClick={() => setEditorPct((p) => (p > 95 ? 50 : 100))}
+              title="Split (Ctrl/Cmd+Alt+\\)"
+              className={`flex cursor-pointer items-center border-l border-border px-3 transition-colors ${splitOpen ? "bg-ink text-paper" : "text-muted hover:bg-border hover:text-ink"}`}
+            >
+              Split
+            </button>
+          )}
+        </div>
         {/* On desktop the right group is the aside width so its left edge lines up with
             the body/sidebar divide. On mobile there is no sidebar, so it sizes naturally. */}
         <div className="flex shrink-0 items-stretch lg:w-96">
@@ -448,43 +486,6 @@ function DocumentLayout({ id }: { id: string }) {
                 <path d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             </button>
-            <div className="mt-1 flex flex-col items-center gap-1 border-t border-border pt-2">
-              <button
-                type="button"
-                disabled={role !== "edit"}
-                onClick={() => role === "edit" && mode !== "edit" && toggleMode()}
-                title="Edit (Ctrl/Cmd+Alt+E)"
-                className={`w-7 rounded py-0.5 text-center text-xs ${mode === "edit" ? "bg-coral text-paper" : "text-muted hover:text-ink"} ${role === "edit" ? "cursor-pointer" : "opacity-40"}`}
-              >
-                E
-              </button>
-              <button
-                type="button"
-                onClick={() => mode !== "suggest" && role === "edit" && toggleMode()}
-                title="Suggest (Ctrl/Cmd+Alt+S)"
-                className={`w-7 cursor-pointer rounded py-0.5 text-center text-xs ${mode === "suggest" ? "bg-amber-500 text-paper" : "text-muted hover:text-ink"}`}
-              >
-                S
-              </button>
-              <button
-                type="button"
-                onClick={() => togglePreview()}
-                title="Preview (Ctrl/Cmd+Alt+V)"
-                className={`w-7 cursor-pointer rounded py-0.5 text-center text-xs ${showPreview ? "bg-emerald-600 text-paper" : "text-muted hover:text-ink"}`}
-              >
-                P
-              </button>
-              {isDesktop && (
-                <button
-                  type="button"
-                  onClick={() => setEditorPct((p) => (p > 95 ? 50 : 100))}
-                  title="Split (Ctrl/Cmd+Alt+\\)"
-                  className={`w-7 cursor-pointer rounded py-0.5 text-center text-xs ${splitOpen ? "bg-ink text-paper" : "text-muted hover:text-ink"}`}
-                >
-                  ▥
-                </button>
-              )}
-            </div>
             {threads.length > 0 && (
               <span className="mt-1 rounded bg-coral/20 px-1 text-xs text-coral" title={`${threads.length} comments`}>
                 {threads.length}
@@ -511,9 +512,9 @@ function DocumentLayout({ id }: { id: string }) {
                   <path d="m9 18 6-6-6-6" />
                 </svg>
               </button>
-              <div className="min-w-0 flex-1">
-                <ViewToggle />
-              </div>
+              <span className="flex flex-1 items-center px-3 text-sm uppercase tracking-wider text-muted">
+                Comments
+              </span>
             </div>
             <div className="flex-1 overflow-y-auto">
               <OnboardingBanner />
