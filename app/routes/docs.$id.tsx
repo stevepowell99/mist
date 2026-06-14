@@ -410,8 +410,45 @@ function DocumentLayout({ id }: { id: string }) {
                 <path d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             </button>
+            <div className="mt-1 flex flex-col items-center gap-1 border-t border-border pt-2">
+              <button
+                type="button"
+                disabled={role !== "edit"}
+                onClick={() => role === "edit" && mode !== "edit" && toggleMode()}
+                title="Edit (Ctrl/Cmd+Alt+E)"
+                className={`w-7 rounded py-0.5 text-center text-xs ${mode === "edit" ? "bg-coral text-paper" : "text-muted hover:text-ink"} ${role === "edit" ? "cursor-pointer" : "opacity-40"}`}
+              >
+                E
+              </button>
+              <button
+                type="button"
+                onClick={() => mode !== "suggest" && role === "edit" && toggleMode()}
+                title="Suggest (Ctrl/Cmd+Alt+S)"
+                className={`w-7 cursor-pointer rounded py-0.5 text-center text-xs ${mode === "suggest" ? "bg-amber-500 text-paper" : "text-muted hover:text-ink"}`}
+              >
+                S
+              </button>
+              <button
+                type="button"
+                onClick={() => togglePreview()}
+                title="Preview (Ctrl/Cmd+Alt+V)"
+                className={`w-7 cursor-pointer rounded py-0.5 text-center text-xs ${showPreview ? "bg-emerald-600 text-paper" : "text-muted hover:text-ink"}`}
+              >
+                P
+              </button>
+              {isDesktop && (
+                <button
+                  type="button"
+                  onClick={() => setEditorPct((p) => (p > 95 ? 50 : 100))}
+                  title="Split (Ctrl/Cmd+Alt+\\)"
+                  className={`w-7 cursor-pointer rounded py-0.5 text-center text-xs ${splitOpen ? "bg-ink text-paper" : "text-muted hover:text-ink"}`}
+                >
+                  ▥
+                </button>
+              )}
+            </div>
             {threads.length > 0 && (
-              <span className="rounded bg-coral/20 px-1 text-xs text-coral" title={`${threads.length} comments`}>
+              <span className="mt-1 rounded bg-coral/20 px-1 text-xs text-coral" title={`${threads.length} comments`}>
                 {threads.length}
               </span>
             )}

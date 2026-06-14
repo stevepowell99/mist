@@ -315,7 +315,10 @@ ${inlineStyles}
 <script src="https://cdn.jsdelivr.net/npm/reveal.js@5/plugin/markdown/markdown.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/reveal.js@5/plugin/notes/notes.js"></script>
 <script>
-Reveal.initialize({plugins:[RevealMarkdown,RevealNotes],hash:false}).then(async function(){
+// scrollActivationWidth:null stops reveal v5 auto-switching to scroll view in a
+// narrow pane (the split), which in a sandboxed iframe hits sessionStorage and
+// blanks the deck.
+Reveal.initialize({plugins:[RevealMarkdown,RevealNotes],hash:false,scrollActivationWidth:null}).then(async function(){
   // The preview pane resizes (drag split) and the iframe reloads once for cache
   // busting; re-run reveal's layout on any size change so slide content is scaled
   // to the real container instead of vanishing. ResizeObserver fires once on
