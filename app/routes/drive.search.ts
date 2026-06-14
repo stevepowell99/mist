@@ -4,6 +4,7 @@ import {
   driveConfigured,
   getDriveAccessToken,
   driveFiles,
+  driveGetMeta,
   type DriveKind,
   type DriveSearchEntry,
 } from "~/lib/google.server";
@@ -59,7 +60,14 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   try {
     const token = await getDriveAccessToken(env);
     const entries = await driveFiles(token, { nameQuery: q || undefined, folderId: folder, types });
-    return Response.json({ results: entries.map(toResult) });
+    // When browsing a folder, also return its name and parent so the panel can
+    // show a header and walk up.
+    let folderInfo: { id: string; name: string; parent: string | null } | null = null;
+    if (folder) {
+      const meta = await driveGetMeta(token, folder);
+      folderInfo = { id: meta.id, name: meta.name, parent: meta.parents?.[0] ?? null };
+    }
+    return Response.json({ results: entries.map(toResult), folder: folderInfo });
   } catch (err) {
     return Response.json(
       { error: err instanceof Error ? err.message : "search failed" },

@@ -196,6 +196,19 @@ function escapeQ(s: string): string {
   return s.replace(/['\\]/g, "\\$&");
 }
 
+// Generated/build directories that fill Drive with sludge; results in or named
+// after these are dropped from search. Drive's query cannot exclude by ancestor,
+// so this is a post-filter on the resolved path.
+const SLUDGE_DIRS = new Set([
+  ".quarto", "_freeze", "site_libs", "_site", "_book", "node_modules",
+  ".git", ".obsidian", "_extensions",
+]);
+
+function isSludge(name: string, path: string): boolean {
+  const segs = [name, ...path.split(" / ")].map((s) => s.trim());
+  return segs.some((s) => SLUDGE_DIRS.has(s) || /_files$/.test(s));
+}
+
 /** Resolve a file's parent-folder path, memoising folders across the request so
  *  many results in the same tree cost only a few extra calls. Capped in depth. */
 async function resolveFolderPath(
@@ -256,12 +269,14 @@ export async function driveFiles(
   const cache = new Map<string, { name: string; parent?: string }>();
   const entries: DriveSearchEntry[] = [];
   for (const f of body.files) {
+    const path = await resolveFolderPath(token, f.parents, cache);
+    if (isSludge(f.name, path)) continue; // drop generated/build directories
     entries.push({
       id: f.id,
       name: f.name,
       kind: driveKind(f.mimeType, f.name),
       webViewLink: f.webViewLink ?? null,
-      path: await resolveFolderPath(token, f.parents, cache),
+      path,
     });
   }
   return entries;

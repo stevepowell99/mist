@@ -23,7 +23,6 @@ import MobilePanel from "~/components/MobilePanel";
 import OnboardingBanner from "~/components/OnboardingBanner";
 import NamePrompt from "~/components/NamePrompt";
 import FolderSidebar from "~/components/FolderSidebar";
-import DriveQuickOpen from "~/components/DriveQuickOpen";
 import SlidesView, { isSlideDeck } from "~/components/SlidesView";
 
 // useLayoutEffect on the client (so scroll is restored before paint, no flash),
@@ -220,7 +219,6 @@ function DocumentLayout({ id }: { id: string }) {
           mist
         </Link>
         <FolderSidebar />
-        <DriveQuickOpen />
         <div className="flex min-w-0 grow items-center px-4">
           <span className="truncate font-medium" title={title}>{title}</span>
         </div>
