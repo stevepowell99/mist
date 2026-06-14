@@ -3,9 +3,8 @@ import { getCloudflare } from "~/lib/cloudflare.server";
 import {
   driveConfigured,
   getDriveAccessToken,
-  driveSearch,
-  driveRecent,
-  driveFolderChildren,
+  driveFiles,
+  type DriveKind,
   type DriveSearchEntry,
 } from "~/lib/google.server";
 import { driveKeyOk, driveUnauthorized } from "~/lib/drive-auth.server";
@@ -13,19 +12,21 @@ import { driveKeyOk, driveUnauthorized } from "~/lib/drive-auth.server";
 export interface SearchResult {
   id: string;
   name: string;
-  isFolder: boolean;
+  kind: DriveKind;
   /** A markdown file mist can open in the editor. */
   openInMist: boolean;
   /** Drive web link for opening anything else in a new tab. */
   webViewLink: string | null;
 }
 
+const FILTERABLE: DriveKind[] = ["folder", "markdown", "doc", "sheet", "slides", "pdf"];
+
 function toResult(e: DriveSearchEntry): SearchResult {
   return {
     id: e.id,
     name: e.name,
-    isFolder: e.isFolder,
-    openInMist: !e.isFolder && /\.(md|qmd)$/i.test(e.name),
+    kind: e.kind,
+    openInMist: e.kind === "markdown",
     webViewLink: e.webViewLink,
   };
 }
@@ -33,7 +34,8 @@ function toResult(e: DriveSearchEntry): SearchResult {
 /**
  * Search Drive for the quick-open box. With `q` it name-matches; with `folder`
  * it lists that folder's children (drill-in); with neither it returns recent
- * files. Gated by the shared Drive passphrase.
+ * files. `types` restricts to chosen kinds (defaults to markdown + folders so
+ * data junk does not crowd out documents). Gated by the shared Drive passphrase.
  */
 export async function loader({ request, context }: Route.LoaderArgs) {
   const { env } = getCloudflare(context);
@@ -44,15 +46,16 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 
   const url = new URL(request.url);
   const q = (url.searchParams.get("q") ?? "").trim();
-  const folder = url.searchParams.get("folder");
+  const folder = url.searchParams.get("folder") ?? undefined;
+  const requested = (url.searchParams.get("types") ?? "")
+    .split(",")
+    .map((t) => t.trim())
+    .filter((t): t is DriveKind => (FILTERABLE as string[]).includes(t));
+  const types = requested.length ? requested : (["markdown", "folder"] as DriveKind[]);
 
   try {
     const token = await getDriveAccessToken(env);
-    const entries = folder
-      ? await driveFolderChildren(token, folder)
-      : q
-        ? await driveSearch(token, q)
-        : await driveRecent(token);
+    const entries = await driveFiles(token, { nameQuery: q || undefined, folderId: folder, types });
     return Response.json({ results: entries.map(toResult) });
   } catch (err) {
     return Response.json(

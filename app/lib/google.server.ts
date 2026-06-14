@@ -155,19 +155,65 @@ export async function driveDownload(token: string, fileId: string): Promise<Arra
   return res.arrayBuffer();
 }
 
+/** Coarse file kind for the quick-open type filter and icons. */
+export type DriveKind = "folder" | "markdown" | "doc" | "sheet" | "slides" | "pdf" | "other";
+
+const DOC_MIME = "application/vnd.google-apps.document";
+const SHEET_MIME = "application/vnd.google-apps.spreadsheet";
+const SLIDES_MIME = "application/vnd.google-apps.presentation";
+
+export function driveKind(mimeType: string, name: string): DriveKind {
+  if (mimeType === FOLDER_MIME) return "folder";
+  if (mimeType === DOC_MIME) return "doc";
+  if (mimeType === SHEET_MIME) return "sheet";
+  if (mimeType === SLIDES_MIME) return "slides";
+  if (mimeType === "application/pdf") return "pdf";
+  if (/\.(md|qmd)$/i.test(name)) return "markdown";
+  return "other";
+}
+
+// Each filterable kind to a Drive query clause. "markdown" is by name suffix
+// (Drive types .md/.qmd inconsistently); "other" is not filterable, so omitted.
+const KIND_CLAUSE: Partial<Record<DriveKind, string>> = {
+  folder: `mimeType = '${FOLDER_MIME}'`,
+  doc: `mimeType = '${DOC_MIME}'`,
+  sheet: `mimeType = '${SHEET_MIME}'`,
+  slides: `mimeType = '${SLIDES_MIME}'`,
+  pdf: `mimeType = 'application/pdf'`,
+  markdown: `(name contains '.md' or name contains '.qmd')`,
+};
+
 export interface DriveSearchEntry {
   id: string;
   name: string;
-  mimeType: string;
-  isFolder: boolean;
+  kind: DriveKind;
   webViewLink: string | null;
 }
 
-async function driveQuery(token: string, q: string, orderBy: string): Promise<DriveSearchEntry[]> {
+function escapeQ(s: string): string {
+  return s.replace(/['\\]/g, "\\$&");
+}
+
+/**
+ * List Drive files for the quick-open box. With `folderId` it lists that folder;
+ * with `nameQuery` it name-matches; with neither it returns recent files. `types`
+ * restricts to the given kinds (server-side, so junk does not crowd out matches).
+ */
+export async function driveFiles(
+  token: string,
+  opts: { nameQuery?: string; folderId?: string; types?: DriveKind[] },
+): Promise<DriveSearchEntry[]> {
+  const clauses = ["trashed = false"];
+  if (opts.folderId) clauses.push(`'${escapeQ(opts.folderId)}' in parents`);
+  if (opts.nameQuery) clauses.push(`name contains '${escapeQ(opts.nameQuery)}'`);
+  const typeParts = (opts.types ?? []).map((t) => KIND_CLAUSE[t]).filter(Boolean);
+  if (typeParts.length) clauses.push(`(${typeParts.join(" or ")})`);
+
+  const orderBy = opts.nameQuery || opts.folderId ? "folder,name" : "viewedByMeTime desc";
   const params = new URLSearchParams({
-    q,
+    q: clauses.join(" and "),
     fields: "files(id,name,mimeType,webViewLink)",
-    pageSize: "25",
+    pageSize: "30",
     orderBy,
     supportsAllDrives: "true",
     includeItemsFromAllDrives: "true",
@@ -180,26 +226,9 @@ async function driveQuery(token: string, q: string, orderBy: string): Promise<Dr
   return body.files.map((f) => ({
     id: f.id,
     name: f.name,
-    mimeType: f.mimeType,
-    isFolder: f.mimeType === FOLDER_MIME,
+    kind: driveKind(f.mimeType, f.name),
     webViewLink: f.webViewLink ?? null,
   }));
-}
-
-/** Files and folders whose name contains the query, recent first. */
-export function driveSearch(token: string, query: string): Promise<DriveSearchEntry[]> {
-  const q = `name contains '${query.replace(/['\\]/g, "\\$&")}' and trashed=false`;
-  return driveQuery(token, q, "modifiedTime desc");
-}
-
-/** Recently viewed files and folders, as the default search list. */
-export function driveRecent(token: string): Promise<DriveSearchEntry[]> {
-  return driveQuery(token, "trashed=false", "viewedByMeTime desc");
-}
-
-/** Immediate children of a folder, with web links, for drilling in. */
-export function driveFolderChildren(token: string, folderId: string): Promise<DriveSearchEntry[]> {
-  return driveQuery(token, `'${folderId}' in parents and trashed=false`, "folder,name");
 }
 
 /** Emails on a file's sharing list (for the later ACL check). */
