@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback } from "react";
+import { useRef, useCallback } from "react";
 import { useNavigate } from "react-router";
 import type { Route } from "./+types/home";
 import { APP_NAME, generateDocumentId } from "~/shared/constants";
@@ -19,19 +19,9 @@ export function meta(_args: Route.MetaArgs) {
   ];
 }
 
-export default function Home({ loaderData }: Route.ComponentProps) {
-  const { origin } = loaderData;
+export default function Home(_props: Route.ComponentProps) {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [copied, setCopied] = useState(false);
-
-  const curlCommand = `curl ${origin}/new -T file.md`;
-
-  function handleCopy() {
-    navigator.clipboard.writeText(curlCommand);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }
 
   async function handleNewDocument() {
     const { body, threads, onboarding, frontmatter } = deserializeThreads(demoDocument);
@@ -96,22 +86,18 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           <ThemeSelector />
         </div>
         <h1 className="mb-1 font-bold">{APP_NAME}</h1>
-        <p className="mb-8 text-muted">
-          Share and edit Markdown together, quickly
-        </p>
-        <div className="flex flex-col gap-3 sm:flex-row">
+        <p className="mb-6 text-muted">Open a Google Drive markdown file</p>
+        <div className="h-[58vh] w-full max-w-2xl border border-border text-left">
+          <DriveBrowser className="h-full" />
+        </div>
+        <div className="mt-4 flex items-center gap-4 text-sm text-muted">
           <button
             onClick={handleNewDocument}
-            className="cursor-pointer whitespace-nowrap border border-ink bg-ink px-6 py-2 text-paper transition-opacity hover:opacity-80"
+            className="cursor-pointer underline-offset-2 hover:text-ink hover:underline"
           >
-            New document
+            New blank document
           </button>
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="cursor-pointer whitespace-nowrap border border-border px-6 py-2 text-muted transition-colors hover:border-ink hover:text-ink"
-          >
-            Drag and drop .md file
-          </button>
+          <span>or drag a .md file onto the page</span>
         </div>
         <input
           ref={fileInputRef}
@@ -120,53 +106,6 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           onChange={handleFileChange}
           className="hidden"
         />
-        <p className="mt-8 text-muted">Open from Google Drive</p>
-        <div className="mt-2 h-96 w-full max-w-xl border border-border text-left">
-          <DriveBrowser className="h-full" />
-        </div>
-
-        <p className="mt-8 text-muted">Or from your terminal</p>
-        <div className="mt-2 flex max-w-full items-center gap-1.5">
-          <code className="flex min-w-0 items-center overflow-x-auto font-mono text-base">
-            <span className="md-delimiter shrink-0">`</span>
-            <span className="md-code whitespace-nowrap">{curlCommand}</span>
-            <span className="md-delimiter shrink-0">`</span>
-          </code>
-          <button
-            onClick={handleCopy}
-            className="shrink-0 cursor-pointer p-1 text-muted hover:text-ink transition-colors"
-            aria-label={copied ? "Copied" : "Copy command"}
-          >
-            {copied ? (
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-            ) : (
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-              </svg>
-            )}
-          </button>
-        </div>
       </div>
       <footer className="fixed bottom-0 left-0 right-0 z-10 flex items-baseline justify-between border-t border-border bg-paper px-4 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] text-base text-muted">
         <span>
