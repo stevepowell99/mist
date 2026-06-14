@@ -39,6 +39,11 @@ export default function SlidesView() {
     <iframe
       title="Slides preview"
       sandbox="allow-scripts"
+      // allow + allowFullScreen let reveal's F key take the deck fullscreen from
+      // inside the sandboxed iframe; the menu/overview/notes shortcuts work once
+      // the iframe has focus (click the slide).
+      allow="fullscreen"
+      allowFullScreen
       srcDoc={html}
       className="block h-full w-full border-0"
     />

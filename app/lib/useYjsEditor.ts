@@ -7,7 +7,12 @@ import { useUserIdentity } from "./useUserIdentity";
 import type { DocMode } from "~/shared/types";
 
 export function useYjsEditor(docId: string, docKey: string | null = null) {
-  const doc = useMemo(() => new Y.Doc(), []);
+  // Tie the doc's identity to the document id (and recreate it if the id ever
+  // changes). DocumentRoot is keyed on the id so this hook already remounts per
+  // document, but keying the doc to docId as well makes "this Y.Doc belongs to
+  // this document" structural rather than incidental: a stale doc can never be
+  // reused for another file (the cause of the cross-doc concatenation bug).
+  const doc = useMemo(() => new Y.Doc({ guid: docId }), [docId]);
   const awareness = useMemo(() => new Awareness(doc), [doc]);
   const { user, setName: setUserName, needsName, dismissNamePrompt } = useUserIdentity();
   const docState = useMemo(() => doc.getMap<string>("docState"), [doc]);

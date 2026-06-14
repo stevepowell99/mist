@@ -179,6 +179,24 @@ body {
   opacity: 0.35;
 }
 
+/* Quarto/Pandoc control syntax: muted, monospace, normal-weight and small so it
+   recedes behind the prose even when it sits inside a heading. */
+.tiptap .md-control {
+  font-family: var(--font-mono);
+  font-size: 0.8em;
+  font-weight: 400;
+  color: var(--color-muted);
+  opacity: 0.8;
+}
+
+.tiptap .md-control-faint {
+  font-family: var(--font-mono);
+  font-size: 0.8em;
+  font-weight: 400;
+  color: var(--color-muted);
+  opacity: 0.55;
+}
+
 /* CriticMarkup delimiter tokens (widget decorations around mark ranges) */
 .cm-delimiter {
   opacity: 0.35;

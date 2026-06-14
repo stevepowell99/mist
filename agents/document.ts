@@ -10,6 +10,7 @@ import type { DocRole, DriveMeta, GitHubMeta } from "../app/shared/types";
 import { type DocBackend, DriveBackend } from "../app/lib/backend.server";
 import { type DriveEnv, driveConfigured } from "../app/lib/google.server";
 import { quickHash } from "../app/shared/hash";
+import { stampDocId, isContaminated } from "../app/shared/doc-integrity";
 
 /**
  * Durable Objects SQLite accepts Uint8Array for BLOB columns via the
@@ -65,8 +66,12 @@ class DocumentAgent extends Agent {
       Y.applyUpdate(this.doc, state);
     }
 
-    // Persist on every update
+    // Persist on every update, unless the doc has been contaminated by another
+    // document's content (the cross-doc Yjs merge bug). Persisting corrupted
+    // state is what concatenated files, so refuse it: the last clean snapshot
+    // stays in storage and the DO reverts to it on its next load.
     this.doc.on("update", () => {
+      if (this.isContaminated()) return;
       const state = Y.encodeStateAsUpdate(this.doc!);
       this.sql`
         INSERT INTO doc_state (key, value) VALUES ('state', ${sqlBlob(state)})
@@ -75,6 +80,17 @@ class DocumentAgent extends Agent {
     });
 
     return { doc: this.doc, awareness: this.awareness };
+  }
+
+  /**
+   * Structural integrity check. At seed the doc is stamped with its own id
+   * (meta.docId === this DO's name). If a client ever merges a different
+   * document's content in, that stamp no longer matches, which is the signal
+   * that this doc has been contaminated and must not be persisted or broadcast.
+   * Legacy docs predating the stamp have no docId and are treated as clean.
+   */
+  private isContaminated(): boolean {
+    return this.doc ? isContaminated(this.doc, this.name) : false;
   }
 
   private readStoredText(key: string): string | null {
@@ -170,6 +186,15 @@ class DocumentAgent extends Agent {
         const encoder = encoding.createEncoder();
         encoding.writeVarUint(encoder, MSG_SYNC);
         syncProtocol.readSyncMessage(decoder, encoder, doc, null);
+
+        // A client carrying another document's content would merge it in here.
+        // Detect it before broadcasting and drop the offending session, so the
+        // contamination neither reaches other clients nor (via the persist
+        // guard) reaches storage.
+        if (this.isContaminated()) {
+          connection.close(4400, "cross-document contamination rejected");
+          break;
+        }
 
         // If there's a response (e.g. SyncStep2 reply), send it back
         if (encoding.length(encoder) > 1) {
@@ -310,11 +335,14 @@ class DocumentAgent extends Agent {
         ON CONFLICT(key) DO UPDATE SET value = excluded.value
       `;
 
-      // Stamp doc format version in Yjs metadata
-      const meta = doc.getMap<number>("meta");
+      // Stamp doc format version and the document's own id in Yjs metadata.
+      // The docId stamp is the anchor for the contamination guard: any state
+      // whose stamp stops matching this DO's name is a cross-doc merge.
+      const meta = doc.getMap("meta");
       if (!meta.has("version")) {
         meta.set("version", DOC_FORMAT_VERSION);
       }
+      stampDocId(doc, this.name);
 
       // Store creation timestamp
       const now = Date.now();

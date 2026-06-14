@@ -13,17 +13,15 @@ export function stripFrontmatter(md: string): { frontmatter: string; body: strin
   return m ? { frontmatter: m[1], body: md.slice(m[0].length) } : { frontmatter: "", body: md };
 }
 
-/** True when the document should render as slides rather than a flowing document. */
-export function isSlideDeck(
-  markdown: string,
-  github: GitHubMeta | null,
-  frontmatter = "",
-  drive: DriveMeta | null = null,
-): boolean {
-  if (github?.path?.toLowerCase().endsWith(".qmd")) return true;
-  if (drive?.name?.toLowerCase().endsWith(".qmd")) return true;
+/**
+ * True when the document should render as slides. A deck is identified by its
+ * frontmatter declaring the reveal.js format (format: revealjs), exactly as
+ * Quarto does, independent of the file extension. So a `.md` deck is detected
+ * and a `.qmd` that is a document or report is not misread as slides.
+ */
+export function isSlideDeck(markdown: string, frontmatter = ""): boolean {
   const fm = frontmatter || stripFrontmatter(markdown).frontmatter;
-  return fm.toLowerCase().includes("revealjs");
+  return /revealjs/i.test(fm);
 }
 
 function stripCritic(md: string): string {
@@ -281,6 +279,7 @@ export function buildSlidesHtml(md: string, opts: BuildSlidesOptions): string {
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/reveal.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/theme/${theme}.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js-menu@2/menu.css">
 <style>${PREVIEW_CSS}</style>
 ${deckCss}
 ${inlineStyles}
@@ -289,13 +288,19 @@ ${inlineStyles}
 <script src="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/reveal.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/reveal.js@5/plugin/markdown/markdown.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/reveal.js@5/plugin/notes/notes.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/reveal.js-menu@2/menu.js"></script>
 <script>
 // scrollActivationWidth:null stops reveal v5 auto-switching to scroll view in a
 // narrow pane (the split), which in a sandboxed iframe hits sessionStorage and
 // blanks the deck.
 // width/height fix a 16:9 widescreen slide that reveal scales as a unit, so the
 // preview letterboxes instead of reflowing to the pane shape.
-Reveal.initialize({plugins:[RevealMarkdown,RevealNotes],hash:false,scrollActivationWidth:null,width:1280,height:720}).then(async function(){
+// Keep reveal's own controls, progress bar, overview (Esc/O) and keyboard
+// shortcuts (F fullscreen, S notes, arrows) on, and add the hamburger menu
+// plugin if it loaded (best-effort, like Quarto's decks).
+var revealPlugins=[RevealMarkdown,RevealNotes];
+if (window.RevealMenu) revealPlugins.push(RevealMenu);
+Reveal.initialize({plugins:revealPlugins,hash:false,controls:true,progress:true,keyboard:true,overview:true,scrollActivationWidth:null,width:1280,height:720,menu:{openButton:true,openSlideNumber:false,markers:true}}).then(async function(){
   Reveal.layout();
   if (window.ResizeObserver) new ResizeObserver(function(){ Reveal.layout(); }).observe(document.body);
   window.addEventListener("resize", function(){ Reveal.layout(); });

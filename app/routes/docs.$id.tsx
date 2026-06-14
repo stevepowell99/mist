@@ -72,13 +72,73 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
   return { id, createdAt, role, suggestKey: suggestKey ?? null, docKey, github, drive, initialPreview };
 }
 
+// Navbar toggle icons. Stroke-only 18px glyphs so they sit quietly in the bar.
+const svg = (paths: React.ReactNode) => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    {paths}
+  </svg>
+);
+const IconEditing = () => svg(<><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></>);
+const IconSuggesting = () => svg(<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z" />);
+const IconEditorOnly = () => svg(<><path d="M4 6h16M4 10h16M4 14h10M4 18h10" /></>);
+const IconSplit = () => svg(<><rect x="3" y="4" width="18" height="16" rx="1" /><path d="M12 4v16" /></>);
+const IconPreviewOnly = () => svg(<><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" /><circle cx="12" cy="12" r="3" /></>);
+
+/** A segmented navbar toggle, kept DRY across the Mode and View groups. */
+function ToolbarToggle({
+  active,
+  onClick,
+  title,
+  disabled,
+  activeClass,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  title: string;
+  disabled?: boolean;
+  activeClass: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      aria-pressed={active}
+      className={`flex items-center border-l border-border px-3 transition-colors ${
+        active ? activeClass : "text-muted hover:bg-border hover:text-ink"
+      } ${disabled ? "opacity-40" : "cursor-pointer"}`}
+    >
+      {children}
+    </button>
+  );
+}
+
 export default function DocumentPage({ loaderData }: Route.ComponentProps) {
-  const { id, createdAt, role, suggestKey, docKey, github, drive, initialPreview } = loaderData;
+  // React Router reuses this component across /docs/X to /docs/Y navigation, so
+  // key the whole subtree on the document id. This remounts DocumentRoot, which
+  // OWNS the Y.Doc (in useYjsEditor). Without a fresh Y.Doc per id, the previous
+  // file's content stays in the doc and the next file syncs INTO it, merging the
+  // two (the concatenation/corruption bug). The key must sit above useYjsEditor.
+  return <DocumentRoot key={loaderData.id} {...loaderData} />;
+}
+
+function DocumentRoot({
+  id,
+  createdAt,
+  role,
+  suggestKey,
+  docKey,
+  github,
+  drive,
+  initialPreview,
+}: Route.ComponentProps["loaderData"]) {
   const yjs = useYjsEditor(id, docKey);
 
   return (
     <DocumentProvider
-      key={id}
       docId={id}
       createdAt={createdAt}
       yjs={yjs}
@@ -115,23 +175,52 @@ function DocumentLayout({ id }: { id: string }) {
     bibLib,
     markdown,
     frontmatter,
-    togglePreview,
+    setPreview,
     threads,
     docKey,
   } = useDocument();
 
   const title = fileTitle(github, drive, id);
-  const deck = isSlideDeck(markdown, github, frontmatter, drive);
+  const deck = isSlideDeck(markdown, frontmatter);
   const slidesMode = showPreview && deck;
 
   // Desktop-only draggable split: drag the gutter left to put the editor on the
   // left and a live preview on the right. editorPct is the editor's width; at
   // 100 there is no split. Mobile keeps the full-swap Preview toggle.
   const [isDesktop, setIsDesktop] = useState(false);
-  const [editorPct, setEditorPct] = useState(100);
+  const [editorPct, setEditorPct] = useState(() => {
+    // Open in split if the URL asks for it (?view=split), so a reload or shared
+    // link reopens the same layout. Preview-only is restored via initialPreview.
+    if (typeof window === "undefined") return 100;
+    return new URL(window.location.href).searchParams.get("view") === "split" ? 50 : 100;
+  });
   const contentRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLElement>(null);
   const splitOpen = isDesktop && editorPct <= 95;
+  // A deck previewed full-screen (not split) renders in the same flex section as
+  // the split preview, so the iframe gets a definite height and reveal can size
+  // the deck. Nesting it inside <main> collapses the iframe to zero height.
+  const slidesFull = slidesMode && !splitOpen;
+
+  // The View is one of three exclusive layouts. It is derived from the preview
+  // toggle and split ratio, and setView drives both, so the navbar, keyboard and
+  // URL all speak the same three-state language.
+  const view: "editor" | "split" | "preview" = splitOpen ? "split" : showPreview ? "preview" : "editor";
+  const setView = useCallback(
+    (v: "editor" | "split" | "preview") => {
+      if (v === "preview") {
+        setPreview(true);
+        setEditorPct(100);
+      } else if (v === "split") {
+        setPreview(false);
+        setEditorPct(50);
+      } else {
+        setPreview(false);
+        setEditorPct(100);
+      }
+    },
+    [setPreview],
+  );
 
   // Publish the header height so the sidebar/overlays can sit below it.
   useEffect(() => {
@@ -168,16 +257,30 @@ function DocumentLayout({ id }: { id: string }) {
     return () => mq.removeEventListener("change", update);
   }, []);
 
-  // Keyboard shortcuts (mod+alt+key): E edit, S suggest, V preview, \ split.
-  // One handler keeps it DRY; mod+alt avoids clashing with typing and browser keys.
+  // Mirror the per-viewer View into the URL so a reload or a copied link
+  // restores the same layout. replaceState keeps it out of the back-stack.
+  // Editor is the default, so it carries no param. Mode (edit/suggest) is shared
+  // doc state, so it stays out of the URL.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (view === "editor") url.searchParams.delete("view");
+    else url.searchParams.set("view", view);
+    window.history.replaceState(window.history.state, "", url.toString());
+  }, [view]);
+
+  // Keyboard shortcuts (mod+alt+key). Mode: E edit, S suggest. View: 1 editor,
+  // 2 split, 3 preview. One handler keeps it DRY; mod+alt avoids clashing with
+  // typing and browser keys.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!(e.ctrlKey || e.metaKey) || !e.altKey) return;
       const actions: Record<string, () => void> = {
         e: () => role === "edit" && mode !== "edit" && toggleMode(),
         s: () => mode !== "suggest" && role === "edit" && toggleMode(),
-        v: () => togglePreview(),
-        "\\": () => isDesktop && setEditorPct((p) => (p > 95 ? 50 : 100)),
+        "1": () => setView("editor"),
+        "2": () => isDesktop && setView("split"),
+        "3": () => setView("preview"),
       };
       const action = actions[e.key.toLowerCase()];
       if (action) {
@@ -187,7 +290,7 @@ function DocumentLayout({ id }: { id: string }) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [role, mode, toggleMode, togglePreview, isDesktop]);
+  }, [role, mode, toggleMode, setView, isDesktop]);
 
   const startDrag = useCallback((e: ReactMouseEvent) => {
     e.preventDefault();
@@ -346,44 +449,54 @@ function DocumentLayout({ id }: { id: string }) {
         <div className="flex min-w-0 grow items-center px-4">
           <span className="truncate font-medium" title={title}>{title}</span>
         </div>
-        {/* Mode switches live in the navbar. Suggest is the default; only an
-            edit-link user can switch to Edit. */}
-        <div className="hidden shrink-0 items-stretch border-l border-border text-sm uppercase tracking-wider lg:flex">
-          <button
-            type="button"
+        {/* Two icon groups: Mode (Editing vs Suggesting, shared doc state, only
+            an edit-link user can switch) and View (Editor / Split / Preview,
+            per-viewer). */}
+        <div className="hidden shrink-0 items-stretch lg:flex">
+          <ToolbarToggle
+            active={mode === "edit"}
             onClick={() => role === "edit" && mode !== "edit" && toggleMode()}
             disabled={role !== "edit"}
-            title="Edit (Ctrl/Cmd+Alt+E)"
-            className={`flex items-center px-3 transition-colors ${mode === "edit" ? "bg-coral text-paper" : "text-muted hover:bg-border hover:text-ink"} ${role !== "edit" ? "opacity-40" : "cursor-pointer"}`}
+            title="Editing (Ctrl/Cmd+Alt+E)"
+            activeClass="bg-coral text-paper"
           >
-            Edit
-          </button>
-          <button
-            type="button"
+            <IconEditing />
+          </ToolbarToggle>
+          <ToolbarToggle
+            active={mode === "suggest"}
             onClick={() => mode !== "suggest" && role === "edit" && toggleMode()}
-            title="Suggest (Ctrl/Cmd+Alt+S)"
-            className={`flex cursor-pointer items-center border-l border-border px-3 transition-colors ${mode === "suggest" ? "bg-amber-500 text-paper" : "text-muted hover:bg-border hover:text-ink"}`}
+            disabled={role !== "edit"}
+            title="Suggesting (Ctrl/Cmd+Alt+S)"
+            activeClass="bg-amber-500 text-paper"
           >
-            Suggest
-          </button>
-          <button
-            type="button"
-            onClick={() => togglePreview()}
-            title="Preview (Ctrl/Cmd+Alt+V)"
-            className={`flex cursor-pointer items-center border-l border-border px-3 transition-colors ${showPreview ? "bg-emerald-600 text-paper" : "text-muted hover:bg-border hover:text-ink"}`}
+            <IconSuggesting />
+          </ToolbarToggle>
+          <ToolbarToggle
+            active={view === "editor"}
+            onClick={() => setView("editor")}
+            title="Editor only (Ctrl/Cmd+Alt+1)"
+            activeClass="bg-ink text-paper"
           >
-            Preview
-          </button>
+            <IconEditorOnly />
+          </ToolbarToggle>
           {isDesktop && (
-            <button
-              type="button"
-              onClick={() => setEditorPct((p) => (p > 95 ? 50 : 100))}
-              title="Split (Ctrl/Cmd+Alt+\\)"
-              className={`flex cursor-pointer items-center border-l border-border px-3 transition-colors ${splitOpen ? "bg-ink text-paper" : "text-muted hover:bg-border hover:text-ink"}`}
+            <ToolbarToggle
+              active={view === "split"}
+              onClick={() => setView("split")}
+              title="Split (Ctrl/Cmd+Alt+2)"
+              activeClass="bg-ink text-paper"
             >
-              Split
-            </button>
+              <IconSplit />
+            </ToolbarToggle>
           )}
+          <ToolbarToggle
+            active={view === "preview"}
+            onClick={() => setView("preview")}
+            title="Preview only (Ctrl/Cmd+Alt+3)"
+            activeClass="bg-emerald-600 text-paper"
+          >
+            <IconPreviewOnly />
+          </ToolbarToggle>
         </div>
         {/* On desktop the right group is the aside width so its left edge lines up with
             the body/sidebar divide. On mobile there is no sidebar, so it sizes naturally. */}
@@ -422,9 +535,11 @@ function DocumentLayout({ id }: { id: string }) {
             ref={mainRef}
             onScroll={handleScroll}
             className={`lg:border-r lg:border-border ${
-              splitOpen
-                ? "shrink-0 overflow-y-auto"
-                : `flex-1 ${slidesMode ? "overflow-hidden" : "overflow-y-auto pb-[33vh] lg:pb-0"}`
+              slidesFull
+                ? "hidden"
+                : splitOpen
+                  ? "shrink-0 overflow-y-auto"
+                  : "flex-1 overflow-y-auto pb-[33vh] lg:pb-0"
             }`}
             style={splitOpen ? { width: `${editorPct}%` } : undefined}
           >
@@ -443,9 +558,11 @@ function DocumentLayout({ id }: { id: string }) {
               onResolveAtCursor={handleResolveAtCursor}
               onDeleteAtCursor={handleDeleteAtCursor}
             />
-            {!splitOpen && showPreview && (slidesMode ? <SlidesView /> : <Preview />)}
+            {/* Full-screen document preview stays inside main (it scrolls with
+                the editor). A deck preview instead renders in the section below. */}
+            {!splitOpen && showPreview && !deck && <Preview />}
           </main>
-          {isDesktop && (
+          {isDesktop && !slidesFull && (
             <div
               role="separator"
               aria-orientation="vertical"
@@ -463,7 +580,7 @@ function DocumentLayout({ id }: { id: string }) {
               </span>
             </div>
           )}
-          {splitOpen && (
+          {(splitOpen || slidesFull) && (
             <section className="flex-1 overflow-hidden">
               {deck ? <SlidesView /> : <div ref={previewScrollRef} className="h-full overflow-y-auto"><Preview /></div>}
             </section>

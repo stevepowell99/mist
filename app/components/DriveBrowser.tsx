@@ -383,7 +383,7 @@ export default function DriveBrowser({
           )}
           <div className="flex items-center justify-between gap-2">
             <span className="truncate text-sm font-medium">
-              {data.trail[data.trail.length - 1]?.name ?? "Recent"}
+              {data.trail[data.trail.length - 1]?.name ?? "Recent in Drive"}
             </span>
             {currentFolderId && (
               <button

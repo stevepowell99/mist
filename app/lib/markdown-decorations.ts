@@ -86,6 +86,31 @@ export const MARKDOWN_PATTERNS: MarkdownPattern[] = [
     contentClass: "",
     delimiterClass: "md-hr",
   },
+  // Quarto/Pandoc control syntax: keep it readable but quiet so the prose leads.
+  // Fenced-div lines (`::: {.subhead}` ... `:::`).
+  {
+    name: "fenced-div",
+    regex: /^(\s*:::+.*)$/gm,
+    type: "prefix",
+    contentClass: "",
+    delimiterClass: "md-control",
+  },
+  // Pandoc attribute spans on headings and inline text (`{.center ...}`, `{#id}`).
+  {
+    name: "attr-spec",
+    regex: /\{[.#][^}]*\}/g,
+    type: "prefix",
+    contentClass: "",
+    delimiterClass: "md-control",
+  },
+  // Raw inline HTML tags (`<i class="fa-...">`, `</i>`).
+  {
+    name: "html-tag",
+    regex: /<\/?[a-zA-Z][^>]*>/g,
+    type: "prefix",
+    contentClass: "",
+    delimiterClass: "md-control-faint",
+  },
 ];
 
 export const CODE_FENCE_REGEX = /^(`{3,})(.*)?$/;
