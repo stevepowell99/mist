@@ -107,6 +107,20 @@ Progress, 12 June 2026 (auth-free work, done on mobile):
 - Step 4 data layer: `GitHubBackend.list()`, `folderRef()` and `parentRef()` over the public contents API, unit-tested. The folder sidebar can now bind to a real backend without the Drive credential.
 - Still needing a desktop or the Drive credential: the `Y.Text` core rewrite (browser testing), `DriveBackend` and the cloud bridge (Drive auth), and the visible sidebar panel plus `/open` route and TagFox icon (your eyes, plus `/open` waits for Drive).
 
+Progress, 14 June 2026 (Drive credential now set as Worker secrets):
+
+- `DriveBackend` (read/write/list/permissions) implemented; `/drive/import` opens a Drive markdown file into a room; the relay commit-back picks Drive or GitHub. Force-save and unsaved indicator generalised to any backend.
+- Slides for Drive decks: deck `theme:`/`css:` resolve through a `/drive/asset` proxy that streams private-Drive assets via the relay (jsDelivr cannot reach private Drive). Inline `<style>` blocks hoisted to the iframe head. Reveal re-lays out on resize so the split pane is not blank.
+- Drive quick-open search box (`/drive/search`): recent by default, name search, opens markdown in mist, drills into folders, opens other Drive files in a new tab.
+- **Interim auth:** all `/drive/*` endpoints gated by a shared passphrase (`DRIVE_ACCESS_KEY` secret, `X-Drive-Key` header or `?token=`), fail-closed. This is a stopgap for the proper Google sign-in + per-file ACL, which remains the real auth (and would replace the passphrase, give named cursors, and bound folder navigation).
+
+### Next
+
+- **Drive folder sidebar (siblings).** The existing `FolderSidebar` and `/docs/:id/folder` are GitHub-only; generalise to Drive (construct the right backend; make `parentRef` allow async for Drive) so opening a Drive file shows its siblings as it does for GitHub.
+- **Drive images in slides and document preview.** Relative image paths in Drive decks/docs do not resolve yet; route them through `/drive/asset` like CSS.
+- **PDF printing.** Reveal supports print-to-PDF via the `?print-pdf` query and the browser print dialog; add a Print/PDF control to the slides view that opens the deck in that mode so a clean PDF can be produced from the browser. Check our component+colour CSS (which uses `zoom`/`scale`) prints faithfully.
+- **Replace the passphrase with Google sign-in + ACL** (the deferred real auth).
+
 ## Open decisions
 
 - **Drive credential for the relay.** Decided 12 June 2026: use Steve's stored OAuth refresh token, so files stay owned by Steve and edits attribute to him. The service-account alternative (tidier server-side, but needs the folders shared with it and writes show as the service account) is not used. Secrets needed, names only, as Worker secrets alongside the existing `GITHUB_TOKEN`: the Google OAuth client id and secret, and the Drive refresh token.
