@@ -50,8 +50,9 @@ export interface DocBackend {
   folderRef?(): string;
   /** Entries in a folder, defaulting to this document's folder. Folders first. */
   list?(folderRef?: string): Promise<BackendEntry[]>;
-  /** The parent folder ref, or null at the shared root. */
-  parentRef?(folderRef: string): string | null;
+  /** The parent folder ref, or null at the shared root. Async for backends
+   *  (Drive) that must look the parent up. */
+  parentRef?(folderRef: string): string | null | Promise<string | null>;
 
   /** Whether the signed-in user may access this document (Drive only). */
   canAccess?(userEmail: string): Promise<boolean>;
@@ -163,6 +164,22 @@ export class DriveBackend implements DocBackend {
       .filter((e) => e.isFolder || /\.(md|qmd)$/i.test(e.name))
       .map((e) => ({ name: e.name, isFolder: e.isFolder, ref: e.id }))
       .sort(byFolderThenName);
+  }
+
+  async parentRef(folderRef: string): Promise<string | null> {
+    if (!folderRef) return null;
+    const meta = await driveGetMeta(await this.token(), folderRef);
+    return meta.parents?.[0] ?? null;
+  }
+
+  /** Display name of a folder id, for the sidebar header. */
+  async folderName(folderRef: string): Promise<string> {
+    if (!folderRef) return "";
+    try {
+      return (await driveGetMeta(await this.token(), folderRef)).name;
+    } catch {
+      return "";
+    }
   }
 
   async canAccess(userEmail: string): Promise<boolean> {

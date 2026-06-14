@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useDocument } from "~/lib/DocumentContext";
+import { ensureDriveKey, getDriveKey, clearDriveKey } from "~/lib/drive-key";
 
 interface Entry {
   name: string;
@@ -12,6 +13,7 @@ interface Listing {
   folderRef: string | null;
   parentRef: string | null;
   currentPath: string | null;
+  folderName: string | null;
 }
 
 function FolderGlyph() {
@@ -42,7 +44,7 @@ function folderLabel(ref: string | null | undefined): string {
  * Renders only when the document has a folder backend (GitHub today, Drive later).
  */
 export default function FolderSidebar() {
-  const { github, docId, docKey } = useDocument();
+  const { github, drive, docId, docKey } = useDocument();
   const [open, setOpen] = useState(false);
   const [data, setData] = useState<Listing | null>(null);
   const [loading, setLoading] = useState(false);
@@ -57,7 +59,18 @@ export default function FolderSidebar() {
         const params = new URLSearchParams();
         if (docKey) params.set("k", docKey);
         if (ref != null) params.set("ref", ref);
-        const res = await fetch(`/docs/${docId}/folder?${params.toString()}`);
+        // The Drive folder listing browses the relay's Drive, so it needs the
+        // shared passphrase too; GitHub listing is public and needs no header.
+        const headers: HeadersInit = {};
+        if (drive) {
+          const key = ensureDriveKey();
+          if (key) headers["X-Drive-Key"] = key;
+        }
+        const res = await fetch(`/docs/${docId}/folder?${params.toString()}`, { headers });
+        if (res.status === 401) {
+          clearDriveKey();
+          throw new Error("wrong Drive passphrase, try again");
+        }
         if (!res.ok) throw new Error(`could not load folder (${res.status})`);
         setData((await res.json()) as Listing);
       } catch (e) {
@@ -66,7 +79,7 @@ export default function FolderSidebar() {
         setLoading(false);
       }
     },
-    [docId, docKey],
+    [docId, docKey, drive],
   );
 
   useEffect(() => {
@@ -75,17 +88,33 @@ export default function FolderSidebar() {
 
   const openFile = useCallback(
     async (ref: string) => {
-      if (!github || opening) return;
+      if (opening) return;
       setOpening(true);
       setError(null);
       try {
-        const encPath = ref.split("/").map(encodeURIComponent).join("/");
-        const blobUrl = `https://github.com/${github.owner}/${github.repo}/blob/${github.branch}/${encPath}`;
-        const res = await fetch("/gh/import", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url: blobUrl }),
-        });
+        let res: Response;
+        if (drive) {
+          const key = getDriveKey();
+          res = await fetch("/drive/import", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...(key ? { "X-Drive-Key": key } : {}) },
+            body: JSON.stringify({ url: ref }),
+          });
+        } else if (github) {
+          const encPath = ref.split("/").map(encodeURIComponent).join("/");
+          const blobUrl = `https://github.com/${github.owner}/${github.repo}/blob/${github.branch}/${encPath}`;
+          res = await fetch("/gh/import", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url: blobUrl }),
+          });
+        } else {
+          return;
+        }
+        if (res.status === 401) {
+          clearDriveKey();
+          throw new Error("wrong Drive passphrase, try again");
+        }
         const body = (await res.json()) as { url?: string; error?: string };
         if (body.url) {
           window.location.href = body.url;
@@ -97,10 +126,10 @@ export default function FolderSidebar() {
       }
       setOpening(false);
     },
-    [github, opening],
+    [github, drive, opening],
   );
 
-  if (!github) return null;
+  if (!github && !drive) return null;
 
   return (
     <>
@@ -125,7 +154,7 @@ export default function FolderSidebar() {
           <div className="fixed left-0 top-0 z-50 flex h-screen w-80 max-w-[85vw] flex-col border-r border-border bg-paper shadow-lg">
             <div className="flex items-center justify-between border-b border-border px-4 py-2">
               <span className="truncate font-medium" title={data?.folderRef ?? undefined}>
-                {folderLabel(data?.folderRef)}
+                {data?.folderName || folderLabel(data?.folderRef)}
               </span>
               <button type="button" onClick={() => setOpen(false)} aria-label="Close" className="px-2 text-lg leading-none">
                 &times;

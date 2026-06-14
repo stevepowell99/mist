@@ -164,7 +164,7 @@ export default function DriveQuickOpen() {
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full z-50 mt-1 w-96 max-w-[90vw] border border-border bg-paper shadow-lg">
+        <div className="absolute left-0 top-full z-50 mt-1 w-[48rem] max-w-[95vw] border border-border bg-paper shadow-lg">
           <input
             autoFocus
             type="text"
@@ -207,13 +207,18 @@ export default function DriveQuickOpen() {
                     type="button"
                     disabled={busy}
                     onClick={() => onPick(r)}
-                    className="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-black/5 disabled:opacity-50"
+                    className="flex w-full items-start gap-2 px-3 py-1.5 text-left hover:bg-black/5 disabled:opacity-50"
                     title={r.kind === "folder" ? "Open folder" : r.openInMist ? "Open in mist" : "Open in Drive"}
                   >
-                    <KindIcon kind={r.kind} />
-                    <span className="truncate">{r.name}</span>
+                    <span className="mt-0.5 shrink-0">
+                      <KindIcon kind={r.kind} />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      {r.path && <span className="block truncate text-xs opacity-50">{r.path}</span>}
+                      <span className="block truncate">{r.name}</span>
+                    </span>
                     {!r.openInMist && r.kind !== "folder" && (
-                      <span className="ml-auto shrink-0 text-xs opacity-50">Drive</span>
+                      <span className="mt-0.5 shrink-0 text-xs opacity-50">Drive</span>
                     )}
                   </button>
                 </li>

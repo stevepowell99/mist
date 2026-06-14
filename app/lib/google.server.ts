@@ -188,10 +188,39 @@ export interface DriveSearchEntry {
   name: string;
   kind: DriveKind;
   webViewLink: string | null;
+  /** Parent folder path, e.g. "Causal Map / 19c-slides", "" at the root. */
+  path: string;
 }
 
 function escapeQ(s: string): string {
   return s.replace(/['\\]/g, "\\$&");
+}
+
+/** Resolve a file's parent-folder path, memoising folders across the request so
+ *  many results in the same tree cost only a few extra calls. Capped in depth. */
+async function resolveFolderPath(
+  token: string,
+  parents: string[] | undefined,
+  cache: Map<string, { name: string; parent?: string }>,
+): Promise<string> {
+  let id = parents?.[0];
+  const parts: string[] = [];
+  let guard = 0;
+  while (id && guard++ < 5) {
+    let info = cache.get(id);
+    if (!info) {
+      try {
+        const meta = await driveGetMeta(token, id);
+        info = { name: meta.name, parent: meta.parents?.[0] };
+      } catch {
+        info = { name: "" };
+      }
+      cache.set(id, info);
+    }
+    if (info.name && info.name !== "My Drive") parts.unshift(info.name);
+    id = info.parent;
+  }
+  return parts.join(" / ");
 }
 
 /**
@@ -212,7 +241,7 @@ export async function driveFiles(
   const orderBy = opts.nameQuery || opts.folderId ? "folder,name" : "viewedByMeTime desc";
   const params = new URLSearchParams({
     q: clauses.join(" and "),
-    fields: "files(id,name,mimeType,webViewLink)",
+    fields: "files(id,name,mimeType,webViewLink,parents)",
     pageSize: "30",
     orderBy,
     supportsAllDrives: "true",
@@ -221,14 +250,21 @@ export async function driveFiles(
   const res = await fetch(`${DRIVE}/files?${params.toString()}`, { headers: authHeaders(token) });
   if (!res.ok) throw new Error(`Drive search failed (${res.status})`);
   const body = (await res.json()) as {
-    files: { id: string; name: string; mimeType: string; webViewLink?: string }[];
+    files: { id: string; name: string; mimeType: string; webViewLink?: string; parents?: string[] }[];
   };
-  return body.files.map((f) => ({
-    id: f.id,
-    name: f.name,
-    kind: driveKind(f.mimeType, f.name),
-    webViewLink: f.webViewLink ?? null,
-  }));
+
+  const cache = new Map<string, { name: string; parent?: string }>();
+  const entries: DriveSearchEntry[] = [];
+  for (const f of body.files) {
+    entries.push({
+      id: f.id,
+      name: f.name,
+      kind: driveKind(f.mimeType, f.name),
+      webViewLink: f.webViewLink ?? null,
+      path: await resolveFolderPath(token, f.parents, cache),
+    });
+  }
+  return entries;
 }
 
 /** Emails on a file's sharing list (for the later ACL check). */
