@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router";
 import { useDocument } from "~/lib/DocumentContext";
 import DriveBrowser, { KindIcon, Spinner } from "~/components/DriveBrowser";
 import type { GitHubMeta } from "~/shared/types";
@@ -25,6 +26,7 @@ interface GhListing {
 }
 
 function GithubBrowse({ github, docId, docKey }: { github: GitHubMeta; docId: string; docKey: string | null }) {
+  const navigate = useNavigate();
   const [data, setData] = useState<GhListing | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -68,7 +70,7 @@ function GithubBrowse({ github, docId, docKey }: { github: GitHubMeta; docId: st
         });
         const body = (await res.json()) as { url?: string; error?: string };
         if (body.url) {
-          window.location.href = body.url;
+          navigate(body.url);
           return;
         }
         throw new Error(body.error ?? "could not open file");
@@ -77,13 +79,13 @@ function GithubBrowse({ github, docId, docKey }: { github: GitHubMeta; docId: st
         setBusy(false);
       }
     },
-    [github],
+    [github, navigate],
   );
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {busy && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-paper/70 text-ink">
+        <div className="fixed inset-x-0 bottom-0 top-[var(--header-h,0px)] z-[60] flex items-center justify-center bg-paper/70 text-ink">
           <Spinner />
         </div>
       )}
@@ -158,13 +160,14 @@ export default function FolderSidebar() {
           type="button"
           aria-label="Close folder"
           onClick={() => setOpen(false)}
-          className="fixed inset-0 z-40 cursor-default bg-black/30"
+          className="fixed inset-x-0 bottom-0 top-[var(--header-h,0px)] z-40 cursor-default bg-black/30"
         />
       )}
-      {/* Kept mounted once opened so reopening shows the cached folder instantly. */}
+      {/* Kept mounted once opened so reopening shows the cached folder instantly.
+          Opens below the header (--header-h) so the top bar stays usable. */}
       {everOpened && (
         <div
-          className={`fixed left-0 top-0 z-50 flex h-screen w-[48rem] max-w-[95vw] flex-col border-r border-border bg-paper shadow-lg ${open ? "" : "hidden"}`}
+          className={`fixed left-0 top-[var(--header-h,0px)] z-50 flex h-[calc(100dvh-var(--header-h,0px))] w-[48rem] max-w-[95vw] flex-col border-r border-border bg-paper shadow-lg ${open ? "" : "hidden"}`}
         >
           <div className="flex items-center justify-between border-b border-border px-4 py-2">
             <span className="font-medium">Drive</span>

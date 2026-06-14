@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router";
 import { ensureDriveKey, getDriveKey, clearDriveKey } from "~/lib/drive-key";
+import { getRecentOpened, addRecentOpened, type RecentItem } from "~/lib/drive-recent";
 import type { DriveKind } from "~/lib/google.server";
 import type { SearchResult } from "~/routes/drive.search";
 
@@ -76,14 +78,22 @@ export default function DriveBrowser({
   currentFileId?: string | null;
   className?: string;
 }) {
+  const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [types, setTypes] = useState<DriveKind[]>(["markdown", "folder"]);
   const [folderRef, setFolderRef] = useState<string | null>(startFolderId);
   const [data, setData] = useState<Listing | null>(null);
+  const [recent, setRecent] = useState<RecentItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const reqId = useRef(0); // guards against out-of-order responses racing
+
+  // Recently-opened files (localStorage) for an instant list on open and a
+  // pinned quick-access section at the bottom. Read after mount (no SSR).
+  useEffect(() => {
+    setRecent(getRecentOpened());
+  }, []);
 
   const refresh = useCallback(async () => {
     const key = ensureDriveKey();
@@ -136,36 +146,42 @@ export default function DriveBrowser({
     setFolderRef(id);
   }, []);
 
-  const openFile = useCallback(async (id: string) => {
-    setBusy(true);
-    setError(null);
-    try {
-      const key = getDriveKey();
-      const res = await fetch("/drive/import", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...(key ? { "X-Drive-Key": key } : {}) },
-        body: JSON.stringify({ url: id }),
-      });
-      if (res.status === 401) {
-        clearDriveKey();
-        throw new Error("wrong passphrase, try again");
+  const openFile = useCallback(
+    async (item: RecentItem) => {
+      setBusy(true);
+      setError(null);
+      try {
+        const key = getDriveKey();
+        const res = await fetch("/drive/import", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...(key ? { "X-Drive-Key": key } : {}) },
+          body: JSON.stringify({ url: item.id }),
+        });
+        if (res.status === 401) {
+          clearDriveKey();
+          throw new Error("wrong passphrase, try again");
+        }
+        const body = (await res.json()) as { url?: string; error?: string };
+        if (body.url) {
+          addRecentOpened({ id: item.id, name: item.name, path: item.path });
+          // Client-side navigation keeps the top bar mounted through the load;
+          // the doc page remounts per id (keyed) so Yjs state resets.
+          navigate(body.url);
+          return; // keep the waiter up until the route swaps
+        }
+        throw new Error(body.error ?? "could not open file");
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "could not open file");
+        setBusy(false);
       }
-      const body = (await res.json()) as { url?: string; error?: string };
-      if (body.url) {
-        window.location.href = body.url; // full load so the doc/Yjs state resets
-        return; // keep the waiter up until the page unloads
-      }
-      throw new Error(body.error ?? "could not open file");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "could not open file");
-      setBusy(false);
-    }
-  }, []);
+    },
+    [navigate],
+  );
 
   const onPick = useCallback(
     (item: Item) => {
       if (item.isFolder) browseFolder(item.id);
-      else if (item.openInMist) void openFile(item.id);
+      else if (item.openInMist) void openFile({ id: item.id, name: item.name, path: item.path });
       else if (item.webViewLink) window.open(item.webViewLink, "_blank", "noopener,noreferrer");
     },
     [browseFolder, openFile],
@@ -174,7 +190,7 @@ export default function DriveBrowser({
   return (
     <div className={`flex min-h-0 flex-col ${className}`}>
       {busy && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-paper/70 text-ink">
+        <div className="fixed inset-x-0 bottom-0 top-[var(--header-h,0px)] z-[60] flex items-center justify-center bg-paper/70 text-ink">
           <Spinner />
         </div>
       )}
@@ -266,6 +282,32 @@ export default function DriveBrowser({
           </ul>
         )}
       </div>
+      {recent.length > 0 && (
+        <div className="shrink-0 border-t border-border">
+          <div className="px-3 py-1 text-xs uppercase tracking-wide opacity-50">Recently opened</div>
+          <ul className="max-h-44 overflow-y-auto text-sm">
+            {recent.map((r) => (
+              <li key={r.id}>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void openFile(r)}
+                  className="flex w-full cursor-pointer items-start gap-2 px-3 py-1 text-left hover:bg-black/5 disabled:opacity-50"
+                  title="Open in mist"
+                >
+                  <span className="mt-0.5 shrink-0">
+                    <KindIcon kind="markdown" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    {r.path && <span className="block truncate text-xs opacity-50">{r.path}</span>}
+                    <span className="block truncate">{r.name}</span>
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

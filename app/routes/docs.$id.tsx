@@ -78,6 +78,7 @@ export default function DocumentPage({ loaderData }: Route.ComponentProps) {
 
   return (
     <DocumentProvider
+      key={id}
       docId={id}
       createdAt={createdAt}
       yjs={yjs}
@@ -128,7 +129,22 @@ function DocumentLayout({ id }: { id: string }) {
   const [isDesktop, setIsDesktop] = useState(false);
   const [editorPct, setEditorPct] = useState(100);
   const contentRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLElement>(null);
   const splitOpen = isDesktop && editorPct <= 95;
+
+  // Publish the header height so the sidebar/overlays can sit below it.
+  useEffect(() => {
+    const h = headerRef.current;
+    if (!h) return;
+    const apply = () => document.documentElement.style.setProperty("--header-h", `${h.offsetHeight}px`);
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(h);
+    return () => {
+      ro.disconnect();
+      document.documentElement.style.removeProperty("--header-h");
+    };
+  }, []);
 
   // Collapsible right panel: a thin strip when collapsed, peeking on hover as an
   // overlay so the editor does not reflow. Persisted per browser.
@@ -318,7 +334,7 @@ function DocumentLayout({ id }: { id: string }) {
 
   return (
     <div className="flex h-screen flex-col">
-      <header className="flex items-stretch border-b border-border">
+      <header ref={headerRef} className="flex items-stretch border-b border-border">
         <Link
           to="/"
           className="flex shrink-0 items-center bg-ink px-4 py-2 font-medium text-paper transition-colors hover:bg-chartreuse hover:text-[#1a1a1a]"
