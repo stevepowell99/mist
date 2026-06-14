@@ -384,8 +384,17 @@ function DocumentLayout({ id }: { id: string }) {
               aria-orientation="vertical"
               onMouseDown={startDrag}
               title="Drag to split editor and preview"
-              className="w-1.5 shrink-0 cursor-col-resize bg-border transition-colors hover:bg-chartreuse"
-            />
+              className="group relative z-10 flex w-2 shrink-0 cursor-col-resize items-center justify-center bg-border transition-colors hover:bg-chartreuse"
+            >
+              {/* widen the grab target a few px into each pane */}
+              <span className="absolute inset-y-0 -left-1 -right-1" />
+              {/* grip dots so the handle is findable */}
+              <span className="pointer-events-none flex flex-col gap-1 opacity-50 group-hover:opacity-90">
+                <span className="h-1 w-1 rounded-full bg-ink" />
+                <span className="h-1 w-1 rounded-full bg-ink" />
+                <span className="h-1 w-1 rounded-full bg-ink" />
+              </span>
+            </div>
           )}
           {splitOpen && (
             <section className="flex-1 overflow-hidden">
