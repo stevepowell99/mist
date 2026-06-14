@@ -165,6 +165,65 @@ export async function driveTrail(token: string, folderId: string): Promise<{ id:
   return trail;
 }
 
+/** Create a new file in a folder with the given name and (markdown) content. */
+export async function driveCreateFile(
+  token: string,
+  folderId: string,
+  name: string,
+  content = "",
+): Promise<{ id: string; name: string }> {
+  const boundary = "mist-" + name.length + "-boundary";
+  const metadata = { name, parents: [folderId], mimeType: "text/markdown" };
+  const body =
+    `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n` +
+    `${JSON.stringify(metadata)}\r\n` +
+    `--${boundary}\r\nContent-Type: text/markdown\r\n\r\n${content}\r\n--${boundary}--`;
+  const res = await fetch(`${UPLOAD}/files?uploadType=multipart&fields=id,name&${COMMON}`, {
+    method: "POST",
+    headers: { ...authHeaders(token), "Content-Type": `multipart/related; boundary=${boundary}` },
+    body,
+  });
+  if (!res.ok) throw new Error(`Drive create failed (${res.status})`);
+  const f = (await res.json()) as { id: string; name: string };
+  return { id: f.id, name: f.name };
+}
+
+/** Rename a file. */
+export async function driveRename(token: string, fileId: string, name: string): Promise<void> {
+  const res = await fetch(`${DRIVE}/files/${fileId}?fields=id&${COMMON}`, {
+    method: "PATCH",
+    headers: { ...authHeaders(token), "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+  if (!res.ok) throw new Error(`Drive rename failed (${res.status})`);
+}
+
+/** Duplicate a file (same folder), optionally with a new name. */
+export async function driveCopy(
+  token: string,
+  fileId: string,
+  name?: string,
+): Promise<{ id: string; name: string }> {
+  const res = await fetch(`${DRIVE}/files/${fileId}/copy?fields=id,name&${COMMON}`, {
+    method: "POST",
+    headers: { ...authHeaders(token), "Content-Type": "application/json" },
+    body: JSON.stringify(name ? { name } : {}),
+  });
+  if (!res.ok) throw new Error(`Drive copy failed (${res.status})`);
+  const f = (await res.json()) as { id: string; name: string };
+  return { id: f.id, name: f.name };
+}
+
+/** Move a file to the Drive trash (recoverable), not a permanent delete. */
+export async function driveTrash(token: string, fileId: string): Promise<void> {
+  const res = await fetch(`${DRIVE}/files/${fileId}?fields=id&${COMMON}`, {
+    method: "PATCH",
+    headers: { ...authHeaders(token), "Content-Type": "application/json" },
+    body: JSON.stringify({ trashed: true }),
+  });
+  if (!res.ok) throw new Error(`Drive trash failed (${res.status})`);
+}
+
 /** Raw bytes of a Drive file (for asset proxying). */
 export async function driveDownload(token: string, fileId: string): Promise<ArrayBuffer> {
   const res = await fetch(`${DRIVE}/files/${fileId}?alt=media&${COMMON}`, {

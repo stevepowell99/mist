@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router";
 import { ensureDriveKey, getDriveKey, clearDriveKey } from "~/lib/drive-key";
 import { getRecentOpened, addRecentOpened, type RecentItem } from "~/lib/drive-recent";
@@ -66,6 +66,30 @@ export function Spinner() {
       <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="3" strokeOpacity="0.2" />
       <path d="M21 12a9 9 0 0 0-9-9" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
     </svg>
+  );
+}
+
+const gprops = { width: 14, height: 14, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round" as const, strokeLinejoin: "round" as const, "aria-hidden": true };
+const PencilGlyph = () => <svg {...gprops}><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" /></svg>;
+const CopyGlyph = () => <svg {...gprops}><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>;
+const LinkGlyph = () => <svg {...gprops}><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1" /><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1" /></svg>;
+const TrashGlyph = () => <svg {...gprops}><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /></svg>;
+
+function RowAction({ title, disabled, onClick, children }: { title: string; disabled?: boolean; onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      title={title}
+      aria-label={title}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+      className="cursor-pointer rounded p-1 text-muted hover:bg-black/10 hover:text-ink disabled:opacity-50"
+    >
+      {children}
+    </button>
   );
 }
 
@@ -208,6 +232,102 @@ export default function DriveBrowser({
     [browseFolder, openFile],
   );
 
+  // File operations (create / rename / duplicate / trash) via /drive/op.
+  const driveOp = useCallback(
+    async (payload: Record<string, unknown>): Promise<{ file?: { id: string; name: string } }> => {
+      const key = getDriveKey();
+      if (!key) throw new Error("no passphrase");
+      const res = await fetch("/drive/op", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Drive-Key": key },
+        body: JSON.stringify(payload),
+      });
+      if (res.status === 401) {
+        clearDriveKey();
+        throw new Error("wrong passphrase, try again");
+      }
+      const body = (await res.json()) as { file?: { id: string; name: string }; error?: string };
+      if (!res.ok) throw new Error(body.error ?? "operation failed");
+      return body;
+    },
+    [],
+  );
+
+  const newFile = useCallback(
+    async (folderId: string) => {
+      const name = typeof window !== "undefined" ? window.prompt("New file name", "untitled.md") : null;
+      if (!name) return;
+      setBusy(true);
+      setError(null);
+      try {
+        const r = await driveOp({ action: "create", folderId, name });
+        if (r.file) {
+          await openFile({ id: r.file.id, name: r.file.name });
+          return;
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "could not create");
+      }
+      setBusy(false);
+    },
+    [driveOp, openFile],
+  );
+
+  const renameItem = useCallback(
+    async (item: Item) => {
+      const name = window.prompt("Rename to", item.name);
+      if (!name || name === item.name) return;
+      setBusy(true);
+      setError(null);
+      try {
+        await driveOp({ action: "rename", fileId: item.id, name });
+        await refresh();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "could not rename");
+        setBusy(false);
+      }
+    },
+    [driveOp, refresh],
+  );
+
+  const duplicateItem = useCallback(
+    async (item: Item) => {
+      setBusy(true);
+      setError(null);
+      try {
+        await driveOp({ action: "duplicate", fileId: item.id });
+        await refresh();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "could not duplicate");
+        setBusy(false);
+      }
+    },
+    [driveOp, refresh],
+  );
+
+  const trashItem = useCallback(
+    async (item: Item) => {
+      if (!window.confirm(`Move "${item.name}" to Drive trash? (recoverable)`)) return;
+      setBusy(true);
+      setError(null);
+      try {
+        await driveOp({ action: "trash", fileId: item.id });
+        await refresh();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "could not trash");
+        setBusy(false);
+      }
+    },
+    [driveOp, refresh],
+  );
+
+  const copyPath = useCallback((item: Item) => {
+    const p = (item.path ? `${item.path} / ` : "") + item.name;
+    void navigator.clipboard?.writeText(p);
+  }, []);
+
+  const currentFolderId = data && !data.isSearch ? data.trail[data.trail.length - 1]?.id ?? null : null;
+
   return (
     <div ref={rootRef} className={`flex min-h-0 flex-col ${className}`}>
       {busy && (
@@ -261,8 +381,21 @@ export default function DriveBrowser({
               ))}
             </div>
           )}
-          <div className="truncate text-sm font-medium">
-            {data.trail[data.trail.length - 1]?.name ?? "Recent"}
+          <div className="flex items-center justify-between gap-2">
+            <span className="truncate text-sm font-medium">
+              {data.trail[data.trail.length - 1]?.name ?? "Recent"}
+            </span>
+            {currentFolderId && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void newFile(currentFolderId)}
+                title="New markdown file in this folder"
+                className="shrink-0 cursor-pointer rounded border border-border px-1.5 py-0.5 text-xs text-muted transition-colors hover:border-ink hover:text-ink disabled:opacity-50"
+              >
+                + New
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -275,12 +408,12 @@ export default function DriveBrowser({
               const isCurrent = e.id === currentFileId;
               const cursor = e.isFolder || e.openInMist ? "cursor-pointer" : "cursor-alias";
               return (
-                <li key={e.id}>
+                <li key={e.id} className="group flex items-stretch hover:bg-black/5">
                   <button
                     type="button"
                     disabled={busy}
                     onClick={() => onPick(e)}
-                    className={`flex w-full items-start gap-2 px-3 py-1.5 text-left hover:bg-black/5 disabled:opacity-50 ${cursor} ${isCurrent ? "font-semibold" : ""}`}
+                    className={`flex min-w-0 flex-1 items-start gap-2 px-3 py-1.5 text-left disabled:opacity-50 ${cursor} ${isCurrent ? "font-semibold" : ""}`}
                     title={e.isFolder ? "Open folder" : e.openInMist ? "Open in mist" : "Open in Drive (new tab)"}
                   >
                     <span className="mt-0.5 shrink-0">
@@ -296,6 +429,22 @@ export default function DriveBrowser({
                       <span className="mt-0.5 shrink-0 text-xs opacity-50">Drive</span>
                     )}
                   </button>
+                  <div className="hidden shrink-0 items-center gap-0.5 pr-1.5 group-hover:flex">
+                    {!e.isFolder && (
+                      <RowAction title="Duplicate" disabled={busy} onClick={() => void duplicateItem(e)}>
+                        <CopyGlyph />
+                      </RowAction>
+                    )}
+                    <RowAction title="Rename" disabled={busy} onClick={() => void renameItem(e)}>
+                      <PencilGlyph />
+                    </RowAction>
+                    <RowAction title="Copy path" disabled={busy} onClick={() => copyPath(e)}>
+                      <LinkGlyph />
+                    </RowAction>
+                    <RowAction title="Move to trash" disabled={busy} onClick={() => void trashItem(e)}>
+                      <TrashGlyph />
+                    </RowAction>
+                  </div>
                 </li>
               );
             })}
