@@ -50,12 +50,12 @@ export async function action({ request, context }: Route.ActionArgs) {
   const { env } = getCloudflare(context);
   const stub = await getAgentByName(env.DocumentAgent, id);
 
-  const { body, threads } = deserializeThreads(content);
+  const { body, threads, frontmatter } = deserializeThreads(content);
   const res = await stub.fetch(
     new Request("https://do/", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: body, threads, github: file }),
+      body: JSON.stringify({ content: body, threads, frontmatter, github: file }),
     }),
   );
 

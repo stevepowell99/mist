@@ -10,6 +10,10 @@ import type { GitHubMeta } from "~/shared/types";
  * common Quarto layout syntax into reveal.js HTML, loads the deck's own theme
  * and CSS for GitHub-backed decks, and shows it with real reveal.js (from a CDN)
  * in a sandboxed iframe. Executed code and Quarto-specific features do not appear.
+ *
+ * The deck's `theme:`/`css:` come from the document frontmatter, which is kept in
+ * the doc (DocumentContext.frontmatter) so the preview reads it locally rather
+ * than refetching the source file.
  */
 
 function stripFrontmatter(md: string): { frontmatter: string; body: string } {
@@ -17,10 +21,18 @@ function stripFrontmatter(md: string): { frontmatter: string; body: string } {
   return m ? { frontmatter: m[1], body: md.slice(m[0].length) } : { frontmatter: "", body: md };
 }
 
-/** True when the document should render as slides rather than a flowing document. */
-export function isSlideDeck(markdown: string, github: GitHubMeta | null): boolean {
+/** True when the document should render as slides rather than a flowing document.
+ *  `frontmatter` is the doc's own frontmatter (DocumentContext.frontmatter); the
+ *  editor body no longer carries it, so detection of non-`.qmd` revealjs decks
+ *  relies on it. */
+export function isSlideDeck(
+  markdown: string,
+  github: GitHubMeta | null,
+  frontmatter = "",
+): boolean {
   if (github?.path?.toLowerCase().endsWith(".qmd")) return true;
-  return stripFrontmatter(markdown).frontmatter.toLowerCase().includes("revealjs");
+  const fm = frontmatter || stripFrontmatter(markdown).frontmatter;
+  return fm.toLowerCase().includes("revealjs");
 }
 
 function stripCritic(md: string): string {
@@ -211,8 +223,7 @@ function extractCssPaths(frontmatter: string): string[] {
       }
     } else {
       for (let j = i + 1; j < lines.length; j++) {
-        // The editor serializes each line as its own paragraph, so the YAML
-        // arrives double-spaced; skip blank lines rather than stop on them.
+        // Tolerate blank lines between list items rather than stopping on them.
         if (lines[j].trim() === "") continue;
         const item = lines[j].match(/^\s*-\s*(.+)$/);
         if (!item) break;
@@ -239,12 +250,11 @@ function cssUrl(path: string, github: GitHubMeta | null): string | null {
   return ghJsdelivr(github, resolveAssetPath(github.path, path));
 }
 
-function buildHtml(md: string, github: GitHubMeta | null, bust: string, fileFrontmatter: string): string {
+function buildHtml(md: string, github: GitHubMeta | null, bust: string, docFrontmatter: string): string {
   const { frontmatter: editorFm, body: rawBody } = stripFrontmatter(md);
-  // mist strips YAML frontmatter on import, so the editor content usually has
-  // none; the original file (fetched separately) is the reliable source of
-  // theme: and css:.
-  const frontmatter = fileFrontmatter || editorFm;
+  // The doc carries its own frontmatter (theme:/css:); fall back to any the
+  // editor text happens to include.
+  const frontmatter = docFrontmatter || editorFm;
   let body = stripCritic(rawBody);
   if (github) body = rewriteImageUrls(body, github); // relative images -> raw GitHub URLs
   const sections = splitSlides(body)
@@ -274,7 +284,7 @@ ${deckCss}
 }
 
 export default function SlidesView() {
-  const { markdown, github } = useDocument();
+  const { markdown, github, frontmatter } = useDocument();
   // Rebuilding the iframe reloads reveal, so debounce: refresh ~0.8s after edits
   // settle rather than on every keystroke.
   const [debounced, setDebounced] = useState(markdown);
@@ -291,29 +301,9 @@ export default function SlidesView() {
     setBust(Date.now().toString(36)); // eslint-disable-line react-hooks/set-state-in-effect
   }, []);
 
-  // The editor content lost its YAML frontmatter on import, so fetch the original
-  // file from GitHub to recover theme: and css:.
-  const [fileFrontmatter, setFileFrontmatter] = useState("");
-  useEffect(() => {
-    if (!github) {
-      setFileFrontmatter(""); // eslint-disable-line react-hooks/set-state-in-effect
-      return;
-    }
-    let cancelled = false;
-    fetch(ghJsdelivr(github, github.path))
-      .then((r) => (r.ok ? r.text() : ""))
-      .then((t) => {
-        if (!cancelled) setFileFrontmatter(stripFrontmatter(t).frontmatter);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [github]);
-
   const html = useMemo(
-    () => buildHtml(debounced, github, bust, fileFrontmatter),
-    [debounced, github, bust, fileFrontmatter],
+    () => buildHtml(debounced, github, bust, frontmatter),
+    [debounced, github, bust, frontmatter],
   );
 
   return (

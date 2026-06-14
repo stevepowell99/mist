@@ -3,15 +3,19 @@ import type { ThreadData } from "~/shared/types";
 
 const FRONTMATTER_RE = /^---\n([\s\S]*?\n)---\n\n?/;
 
-export function parseFrontmatter(markdown: string): Record<string, unknown> {
-  const match = FRONTMATTER_RE.exec(markdown);
-  if (!match) return {};
+/** Parse a bare YAML string (no `---` fences) to an object, tolerating errors. */
+function parseYaml(yamlStr: string): Record<string, unknown> {
   try {
-    const result = parse(match[1]);
+    const result = parse(yamlStr);
     return result && typeof result === "object" ? result : {};
   } catch {
     return {};
   }
+}
+
+export function parseFrontmatter(markdown: string): Record<string, unknown> {
+  const match = FRONTMATTER_RE.exec(markdown);
+  return match ? parseYaml(match[1]) : {};
 }
 
 export function stripFrontmatter(markdown: string): string {
@@ -33,14 +37,28 @@ interface SerializedThread {
   }[];
 }
 
+/**
+ * Serialize the document back to a markdown file. `baseFrontmatter` is the
+ * document's own YAML frontmatter (theme, css, format, title...), carried
+ * separately from the editor text because the editor holds body only. It is
+ * re-emitted here so a commit-back or download keeps the deck/file config.
+ * The comment threads are folded into a `mist:` key on top of it.
+ */
 export function serializeThreads(
   markdown: string,
   threads: ThreadData[],
+  baseFrontmatter = "",
 ): string {
-  if (threads.length === 0) return markdown;
-
-  const existing = parseFrontmatter(markdown);
+  // The editor text carries no frontmatter; the doc-level frontmatter is the
+  // reliable source, but honour any the markdown happens to include too.
+  const existing = { ...parseYaml(baseFrontmatter), ...parseFrontmatter(markdown) };
   const body = stripFrontmatter(markdown);
+
+  if (threads.length === 0) {
+    return Object.keys(existing).length === 0
+      ? body
+      : `---\n${stringify(existing, { lineWidth: 0 })}---\n\n${body}`;
+  }
 
   const serialized: SerializedThread[] = threads.map((t) => {
     const entry: SerializedThread = {
@@ -79,14 +97,24 @@ export function deserializeThreads(markdown: string): {
   body: string;
   threads: ThreadData[];
   onboarding: boolean;
+  /** The file's own frontmatter as YAML (the `mist` key removed), "" if none.
+   *  Carried into the doc so theme/css/format round-trip on commit-back. */
+  frontmatter: string;
 } {
   const body = stripFrontmatter(markdown);
   const fm = parseFrontmatter(markdown);
 
+  // Everything except mist (threads/onboarding are handled separately) is the
+  // file's own config that must survive the round-trip.
+  const { mist: mistKey, ...rest } = fm;
+  const frontmatter =
+    Object.keys(rest).length > 0 ? stringify(rest, { lineWidth: 0 }) : "";
+  void mistKey;
+
   const mist = fm.mist as Record<string, unknown> | undefined;
   const onboarding = mist?.onboarding === true;
   if (!mist || !Array.isArray(mist.threads)) {
-    return { body, threads: [], onboarding };
+    return { body, threads: [], onboarding, frontmatter };
   }
 
   const threads: ThreadData[] = mist.threads.map(
@@ -116,5 +144,5 @@ export function deserializeThreads(markdown: string): {
     }),
   );
 
-  return { body, threads, onboarding };
+  return { body, threads, onboarding, frontmatter };
 }

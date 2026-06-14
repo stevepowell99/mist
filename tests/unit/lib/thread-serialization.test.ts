@@ -100,6 +100,24 @@ describe("serializeThreads", () => {
     expect(result).toContain("comment: Second");
   });
 
+  it("baseFrontmatter with no threads → frontmatter emitted (deck config kept)", () => {
+    const fm = "format:\n  revealjs:\n    theme: dark\ncss: styles.css\n";
+    const result = serializeThreads("# Slide one\n\nText", [], fm);
+    expect(result).toMatch(/^---\n/);
+    expect(result).toContain("theme: dark");
+    expect(result).toContain("css: styles.css");
+    expect(result).toContain("---\n\n# Slide one");
+    expect(result).not.toContain("mist:");
+  });
+
+  it("baseFrontmatter plus threads → both deck config and mist kept", () => {
+    const fm = "title: Deck\n";
+    const result = serializeThreads("text {>>A comment<<}", [makeThread({ commentText: "A comment" })], fm);
+    expect(result).toContain("title: Deck");
+    expect(result).toContain("mist:");
+    expect(result).toContain("comment: A comment");
+  });
+
   it("thread with empty replies array → no replies key", () => {
     const threads = [makeThread({ replies: [] })];
     const result = serializeThreads("text {>>This needs work<<}", threads);
@@ -187,6 +205,35 @@ Some text`;
     const { body, threads } = deserializeThreads("# Hello\n\nWorld");
     expect(threads).toEqual([]);
     expect(body).toBe("# Hello\n\nWorld");
+  });
+
+  it("returns non-mist frontmatter as YAML, mist key removed", () => {
+    const md = `---
+title: My Deck
+format:
+  revealjs:
+    theme: dark
+mist:
+  threads:
+    - comment: "Note"
+      author: Jane
+      color: "#E57373"
+      created: 2024-02-08T14:30:00.000Z
+      resolved: false
+---
+
+Text {>>Note<<}`;
+    const { frontmatter, threads } = deserializeThreads(md);
+    expect(threads).toHaveLength(1);
+    expect(frontmatter).toContain("title: My Deck");
+    expect(frontmatter).toContain("theme: dark");
+    expect(frontmatter).not.toContain("mist");
+    expect(frontmatter).not.toContain("Note");
+  });
+
+  it("no frontmatter → frontmatter is empty string", () => {
+    const { frontmatter } = deserializeThreads("# Hello\n\nWorld");
+    expect(frontmatter).toBe("");
   });
 
   it("thread with highlight → highlightText populated", () => {
@@ -331,5 +378,29 @@ describe("roundtrip", () => {
     const round2 = deserializeThreads(result);
     expect(round2.body).toBe(body);
     expect(round2.threads).toHaveLength(1);
+  });
+
+  it("deck frontmatter survives import then commit-back via the doc", () => {
+    // The bug this fixes: import dropped theme/css, and commit-back rewrote the
+    // file without them. The doc now carries the frontmatter separately.
+    const file = `---
+format:
+  revealjs:
+    theme: dark
+css: assets/deck.css
+---
+
+## Slide one
+
+Body`;
+    const { body, frontmatter } = deserializeThreads(file);
+    // body reaches the editor with no frontmatter
+    expect(body).toContain("## Slide one");
+    expect(body).not.toContain("theme:");
+    // committing the edited body back, with the doc's frontmatter, re-emits it
+    const committed = serializeThreads(body, [], frontmatter);
+    expect(committed).toContain("theme: dark");
+    expect(committed).toContain("css: assets/deck.css");
+    expect(committed).toContain("## Slide one");
   });
 });

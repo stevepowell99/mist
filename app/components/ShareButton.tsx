@@ -15,7 +15,7 @@ export function shareLink(href: string, key: string | null, asPreview: boolean):
 }
 
 export default function ShareButton() {
-  const { docId, markdown, threads, role, docKey, suggestKey } = useDocument();
+  const { docId, markdown, threads, frontmatter, role, docKey, suggestKey } = useDocument();
   const [copied, setCopied] = useState<"edit" | "suggest" | null>(null);
   const [asPreview, setAsPreview] = useState(false);
 
@@ -29,7 +29,7 @@ export default function ShareButton() {
   );
 
   const handleDownload = useCallback(() => {
-    const content = serializeThreads(markdown, threads);
+    const content = serializeThreads(markdown, threads, frontmatter);
     const blob = new Blob([content], { type: "text/markdown" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -37,7 +37,7 @@ export default function ShareButton() {
     a.download = `${docId}.md`;
     a.click();
     URL.revokeObjectURL(url);
-  }, [docId, markdown, threads]);
+  }, [docId, markdown, threads, frontmatter]);
 
   return (
     <DropdownMenu.Root>

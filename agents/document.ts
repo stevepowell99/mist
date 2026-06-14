@@ -313,7 +313,13 @@ class DocumentAgent extends Agent {
       const contentType = request.headers.get("Content-Type") || "";
       if (contentType.includes("application/json")) {
         try {
-          const body = await request.json() as { content?: string; threads?: unknown[]; onboarding?: boolean; github?: GitHubMeta };
+          const body = await request.json() as { content?: string; threads?: unknown[]; onboarding?: boolean; github?: GitHubMeta; frontmatter?: string };
+          if (body.frontmatter) {
+            // The file's own YAML frontmatter (theme, css, format, title...),
+            // kept in the doc so it round-trips on commit-back rather than being
+            // lost on import. The body text never carries it.
+            doc.getMap<string>("meta").set("frontmatter", body.frontmatter);
+          }
           if (body.github) {
             const g = body.github;
             this.sql`

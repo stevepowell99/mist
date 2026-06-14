@@ -42,9 +42,9 @@ export async function action({ request, context }: Route.ActionArgs) {
     const init: RequestInit = { method: "POST" };
 
     if (content.trim()) {
-      const { body, threads } = deserializeThreads(content);
+      const { body, threads, frontmatter } = deserializeThreads(content);
       init.headers = { "Content-Type": "application/json" };
-      init.body = JSON.stringify({ content: body, threads });
+      init.body = JSON.stringify({ content: body, threads, frontmatter });
     }
 
     const res = await stub.fetch(new Request("https://do/", init));

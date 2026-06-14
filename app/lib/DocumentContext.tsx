@@ -18,6 +18,9 @@ export interface DocumentContextValue {
   yjs: ReturnType<typeof useYjsEditor>;
   editorInstance: TiptapEditor | null;
   markdown: string;
+  /** The document's own YAML frontmatter (theme, css, format...), held in the
+   *  doc so it survives import and round-trips on commit-back. "" if none. */
+  frontmatter: string;
 
   // Access role from the secret link; suggest-role users can never edit
   role: DocRole;
@@ -108,6 +111,7 @@ export function DocumentProvider({
   children: React.ReactNode;
 }) {
   const [markdown, setMarkdown] = useState("");
+  const [frontmatter, setFrontmatter] = useState("");
   const [editorInstance, setEditorInstance] = useState<TiptapEditor | null>(null);
   const [previewToggled, setPreviewToggled] = useState(initialPreview);
   const [previewHeld, setPreviewHeld] = useState(false);
@@ -134,6 +138,17 @@ export function DocumentProvider({
     yjs.setMode(yjs.mode === "edit" ? "suggest" : "edit");
   }, [yjs, role]);
 
+  // The file's frontmatter lives in the Yjs "meta" map (seeded at import). Read
+  // it once synced and observe so the preview and commit-back use the real
+  // theme/css/format rather than refetching the source file.
+  useEffect(() => {
+    const meta = yjs.doc.getMap<string>("meta");
+    const read = () => setFrontmatter((meta.get("frontmatter") as string) ?? "");
+    read();
+    meta.observe(read);
+    return () => meta.unobserve(read);
+  }, [yjs.doc]);
+
   // Relay the serialized document to the agent for GitHub-backed docs. The
   // agent auto-commits on a throttle (and after the last editor disconnects),
   // so web edits reach the repo without anyone pressing save.
@@ -144,13 +159,13 @@ export function DocumentProvider({
       if (!socket?.send) return;
       try {
         socket.send(
-          JSON.stringify({ type: "doc", content: serializeThreads(markdown, threads), commitNow }),
+          JSON.stringify({ type: "doc", content: serializeThreads(markdown, threads, frontmatter), commitNow }),
         );
       } catch {
         // socket not ready; the next change retries
       }
     },
-    [github, yjs.socket, markdown, threads],
+    [github, yjs.socket, markdown, threads, frontmatter],
   );
 
   useEffect(() => {
@@ -165,8 +180,8 @@ export function DocumentProvider({
   const [lastCommittedHash, setLastCommittedHash] = useState<string | null>(null);
   const baselineSetRef = useRef(false);
   const currentHash = useMemo(
-    () => (github ? quickHash(serializeThreads(markdown, threads)) : null),
-    [github, markdown, threads],
+    () => (github ? quickHash(serializeThreads(markdown, threads, frontmatter)) : null),
+    [github, markdown, threads, frontmatter],
   );
 
   // The freshly imported content came from GitHub, so treat it as already saved.
@@ -355,6 +370,7 @@ export function DocumentProvider({
     yjs,
     editorInstance,
     markdown,
+    frontmatter,
     role,
     docKey,
     suggestKey,

@@ -107,10 +107,11 @@ function DocumentLayout({ id }: { id: string }) {
     github,
     bibLib,
     markdown,
+    frontmatter,
   } = useDocument();
 
   const title = fileTitle(github, id);
-  const deck = isSlideDeck(markdown, github);
+  const deck = isSlideDeck(markdown, github, frontmatter);
   const slidesMode = showPreview && deck;
 
   // Desktop-only draggable split: drag the gutter left to put the editor on the
