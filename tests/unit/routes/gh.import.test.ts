@@ -1,26 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-
-const { mockAgentFetch, mockFetch } = vi.hoisted(() => ({
-  mockAgentFetch: vi.fn(),
-  mockFetch: vi.fn(),
-}));
-
-vi.mock("agents", () => ({
-  getAgentByName: vi.fn().mockResolvedValue({ fetch: mockAgentFetch }),
-}));
-
-vi.mock("~/lib/cloudflare.server", () => ({
-  getCloudflare: vi.fn().mockReturnValue({ env: { DocumentAgent: {} } }),
-}));
-
-vi.mock("~/shared/constants", async () => {
-  const actual = await vi.importActual<typeof import("~/shared/constants")>("~/shared/constants");
-  return { ...actual, generateDocumentId: vi.fn().mockReturnValue("abcd1234") };
-});
-
+import { describe, it, expect } from "vitest";
 import { action } from "~/routes/gh.import";
-
-const context = {} as Parameters<typeof action>[0]["context"];
 
 function post(body: unknown) {
   return new Request("https://mist.example.com/gh/import", {
@@ -30,56 +9,25 @@ function post(body: unknown) {
   });
 }
 
-describe("POST /gh/import", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    vi.stubGlobal("fetch", mockFetch);
-    mockAgentFetch.mockResolvedValue(
-      new Response(JSON.stringify({ ok: true, editKey: "ek" }), { status: 200 }),
-    );
-  });
-
-  it("imports a public markdown file and returns the edit link", async () => {
-    mockFetch.mockResolvedValue(new Response("# Hello", { status: 200 }));
+// GitHub import is disabled (14 June 2026) so mist does not double-sync files
+// that live in both git and Drive. The route returns 410.
+describe("POST /gh/import (disabled)", () => {
+  it("returns 410 with a disabled message", async () => {
     const res = await action({
       request: post({ url: "https://github.com/me/repo/blob/main/doc.md" }),
-      context,
+      context: {} as Parameters<typeof action>[0]["context"],
     } as Parameters<typeof action>[0]);
 
-    expect(res.status).toBe(201);
-    const body = (await res.json()) as { url: string };
-    expect(body.url).toBe("/docs/abcd1234?k=ek");
-
-    // The raw file was fetched and the agent got the github metadata
-    expect(mockFetch).toHaveBeenCalledOnce();
-    const agentReq = mockAgentFetch.mock.calls[0][0] as Request;
-    const agentBody = await agentReq.json();
-    expect(agentBody.github).toEqual({ owner: "me", repo: "repo", branch: "main", path: "doc.md" });
+    expect(res.status).toBe(410);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toMatch(/disabled/i);
   });
 
-  it("rejects a non-GitHub URL", async () => {
+  it("rejects non-POST methods", async () => {
     const res = await action({
-      request: post({ url: "https://example.com/x.md" }),
-      context,
+      request: new Request("https://mist.example.com/gh/import", { method: "GET" }),
+      context: {} as Parameters<typeof action>[0]["context"],
     } as Parameters<typeof action>[0]);
-    expect(res.status).toBe(400);
-    expect(mockFetch).not.toHaveBeenCalled();
-  });
-
-  it("rejects a non-markdown path", async () => {
-    const res = await action({
-      request: post({ url: "https://github.com/me/repo/blob/main/img.png" }),
-      context,
-    } as Parameters<typeof action>[0]);
-    expect(res.status).toBe(400);
-  });
-
-  it("returns 502 when the file cannot be fetched", async () => {
-    mockFetch.mockResolvedValue(new Response("nope", { status: 404 }));
-    const res = await action({
-      request: post({ url: "https://github.com/me/repo/blob/main/doc.md" }),
-      context,
-    } as Parameters<typeof action>[0]);
-    expect(res.status).toBe(502);
+    expect(res.status).toBe(405);
   });
 });

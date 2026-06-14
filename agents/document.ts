@@ -5,9 +5,9 @@ import * as syncProtocol from "y-protocols/sync";
 import * as awarenessProtocol from "y-protocols/awareness";
 import * as encoding from "lib0/encoding";
 import * as decoding from "lib0/decoding";
-import { MSG_SYNC, MSG_AWARENESS, DOC_FORMAT_VERSION, COMMIT_THROTTLE_MS } from "../app/shared/constants";
+import { MSG_SYNC, MSG_AWARENESS, DOC_FORMAT_VERSION } from "../app/shared/constants";
 import type { DocRole, DriveMeta, GitHubMeta } from "../app/shared/types";
-import { type DocBackend, GitHubBackend, DriveBackend } from "../app/lib/backend.server";
+import { type DocBackend, DriveBackend } from "../app/lib/backend.server";
 import { type DriveEnv, driveConfigured } from "../app/lib/google.server";
 import { quickHash } from "../app/shared/hash";
 import { withMistBanner } from "../app/shared/mist-banner";
@@ -225,18 +225,16 @@ class DocumentAgent extends Agent {
     if (msg.type !== "doc" || typeof msg.content !== "string") return;
     // only backend-bound docs (GitHub or Drive) commit back
     if (!this.readStoredText("github") && !this.readStoredText("drive")) return;
+    // EXPLICIT SAVE ONLY (14 June 2026): never auto-commit. Only a user pressing
+    // save (commitNow) writes back. The auto-commit-on-open/typing was what
+    // corrupted vault files, so relayed content without commitNow is ignored.
+    if (!msg.commitNow) return;
 
     this.sql`
       INSERT INTO doc_state (key, value) VALUES ('pendingMd', ${textBlob(msg.content)})
       ON CONFLICT(key) DO UPDATE SET value = excluded.value
     `;
-
-    if (msg.commitNow) {
-      await this.commitPending();
-    } else if ((await this.ctx.storage.getAlarm()) == null) {
-      // Throttle: commit at most once per window while edits keep arriving
-      await this.ctx.storage.setAlarm(Date.now() + COMMIT_THROTTLE_MS);
-    }
+    await this.commitPending();
   }
 
   override readonly alarm = async (): Promise<void> => {
@@ -253,24 +251,17 @@ class DocumentAgent extends Agent {
       const drive = JSON.parse(driveRaw) as DriveMeta;
       return { backend: new DriveBackend(drive, env), label: drive.name ?? drive.fileId };
     }
-    const githubRaw = this.readStoredText("github");
-    if (githubRaw) {
-      const token = (this.env as { GITHUB_TOKEN?: string }).GITHUB_TOKEN;
-      if (!token) return null;
-      const github = JSON.parse(githubRaw) as GitHubMeta;
-      return { backend: new GitHubBackend(github, token), label: github.path };
-    }
+    // GitHub commit-back disabled (14 June 2026): when a file lives in both git
+    // and Drive, mist must not also sync via git. Drive is the only write path.
     return null;
   }
 
   private async commitPending(): Promise<void> {
-    // KILL-SWITCH (14 June 2026): commit-back is disabled by default after it
-    // corrupted source files in the 19aCMgarden vault (one doc's content written
-    // into another file, plus banner/serialization changes). Re-enable only by
-    // setting the COMMIT_BACK_ENABLED Worker secret, and only once the document
-    // model is proven to round-trip safely and writes cannot cross documents.
-    if (!(this.env as { COMMIT_BACK_ENABLED?: string }).COMMIT_BACK_ENABLED) return;
-
+    // Only ever reached via an explicit save (handleControl requires commitNow).
+    // The doc now resets per id (keyed provider + SPA nav), so a save writes this
+    // doc's own content. NOTE: a save still injects the mist banner and reformats
+    // YAML/spacing until the Y.Text document core lands; only save files you are
+    // happy for mist to reformat.
     const pending = this.readStoredText("pendingMd");
     if (pending == null) return;
     if (this.readStoredText("lastCommitMd") === pending) return; // unchanged since last commit

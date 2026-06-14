@@ -8,7 +8,6 @@ import { findCommentTextAtCursor } from "~/lib/comment-threads";
 import { serializeWithCriticMarkup } from "~/lib/critic-serializer";
 import { serializeThreads } from "~/lib/thread-serialization";
 import { quickHash } from "~/shared/hash";
-import { RELAY_DEBOUNCE_MS } from "~/shared/constants";
 import { rawAssetUrl } from "~/lib/github";
 import { getDriveKey } from "~/lib/drive-key";
 import { parseBib, type BibLibrary } from "~/lib/citations";
@@ -177,12 +176,8 @@ export function DocumentProvider({
     [backed, yjs.socket, markdown, threads, frontmatter],
   );
 
-  useEffect(() => {
-    if (!backed || !markdown) return;
-    const t = setTimeout(() => sendDoc(false), RELAY_DEBOUNCE_MS);
-    return () => clearTimeout(t);
-  }, [backed, markdown, threads, sendDoc]);
-
+  // Explicit save only: no auto-commit effect here. Writing back happens solely
+  // when the user presses save (saveNow -> sendDoc(true)).
   const saveNow = useCallback(() => sendDoc(true), [sendDoc]);
 
   // Track whether the shown document matches what was last committed to GitHub.
