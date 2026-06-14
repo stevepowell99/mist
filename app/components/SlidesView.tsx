@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useDocument } from "~/lib/DocumentContext";
 import { rewriteImageUrls, resolveImageSrc, resolveAssetPath } from "~/lib/github";
-import type { GitHubMeta } from "~/shared/types";
+import type { DriveMeta, GitHubMeta } from "~/shared/types";
 
 /**
  * Inline slides renderer for `.qmd` / RevealJS decks. It is the Preview for a
@@ -29,8 +29,10 @@ export function isSlideDeck(
   markdown: string,
   github: GitHubMeta | null,
   frontmatter = "",
+  drive: DriveMeta | null = null,
 ): boolean {
   if (github?.path?.toLowerCase().endsWith(".qmd")) return true;
+  if (drive?.name?.toLowerCase().endsWith(".qmd")) return true;
   const fm = frontmatter || stripFrontmatter(markdown).frontmatter;
   return fm.toLowerCase().includes("revealjs");
 }
@@ -242,12 +244,26 @@ function ghJsdelivr(github: GitHubMeta, repoPath: string): string {
   return `https://cdn.jsdelivr.net/gh/${github.owner}/${github.repo}@${github.branch}/${enc}`;
 }
 
+/** Build a /drive/asset proxy URL for a deck-relative path (CSS, image, font).
+ *  The relay streams the private-Drive file, resolved against the deck's folder. */
+function driveAssetUrl(drive: DriveMeta, origin: string, relPath: string): string {
+  return `${origin}/drive/asset?deck=${encodeURIComponent(drive.fileId)}&path=${encodeURIComponent(relPath)}`;
+}
+
 /** Resolve a deck CSS entry to a URL. Absolute URLs work for any deck; a
- * relative path needs a folder backend (a GitHub repo today) to resolve against. */
-function cssUrl(path: string, github: GitHubMeta | null): string | null {
+ * relative path needs a folder backend (GitHub via jsDelivr, or Drive via the
+ * asset proxy) to resolve against. */
+function cssUrl(
+  path: string,
+  github: GitHubMeta | null,
+  drive: DriveMeta | null,
+  origin: string,
+): string | null {
   if (/^https?:\/\//.test(path)) return path;
-  if (!github || path.startsWith("/") || path.toLowerCase().endsWith(".scss")) return null;
-  return ghJsdelivr(github, resolveAssetPath(github.path, path));
+  if (path.startsWith("/") || path.toLowerCase().endsWith(".scss")) return null;
+  if (github) return ghJsdelivr(github, resolveAssetPath(github.path, path));
+  if (drive) return driveAssetUrl(drive, origin, path);
+  return null;
 }
 
 /** Pull raw `<style>...</style>` blocks out of the body so reveal does not show
@@ -261,7 +277,14 @@ function extractStyleBlocks(md: string): { body: string; styles: string } {
   return { body, styles: blocks.length ? `<style>${blocks.join("\n")}</style>` : "" };
 }
 
-function buildHtml(md: string, github: GitHubMeta | null, bust: string, docFrontmatter: string): string {
+function buildHtml(
+  md: string,
+  github: GitHubMeta | null,
+  drive: DriveMeta | null,
+  origin: string,
+  bust: string,
+  docFrontmatter: string,
+): string {
   const { frontmatter: editorFm, body: rawBody } = stripFrontmatter(md);
   // The doc carries its own frontmatter (theme:/css:); fall back to any the
   // editor text happens to include.
@@ -275,7 +298,7 @@ function buildHtml(md: string, github: GitHubMeta | null, bust: string, docFront
 
   const theme = extractTheme(frontmatter);
   const deckCss = extractCssPaths(frontmatter)
-    .map((p) => cssUrl(p, github))
+    .map((p) => cssUrl(p, github, drive, origin))
     .filter((u): u is string => u !== null)
     // cache-bust so an edited stylesheet is re-fetched rather than served stale
     .map((u) => `<link rel="stylesheet" href="${u}${u.includes("?") ? "&" : "?"}cb=${bust}">`)
@@ -307,7 +330,8 @@ Reveal.initialize({plugins:[RevealMarkdown,RevealNotes],hash:false}).then(functi
 }
 
 export default function SlidesView() {
-  const { markdown, github, frontmatter } = useDocument();
+  const { markdown, github, drive, frontmatter } = useDocument();
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
   // Rebuilding the iframe reloads reveal, so debounce: refresh ~0.8s after edits
   // settle rather than on every keystroke.
   const [debounced, setDebounced] = useState(markdown);
@@ -325,8 +349,8 @@ export default function SlidesView() {
   }, []);
 
   const html = useMemo(
-    () => buildHtml(debounced, github, bust, frontmatter),
-    [debounced, github, bust, frontmatter],
+    () => buildHtml(debounced, github, drive, origin, bust, frontmatter),
+    [debounced, github, drive, origin, bust, frontmatter],
   );
 
   return (

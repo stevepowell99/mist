@@ -30,14 +30,15 @@ import SlidesView, { isSlideDeck } from "~/components/SlidesView";
 const useIsomorphicLayoutEffect =
   typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
-function fileTitle(github: GitHubMeta | null, fallback: string): string {
-  if (!github) return fallback;
-  const name = (github.path.split("/").pop() ?? fallback).replace(/\.md$/i, "");
+function fileTitle(github: GitHubMeta | null, drive: DriveMeta | null, fallback: string): string {
+  const raw = github ? github.path.split("/").pop() : drive?.name;
+  if (!raw) return fallback;
+  const name = raw.replace(/\.(md|qmd)$/i, "");
   return name || fallback;
 }
 
 export function meta({ data }: Route.MetaArgs) {
-  const title = data?.github ? fileTitle(data.github, "mist") : "mist";
+  const title = data?.github || data?.drive ? fileTitle(data.github, data.drive, "mist") : "mist";
   return [{ title: title || "mist" }];
 }
 
@@ -107,13 +108,14 @@ function DocumentLayout({ id }: { id: string }) {
     mode,
     role,
     github,
+    drive,
     bibLib,
     markdown,
     frontmatter,
   } = useDocument();
 
-  const title = fileTitle(github, id);
-  const deck = isSlideDeck(markdown, github, frontmatter);
+  const title = fileTitle(github, drive, id);
+  const deck = isSlideDeck(markdown, github, frontmatter, drive);
   const slidesMode = showPreview && deck;
 
   // Desktop-only draggable split: drag the gutter left to put the editor on the

@@ -7,4 +7,5 @@ export default [
   route("docs/:id/folder", "routes/docs.$id.folder.ts"),
   route("gh/import", "routes/gh.import.ts"),
   route("drive/import", "routes/drive.import.ts"),
+  route("drive/asset", "routes/drive.asset.ts"),
 ] satisfies RouteConfig;

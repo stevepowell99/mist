@@ -29,6 +29,8 @@ export interface DocumentContextValue {
 
   // GitHub source, if this doc was imported from a repo
   github: GitHubMeta | null;
+  // Google Drive source, if this doc was opened from Drive
+  drive: DriveMeta | null;
   /** True when the doc is bound to a backend (GitHub or Drive) and writes back */
   backed: boolean;
   /** Force an immediate write of the doc back to its backend (GitHub or Drive) */
@@ -381,6 +383,7 @@ export function DocumentProvider({
     docKey,
     suggestKey,
     github,
+    drive,
     backed,
     saveNow,
     unsaved,

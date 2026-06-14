@@ -117,6 +117,44 @@ export async function driveListFolder(token: string, folderId: string): Promise<
   return body.files.map((f) => ({ id: f.id, name: f.name, isFolder: f.mimeType === FOLDER_MIME }));
 }
 
+/**
+ * Resolve a path relative to a folder to a file id, walking folders by name.
+ * Handles `..` (up one folder) and `.`/empty segments. Returns null if any
+ * segment is missing. Used to find a deck's `css:`/image assets in Drive.
+ */
+export async function driveResolvePath(
+  token: string,
+  folderId: string,
+  relPath: string,
+): Promise<string | null> {
+  const segments = relPath.split("/").filter((s) => s && s !== ".");
+  let current = folderId;
+  for (let i = 0; i < segments.length; i++) {
+    const seg = segments[i];
+    const last = i === segments.length - 1;
+    if (seg === "..") {
+      const meta = await driveGetMeta(token, current);
+      if (!meta.parents?.[0]) return null;
+      current = meta.parents[0];
+      continue;
+    }
+    const entries = await driveListFolder(token, current);
+    const match = entries.find((e) => e.name === seg && (last ? !e.isFolder : e.isFolder));
+    if (!match) return null;
+    current = match.id;
+  }
+  return current;
+}
+
+/** Raw bytes of a Drive file (for asset proxying). */
+export async function driveDownload(token: string, fileId: string): Promise<ArrayBuffer> {
+  const res = await fetch(`${DRIVE}/files/${fileId}?alt=media&${COMMON}`, {
+    headers: authHeaders(token),
+  });
+  if (!res.ok) throw new Error(`Drive download failed (${res.status})`);
+  return res.arrayBuffer();
+}
+
 /** Emails on a file's sharing list (for the later ACL check). */
 export async function driveListPermissions(token: string, fileId: string): Promise<string[]> {
   const res = await fetch(
