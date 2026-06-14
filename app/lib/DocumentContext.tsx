@@ -10,7 +10,6 @@ import { serializeThreads } from "~/lib/thread-serialization";
 import { quickHash } from "~/shared/hash";
 import { RELAY_DEBOUNCE_MS } from "~/shared/constants";
 import { rawAssetUrl } from "~/lib/github";
-import { driveAssetUrl } from "~/lib/asset-urls";
 import { getDriveKey } from "~/lib/drive-key";
 import { parseBib, type BibLibrary } from "~/lib/citations";
 
@@ -232,6 +231,21 @@ export function DocumentProvider({
     bibFetchedRef.current = true;
     let cancelled = false;
     (async () => {
+      // Drive: one request that finds a .bib in the doc's folder (or assets/).
+      if (drive) {
+        if (!drive.folderId) return;
+        try {
+          const key = getDriveKey() ?? "";
+          const res = await fetch(`/drive/bib?folder=${encodeURIComponent(drive.folderId)}`, {
+            headers: { "X-Drive-Key": key },
+          });
+          if (res.ok && !cancelled) setBibLib(parseBib(await res.text()));
+        } catch {
+          // no library available
+        }
+        return;
+      }
+      // GitHub: probe the usual library names in the repo.
       const candidates = [
         "assets/MyLibrary.bib",
         "assets/My Library.bib",
@@ -240,14 +254,9 @@ export function DocumentProvider({
         "references.bib",
         "bibliography.bib",
       ];
-      const token = drive ? getDriveKey() ?? "" : "";
-      const urlFor = (path: string) =>
-        github
-          ? rawAssetUrl(github, path)
-          : driveAssetUrl(drive!, window.location.origin, path, token);
       for (const path of candidates) {
         try {
-          const res = await fetch(urlFor(path));
+          const res = await fetch(rawAssetUrl(github!, path));
           if (res.ok) {
             const text = await res.text();
             if (!cancelled) setBibLib(parseBib(text));

@@ -9,4 +9,5 @@ export default [
   route("drive/import", "routes/drive.import.ts"),
   route("drive/asset", "routes/drive.asset.ts"),
   route("drive/search", "routes/drive.search.ts"),
+  route("drive/bib", "routes/drive.bib.ts"),
 ] satisfies RouteConfig;
