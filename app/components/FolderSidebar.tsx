@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { useDocument } from "~/lib/DocumentContext";
 import DriveBrowser, { KindIcon, Spinner } from "~/components/DriveBrowser";
@@ -132,8 +132,22 @@ function GithubBrowse({ github, docId, docKey }: { github: GitHubMeta; docId: st
 
 export default function FolderSidebar() {
   const { github, drive, docId, docKey } = useDocument();
-  const [open, setOpen] = useState(false);
+  // Pinned by a click (stays, with a backdrop) or peeked by hover (closes when
+  // the mouse leaves the trigger or panel), mirroring the right comment panel.
+  // The trigger and panel are separate regions with a gap, so a short close
+  // delay lets the mouse travel from one to the other without the peek closing.
+  const [pinned, setPinned] = useState(false);
+  const [peek, setPeek] = useState(false);
   const [everOpened, setEverOpened] = useState(false);
+  const open = pinned || peek;
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const cancelClose = useCallback(() => {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+  }, []);
+  const scheduleClose = useCallback(() => {
+    cancelClose();
+    closeTimer.current = setTimeout(() => setPeek(false), 200);
+  }, [cancelClose]);
 
   if (!github && !drive) return null;
 
@@ -142,9 +156,15 @@ export default function FolderSidebar() {
       <button
         type="button"
         onClick={() => {
-          setOpen((v) => !v);
+          setPinned((v) => !v);
           setEverOpened(true);
         }}
+        onMouseEnter={() => {
+          cancelClose();
+          setPeek(true);
+          setEverOpened(true);
+        }}
+        onMouseLeave={scheduleClose}
         title="Open from Drive"
         aria-label="Open from Drive"
         className="flex shrink-0 cursor-pointer items-center border-r border-border px-3 transition-colors hover:bg-chartreuse hover:text-[#1a1a1a]"
@@ -155,23 +175,34 @@ export default function FolderSidebar() {
         </svg>
       </button>
 
-      {open && (
+      {pinned && (
         <button
           type="button"
           aria-label="Close folder"
-          onClick={() => setOpen(false)}
+          onClick={() => setPinned(false)}
           className="fixed inset-x-0 bottom-0 top-[var(--header-h,0px)] z-40 cursor-default bg-black/30"
         />
       )}
       {/* Kept mounted once opened so reopening shows the cached folder instantly.
-          Opens below the header (--header-h) so the top bar stays usable. */}
+          Opens below the header (--header-h) so the top bar stays usable.
+          Hover peeks; leaving closes the peek but a pinned panel stays. */}
       {everOpened && (
         <div
+          onMouseEnter={cancelClose}
+          onMouseLeave={scheduleClose}
           className={`fixed left-0 top-[var(--header-h,0px)] z-50 flex h-[calc(100dvh-var(--header-h,0px))] w-[48rem] max-w-[95vw] flex-col border-r border-border bg-paper shadow-lg ${open ? "" : "hidden"}`}
         >
           <div className="flex items-center justify-between border-b border-border px-4 py-2">
             <span className="font-medium">Drive</span>
-            <button type="button" onClick={() => setOpen(false)} aria-label="Close" className="cursor-pointer px-2 text-lg leading-none">
+            <button
+              type="button"
+              onClick={() => {
+                setPinned(false);
+                setPeek(false);
+              }}
+              aria-label="Close"
+              className="cursor-pointer px-2 text-lg leading-none"
+            >
               &times;
             </button>
           </div>
