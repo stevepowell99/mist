@@ -164,7 +164,7 @@ export default function FolderSidebar() {
       {/* Kept mounted once opened so reopening shows the cached folder instantly. */}
       {everOpened && (
         <div
-          className={`fixed left-0 top-0 z-50 flex h-screen w-96 max-w-[90vw] flex-col border-r border-border bg-paper shadow-lg ${open ? "" : "hidden"}`}
+          className={`fixed left-0 top-0 z-50 flex h-screen w-[48rem] max-w-[95vw] flex-col border-r border-border bg-paper shadow-lg ${open ? "" : "hidden"}`}
         >
           <div className="flex items-center justify-between border-b border-border px-4 py-2">
             <span className="font-medium">Drive</span>

@@ -1,8 +1,10 @@
-import { useMemo, useEffect, useState } from "react";
+import { useMemo, useEffect, useRef, useState } from "react";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 import { useDocument } from "~/lib/DocumentContext";
-import { rewriteImageUrls } from "~/lib/github";
+import { rewriteImages } from "~/lib/asset-urls";
+import { getDriveKey } from "~/lib/drive-key";
+import { runMermaid } from "~/lib/mermaid";
 import { renderWikiLinks } from "~/lib/wikilinks";
 import { convertCitations, formatReferenceList } from "~/lib/citations";
 import { stripMistBanner } from "~/shared/mist-banner";
@@ -35,7 +37,8 @@ const PUBLISHED_SITES: Record<string, string> = {
 };
 
 export default function Preview() {
-  const { markdown, github, bibLib } = useDocument();
+  const { markdown, github, drive, bibLib } = useDocument();
+  const containerRef = useRef<HTMLDivElement>(null);
 
   // DOMPurify needs a DOM, which the Cloudflare Worker has none of, so the
   // markdown render only runs after hydration. With a Preview share link the
@@ -45,7 +48,13 @@ export default function Preview() {
 
   const html = useMemo(() => {
     if (!mounted) return "";
-    const resolved = github ? rewriteImageUrls(stripMistBanner(markdown), github) : stripMistBanner(markdown);
+    const ctx = {
+      github,
+      drive,
+      origin: typeof window !== "undefined" ? window.location.origin : "",
+      driveToken: drive ? getDriveKey() ?? "" : "",
+    };
+    const resolved = rewriteImages(stripMistBanner(markdown), ctx);
     const siteBase = github ? PUBLISHED_SITES[github.repo] ?? null : null;
     const withLinks = stripFencedDivs(stripPandocAttrs(renderWikiLinks(resolved, siteBase)));
     let body = withLinks;
@@ -58,10 +67,16 @@ export default function Preview() {
     const withCritic = renderCriticMarkup(body);
     const raw = (marked.parse(withCritic, { async: false }) as string) + references;
     return DOMPurify.sanitize(raw);
-  }, [mounted, markdown, github, bibLib]);
+  }, [mounted, markdown, github, drive, bibLib]);
+
+  // Render any mermaid code blocks into diagrams once the HTML is in the DOM.
+  useEffect(() => {
+    void runMermaid(containerRef.current);
+  }, [html]);
 
   return (
     <div
+      ref={containerRef}
       className="preview font-serif"
       dangerouslySetInnerHTML={{ __html: html }}
     />

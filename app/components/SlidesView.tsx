@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useDocument } from "~/lib/DocumentContext";
-import { rewriteImageUrls, resolveImageSrc, resolveAssetPath } from "~/lib/github";
+import { resolveAssetPath } from "~/lib/github";
+import { driveAssetUrl, resolveAssetSrc, rewriteImages, type AssetCtx } from "~/lib/asset-urls";
 import { getDriveKey } from "~/lib/drive-key";
 import type { DriveMeta, GitHubMeta } from "~/shared/types";
 
@@ -76,7 +77,7 @@ function classesFrom(attr: string): string[] {
 }
 
 /** A leading `# Heading {.cls background-color="..."}` becomes section attributes. */
-function parseHeading(line: string, github: GitHubMeta | null): { heading: string; classAttr: string; bgAttr: string } {
+function parseHeading(line: string, ctx: AssetCtx): { heading: string; classAttr: string; bgAttr: string } {
   const m = line.match(/^(#{1,6})\s*(.*?)\s*\{([^}]*)\}\s*$/);
   if (!m) return { heading: line, classAttr: "", bgAttr: "" };
   const [, hashes, text, attr] = m;
@@ -86,7 +87,7 @@ function parseHeading(line: string, github: GitHubMeta | null): { heading: strin
     const v = attr.match(new RegExp(`${key}="([^"]+)"`));
     if (!v) continue;
     let val = v[1];
-    if (key === "background-image" && github) val = resolveImageSrc(val, github) ?? val;
+    if (key === "background-image") val = resolveAssetSrc(val, ctx);
     bg.push(`data-${key}="${val}"`);
   }
   const heading = text ? `${hashes} ${text}` : ""; // drop empty (e.g. .no-title) headings
@@ -169,13 +170,13 @@ function convertSpans(md: string): string {
   });
 }
 
-function buildSection(slideMd: string, github: GitHubMeta | null): string {
+function buildSection(slideMd: string, ctx: AssetCtx): string {
   const lines = slideMd.split("\n");
   let classAttr = "";
   let bgAttr = "";
   let body = slideMd;
   if (/^#{1,6}\s/.test(lines[0] ?? "")) {
-    const parsed = parseHeading(lines[0], github);
+    const parsed = parseHeading(lines[0], ctx);
     classAttr = parsed.classAttr;
     bgAttr = parsed.bgAttr;
     body = [parsed.heading, ...lines.slice(1)].join("\n");
@@ -245,13 +246,6 @@ function ghJsdelivr(github: GitHubMeta, repoPath: string): string {
   return `https://cdn.jsdelivr.net/gh/${github.owner}/${github.repo}@${github.branch}/${enc}`;
 }
 
-/** Build a /drive/asset proxy URL for a deck-relative path (CSS, image, font).
- *  The relay streams the private-Drive file, resolved against the deck's folder.
- *  The passphrase rides as ?token= since the iframe cannot set a header. */
-function driveAssetUrl(drive: DriveMeta, origin: string, relPath: string, token: string): string {
-  return `${origin}/drive/asset?deck=${encodeURIComponent(drive.fileId)}&path=${encodeURIComponent(relPath)}&token=${encodeURIComponent(token)}`;
-}
-
 /** Resolve a deck CSS entry to a URL. Absolute URLs work for any deck; a
  * relative path needs a folder backend (GitHub via jsDelivr, or Drive via the
  * asset proxy) to resolve against. */
@@ -293,11 +287,12 @@ function buildHtml(
   // The doc carries its own frontmatter (theme:/css:); fall back to any the
   // editor text happens to include.
   const frontmatter = docFrontmatter || editorFm;
+  const ctx: AssetCtx = { github, drive, origin, driveToken };
   const { body: bodyNoStyles, styles: inlineStyles } = extractStyleBlocks(rawBody);
   let body = stripCritic(bodyNoStyles);
-  if (github) body = rewriteImageUrls(body, github); // relative images -> raw GitHub URLs
+  body = rewriteImages(body, ctx); // relative images -> backend URLs (GitHub raw / Drive proxy)
   const sections = splitSlides(body)
-    .map((s) => buildSection(s, github))
+    .map((s) => buildSection(s, ctx))
     .join("\n");
 
   const theme = extractTheme(frontmatter);
@@ -319,16 +314,26 @@ ${inlineStyles}
 <script src="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/reveal.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/reveal.js@5/plugin/markdown/markdown.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/reveal.js@5/plugin/notes/notes.js"></script>
-<script>
-Reveal.initialize({plugins:[RevealMarkdown,RevealNotes],hash:false}).then(function(){
-  // The preview pane resizes (drag split) and the iframe reloads once for cache
-  // busting; re-run reveal's layout on any size change so slide content is
-  // scaled to the real container instead of vanishing. ResizeObserver also
-  // fires once on observe, fixing a layout that ran before the final size.
-  Reveal.layout();
-  if (window.ResizeObserver) new ResizeObserver(function(){ Reveal.layout(); }).observe(document.body);
-  window.addEventListener("resize", function(){ Reveal.layout(); });
+<script type="module">
+import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+mermaid.initialize({ startOnLoad: false, theme: "neutral" });
+await Reveal.initialize({ plugins: [RevealMarkdown, RevealNotes], hash: false });
+// reveal's markdown plugin renders \`\`\`mermaid as code.language-mermaid; turn
+// those into mermaid diagrams.
+document.querySelectorAll("code.language-mermaid").forEach(function (c) {
+  const d = document.createElement("div");
+  d.className = "mermaid";
+  d.textContent = c.textContent || "";
+  (c.closest("pre") || c).replaceWith(d);
 });
+try { await mermaid.run({ querySelector: ".mermaid" }); } catch (e) {}
+// The preview pane resizes (drag split) and the iframe reloads once for cache
+// busting; re-run reveal's layout on any size change so slide content is scaled
+// to the real container instead of vanishing. ResizeObserver fires once on
+// observe, fixing a layout that ran before the final size.
+Reveal.layout();
+if (window.ResizeObserver) new ResizeObserver(function(){ Reveal.layout(); }).observe(document.body);
+window.addEventListener("resize", function(){ Reveal.layout(); });
 </script>
 </body></html>`;
 }
