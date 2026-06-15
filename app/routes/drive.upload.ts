@@ -5,6 +5,7 @@ import {
   getDriveAccessToken,
   driveGetMeta,
   driveCreateBinary,
+  driveEnsureSubfolder,
 } from "~/lib/google.server";
 import { driveAccess, canAccessFile, driveUnauthenticated, driveForbidden } from "~/lib/drive-access.server";
 
@@ -23,10 +24,11 @@ const EXT: Record<string, string> = {
 const MAX_BYTES = 10 * 1024 * 1024; // 10 MB
 
 /**
- * Upload a pasted image into the document's own Drive folder and return its
- * filename, which the editor inserts as `![](name)`. The folder is the doc
- * file's parent (resolved server-side), so the client never names a folder. The
- * /drive/asset proxy then serves it back, resolving the doc-folder-relative path.
+ * Upload a pasted image into an `img/` folder beside the document and return
+ * the `img/name` path, which the editor inserts as `![](img/name)`. The doc's
+ * folder is resolved server-side (the client never names a folder); the img
+ * subfolder is created on first use. The /drive/asset proxy serves it back,
+ * resolving the doc-folder-relative path.
  */
 export async function action({ request, context }: Route.ActionArgs) {
   if (request.method !== "POST") return json({ error: "method not allowed" }, 405);
@@ -51,10 +53,11 @@ export async function action({ request, context }: Route.ActionArgs) {
     const meta = await driveGetMeta(token, deck);
     const folder = meta.parents?.[0];
     if (!folder) return json({ error: "document has no folder" }, 404);
+    const imgFolder = await driveEnsureSubfolder(token, folder, "img");
     const ext = EXT[mime] ?? "png";
     const name = `pasted-${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 4)}.${ext}`;
-    await driveCreateBinary(token, folder, name, mime, bytes);
-    return json({ path: name }, 201);
+    await driveCreateBinary(token, imgFolder, name, mime, bytes);
+    return json({ path: `img/${name}` }, 201);
   } catch (err) {
     return json({ error: err instanceof Error ? err.message : "upload failed" }, 502);
   }

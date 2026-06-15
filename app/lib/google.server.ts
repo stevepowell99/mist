@@ -241,6 +241,21 @@ export async function driveCreateBinary(
   return { id: f.id, name: f.name };
 }
 
+/** Find a named subfolder of `parentId`, creating it if absent. Returns its id.
+ *  Used to collect pasted images in an `img/` folder beside the document. */
+export async function driveEnsureSubfolder(token: string, parentId: string, name: string): Promise<string> {
+  const entries = await driveListFolder(token, parentId);
+  const existing = entries.find((e) => e.isFolder && e.name === name);
+  if (existing) return existing.id;
+  const res = await fetch(`${DRIVE}/files?fields=id&${COMMON}`, {
+    method: "POST",
+    headers: { ...authHeaders(token), "Content-Type": "application/json" },
+    body: JSON.stringify({ name, parents: [parentId], mimeType: FOLDER_MIME }),
+  });
+  if (!res.ok) throw new Error(`Drive folder create failed (${res.status})`);
+  return ((await res.json()) as { id: string }).id;
+}
+
 /** Rename a file. */
 export async function driveRename(token: string, fileId: string, name: string): Promise<void> {
   const res = await fetch(`${DRIVE}/files/${fileId}?fields=id&${COMMON}`, {
