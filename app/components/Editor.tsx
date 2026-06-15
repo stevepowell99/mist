@@ -11,6 +11,7 @@ import CollaborationCaret from "@tiptap/extension-collaboration-caret";
 import { CriticAddition, CriticDeletion, CriticComment, CriticHighlight, CriticDelimiters } from "~/lib/critic-marks";
 import { markdownDecorations, cleanViewKey, type ImageResolver } from "~/lib/markdown-decorations";
 import { suggestModePlugin, type ModeSource } from "~/lib/suggest-mode";
+import { MarkdownShortcuts } from "~/lib/markdown-shortcuts";
 import { CitationSuggest, createCitationController, type CitationController } from "~/lib/citation-suggest";
 import { resolveImageSrc, resolveObsidianEmbed } from "~/lib/github";
 import BubbleToolbar from "~/components/BubbleToolbar";
@@ -272,6 +273,7 @@ export default function Editor({
           render: renderCaret,
         }),
         MarkdownDecorations.configure({ resolveImageSrc: imageResolver }),
+        MarkdownShortcuts,
         SuggestMode.configure({ docState: modeSource }),
         CitationSuggest.configure({ controller: citationController }),
         CommentClickHandler.configure({ onCommentClick }),
