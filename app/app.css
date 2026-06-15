@@ -197,6 +197,19 @@ body {
   opacity: 0.55;
 }
 
+/* CodeMirror gutter: very faint line numbers, no heavy border, no focus ring */
+.cm-editor .cm-gutters {
+  background: transparent;
+  border-right: none;
+  color: var(--color-muted);
+}
+.cm-editor .cm-lineNumbers .cm-gutterElement {
+  opacity: 0.3;
+}
+.cm-editor.cm-focused {
+  outline: none;
+}
+
 /* CriticMarkup delimiter tokens (widget decorations around mark ranges) */
 .cm-delimiter {
   opacity: 0.35;

@@ -2,8 +2,21 @@ import { useEffect, useRef } from "react";
 import * as Y from "yjs";
 import type { Awareness } from "y-protocols/awareness";
 import { EditorState } from "@codemirror/state";
-import { EditorView, keymap, lineNumbers, highlightActiveLine } from "@codemirror/view";
-import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
+import {
+  EditorView,
+  keymap,
+  lineNumbers,
+  highlightActiveLine,
+  highlightActiveLineGutter,
+  drawSelection,
+  dropCursor,
+  rectangularSelection,
+  crosshairCursor,
+} from "@codemirror/view";
+import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
+import { bracketMatching } from "@codemirror/language";
+import { closeBrackets, closeBracketsKeymap, completionKeymap } from "@codemirror/autocomplete";
+import { highlightSelectionMatches, searchKeymap } from "@codemirror/search";
 import { markdown } from "@codemirror/lang-markdown";
 import { yCollab, yUndoManagerKeymap } from "y-codemirror.next";
 import { criticMarkup } from "~/lib/cm-criticmarkup";
@@ -71,10 +84,30 @@ export default function CodeMirrorEditor({
       extensions: [
         lineNumbers(),
         highlightActiveLine(),
+        highlightActiveLineGutter(),
         history(),
+        // Editor helpers: multi-cursor (Alt-click, Mod-D next occurrence,
+        // Alt-drag rectangular), bracket match/close, selection-match
+        // highlighting, drag-drop cursor.
+        EditorState.allowMultipleSelections.of(true),
+        drawSelection(),
+        dropCursor(),
+        rectangularSelection(),
+        crosshairCursor(),
+        bracketMatching(),
+        closeBrackets(),
+        highlightSelectionMatches(),
         wrapOnSelection,
         suggestMode(() => modeRef.current),
-        keymap.of([...yUndoManagerKeymap, ...defaultKeymap, ...historyKeymap]),
+        keymap.of([
+          ...closeBracketsKeymap,
+          ...yUndoManagerKeymap,
+          ...defaultKeymap,
+          ...searchKeymap,
+          ...historyKeymap,
+          ...completionKeymap,
+          indentWithTab,
+        ]),
         wrapKeymap,
         markdown(),
         EditorView.lineWrapping,
