@@ -28,6 +28,16 @@ function textBlob(text: string): string {
 const KEY_CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 const KEY_LENGTH = 24;
 
+// Origin tag for Y.Text mutations the relay itself makes (pulling a fresh
+// version from Drive). The update handler broadcasts these to every client; a
+// client-originated update is already relayed in onMessage, so only server ones
+// need this path.
+const SERVER_ORIGIN = "mist-server";
+
+// Don't re-read Drive on every reconnect storm; one check per this window is
+// enough to catch an external edit on reload.
+const UPSTREAM_CHECK_MS = 10_000;
+
 function generateSecretKey(): string {
   const bytes = new Uint8Array(KEY_LENGTH);
   crypto.getRandomValues(bytes);
@@ -39,6 +49,8 @@ function generateSecretKey(): string {
 class DocumentAgent extends Agent {
   private doc: Y.Doc | null = null;
   private awareness: awarenessProtocol.Awareness | null = null;
+  // Wall-clock of the last Drive upstream check, to throttle reconnect storms.
+  private lastUpstreamCheck = 0;
 
   private ensureInitialised(): { doc: Y.Doc; awareness: awarenessProtocol.Awareness } {
     if (this.doc && this.awareness) {
@@ -70,13 +82,17 @@ class DocumentAgent extends Agent {
     // document's content (the cross-doc Yjs merge bug). Persisting corrupted
     // state is what concatenated files, so refuse it: the last clean snapshot
     // stays in storage and the DO reverts to it on its next load.
-    this.doc.on("update", () => {
+    this.doc.on("update", (update: Uint8Array, origin: unknown) => {
       if (this.isContaminated()) return;
       const state = Y.encodeStateAsUpdate(this.doc!);
       this.sql`
         INSERT INTO doc_state (key, value) VALUES ('state', ${sqlBlob(state)})
         ON CONFLICT(key) DO UPDATE SET value = excluded.value
       `;
+      // A relay-made change (Drive pull) has no client message to relay, so push
+      // it to every connection as a sync update; client changes already relay in
+      // onMessage.
+      if (origin === SERVER_ORIGIN) this.broadcastUpdate(update);
     });
 
     return { doc: this.doc, awareness: this.awareness };
@@ -133,6 +149,14 @@ class DocumentAgent extends Agent {
     if (!this.roleForKey(k)) {
       connection.close(4403, "Invalid or missing key");
       return;
+    }
+
+    // Catch an external edit (Obsidian/Drive) made while the room was idle, so
+    // a reload shows fresh content. Never let a Drive hiccup break the connect.
+    try {
+      await this.checkUpstream(false);
+    } catch {
+      // upstream check is best-effort; fall through to sync the current state
     }
 
     // Send SyncStep1 to the new client
@@ -246,6 +270,15 @@ class DocumentAgent extends Agent {
     } catch {
       return;
     }
+    // Explicit user reload: take the Drive version even if the body diverged.
+    if (msg.type === "pull") {
+      try {
+        await this.checkUpstream(true);
+      } catch {
+        // best-effort; the client can retry
+      }
+      return;
+    }
     if (msg.type !== "doc" || typeof msg.content !== "string") return;
     // only backend-bound docs (GitHub or Drive) commit back
     if (!this.readStoredText("github") && !this.readStoredText("drive")) return;
@@ -280,6 +313,95 @@ class DocumentAgent extends Agent {
     return null;
   }
 
+  /** Send a server-made Yjs update to every connection as a sync message. */
+  private broadcastUpdate(update: Uint8Array) {
+    const encoder = encoding.createEncoder();
+    encoding.writeVarUint(encoder, MSG_SYNC);
+    syncProtocol.writeUpdate(encoder, update);
+    const msg = encoding.toUint8Array(encoder);
+    const buf = msg.buffer.slice(msg.byteOffset, msg.byteOffset + msg.byteLength);
+    for (const conn of this.getConnections()) conn.send(buf);
+  }
+
+  /** Replace the body Y.Text with `text`, editing only the changed middle so
+   *  cursors and unaffected ranges survive. Tagged SERVER_ORIGIN so the update
+   *  handler broadcasts it. */
+  private replaceBodyFromText(text: string) {
+    const body = this.doc!.getText("body");
+    const old = body.toString();
+    if (old === text) return;
+    let p = 0;
+    const max = Math.min(old.length, text.length);
+    while (p < max && old[p] === text[p]) p++;
+    let s = 0;
+    while (s < max - p && old[old.length - 1 - s] === text[text.length - 1 - s]) s++;
+    Y.transact(
+      this.doc!,
+      () => {
+        const removeLen = old.length - p - s;
+        if (removeLen > 0) body.delete(p, removeLen);
+        const insert = text.slice(p, text.length - s);
+        if (insert) body.insert(p, insert);
+      },
+      SERVER_ORIGIN,
+    );
+  }
+
+  /**
+   * Reconcile the open doc with the backend file (#9). If the file changed
+   * upstream (edited in Obsidian/Drive) since this session's baseline, pull the
+   * new content in when the body has no unsaved local edits, so an external edit
+   * appears in the editor. If there are local edits as well, leave both and tell
+   * the client (it shows a reload affordance) rather than discarding either.
+   * `force` pulls regardless, for an explicit user reload.
+   */
+  private async checkUpstream(force: boolean): Promise<void> {
+    if (this.isContaminated()) return;
+    const now = Date.now();
+    if (!force && now - this.lastUpstreamCheck < UPSTREAM_CHECK_MS) return;
+    this.lastUpstreamCheck = now;
+
+    const bound = this.backendFor();
+    if (!bound) return;
+
+    const { text, version } = await bound.backend.read();
+    const known = this.readStoredText("driveVersion");
+    if (!force && version && version === known) return; // already current
+
+    const body = this.doc!.getText("body");
+    const local = body.toString();
+    const base = this.readStoredText("lastCommitMd");
+
+    const setBaseline = () => {
+      if (version) {
+        this.sql`
+          INSERT INTO doc_state (key, value) VALUES ('driveVersion', ${textBlob(version)})
+          ON CONFLICT(key) DO UPDATE SET value = excluded.value
+        `;
+      }
+      this.sql`
+        INSERT INTO doc_state (key, value) VALUES ('lastCommitMd', ${textBlob(text)})
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value
+      `;
+    };
+
+    if (local === text) {
+      // Already matches Drive; just re-anchor the version baseline.
+      setBaseline();
+      return;
+    }
+
+    // Safe to pull only when the body has not diverged locally (or the user
+    // forced it). Otherwise both sides changed: keep them and signal the client.
+    if (force || (base != null && local === base)) {
+      this.replaceBodyFromText(text);
+      setBaseline();
+      this.broadcast(JSON.stringify({ type: "reloaded", hash: quickHash(text) }));
+    } else {
+      this.broadcast(JSON.stringify({ type: "upstream-changed" }));
+    }
+  }
+
   private async commitPending(): Promise<void> {
     // Only ever reached via an explicit save (handleControl requires commitNow).
     // The doc resets per id (keyed provider + SPA nav), so a save writes this
@@ -287,7 +409,12 @@ class DocumentAgent extends Agent {
     // injected, to keep saved files faithful.
     const pending = this.readStoredText("pendingMd");
     if (pending == null) return;
-    if (this.readStoredText("lastCommitMd") === pending) return; // unchanged since last commit
+    if (this.readStoredText("lastCommitMd") === pending) {
+      // Nothing to write (e.g. the client is re-saving content we just pulled
+      // from Drive). Confirm it as saved so the client clears its unsaved badge.
+      this.broadcast(JSON.stringify({ type: "committed", hash: quickHash(pending) }));
+      return;
+    }
 
     const bound = this.backendFor();
     if (!bound) return; // commit-back not configured on this server
@@ -391,6 +518,13 @@ class DocumentAgent extends Agent {
             if (ytextBody.length === 0) {
               ytextBody.insert(0, body.content);
             }
+            // The seed came from the backend at driveVersion, so record it as the
+            // baseline: the upstream-sync check treats a body still equal to this
+            // as having no local edits, and so safe to refresh from Drive.
+            this.sql`
+              INSERT INTO doc_state (key, value) VALUES ('lastCommitMd', ${textBlob(body.content)})
+              ON CONFLICT(key) DO UPDATE SET value = excluded.value
+            `;
           }
           if (body.threads && Array.isArray(body.threads)) {
             const threadsMap = doc.getMap<string>("threads");

@@ -41,6 +41,11 @@ export interface DocumentContextValue {
   unsaved: boolean;
   /** True when the backend rejected a write because the file changed upstream */
   conflict: boolean;
+  /** True when the backend file changed upstream and the body also has local
+   *  edits, so the user must choose to reload (taking the Drive version). */
+  upstreamChanged: boolean;
+  /** Pull the current Drive version into the editor, discarding local edits. */
+  reloadFromDrive: () => void;
   /** Parsed BibTeX library for citation rendering, if found in the repo */
   bibLib: BibLibrary | null;
   /** Short-lived token for fetching private-Drive assets (slides + preview). */
@@ -200,11 +205,25 @@ export function DocumentProvider({
 
   const saveNow = useCallback(() => sendDoc(true), [sendDoc]);
 
+  // Ask the relay to pull the current Drive version in (used to resolve an
+  // upstream change when the body also has local edits: Drive wins).
+  const reloadFromDrive = useCallback(() => {
+    const socket = yjs.socket as unknown as { send?: (data: string) => void } | null;
+    try {
+      socket?.send?.(JSON.stringify({ type: "pull" }));
+    } catch {
+      // socket not ready; the user can retry
+    }
+  }, [yjs.socket]);
+
   // Track whether the shown document matches what was last committed to GitHub.
   const [lastCommittedHash, setLastCommittedHash] = useState<string | null>(null);
   // True when the backend rejected a write because the file changed upstream
   // (edited in Obsidian/Drive). Auto-save never clobbers; the user reloads.
   const [conflict, setConflict] = useState(false);
+  // The file changed upstream while the body also held local edits: the user
+  // must reload (Drive wins) to reconcile, since we will not discard either side.
+  const [upstreamChanged, setUpstreamChanged] = useState(false);
   const baselineSetRef = useRef(false);
   const currentHash = useMemo(
     () => (backed ? quickHash(serializeThreads(markdown, threads, frontmatter)) : null),
@@ -231,6 +250,15 @@ export function DocumentProvider({
           setConflict(false);
         } else if (m.type === "conflict") {
           setConflict(true);
+        } else if (m.type === "reloaded") {
+          // The relay refreshed the body from Drive; the new content arrives via
+          // the Yjs binding. Re-baseline so it reads as saved, and clear flags.
+          baselineSetRef.current = false;
+          setLastCommittedHash(null);
+          setConflict(false);
+          setUpstreamChanged(false);
+        } else if (m.type === "upstream-changed") {
+          setUpstreamChanged(true);
         }
       } catch {
         // not a JSON control message
@@ -247,10 +275,10 @@ export function DocumentProvider({
   // relay write conditionally (it rejects rather than clobbering an upstream
   // edit). A conflict pauses auto-save until the user reloads.
   useEffect(() => {
-    if (!unsaved || conflict) return;
+    if (!unsaved || conflict || upstreamChanged) return;
     const t = setTimeout(saveNow, AUTOSAVE_DEBOUNCE_MS);
     return () => clearTimeout(t);
-  }, [unsaved, conflict, saveNow]);
+  }, [unsaved, conflict, upstreamChanged, saveNow]);
 
   // Fetch and parse the backend's BibTeX library once, so the `@`-citation
   // picker and rendering work for both GitHub repos and Drive folders. The same
@@ -409,6 +437,8 @@ export function DocumentProvider({
     saveNow,
     unsaved,
     conflict,
+    upstreamChanged,
+    reloadFromDrive,
     bibLib,
     assetToken,
     // Suggest-role users are locked to suggest regardless of the shared mode

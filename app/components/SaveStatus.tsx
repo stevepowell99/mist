@@ -11,7 +11,7 @@ import { useDocument } from "~/lib/DocumentContext";
  * (#9), not yet built. Also warns before closing with unsaved edits.
  */
 export default function SaveStatus() {
-  const { backed, unsaved, conflict, saveNow } = useDocument();
+  const { backed, unsaved, conflict, upstreamChanged, reloadFromDrive, saveNow } = useDocument();
 
   useEffect(() => {
     if (!unsaved && !conflict) return;
@@ -24,6 +24,21 @@ export default function SaveStatus() {
   }, [unsaved, conflict]);
 
   if (!backed) return null;
+
+  // The file changed in Obsidian/Drive and the body also has local edits. Offer
+  // to take the Drive version (it wins); local edits are discarded on reload.
+  if (upstreamChanged) {
+    return (
+      <button
+        onClick={reloadFromDrive}
+        className="flex h-full cursor-pointer items-center gap-2 bg-amber-500/15 px-3 text-sm uppercase tracking-wider text-amber-600 hover:bg-amber-500/25"
+        title="This file changed in Obsidian/Drive while you had unsaved edits here. Reload to take the Drive version; your unsaved edits in mist are discarded."
+      >
+        <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-amber-500" />
+        Reload from Drive
+      </button>
+    );
+  }
 
   if (conflict) {
     return (
