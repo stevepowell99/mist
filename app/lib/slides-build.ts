@@ -317,7 +317,19 @@ ${inlineStyles}
 // plugin if it loaded (best-effort, like Quarto's decks).
 var revealPlugins=[RevealMarkdown,RevealNotes];
 if (window.RevealMenu) revealPlugins.push(RevealMenu);
+// Cursor-driven sync: the editor posts {type:"mist-goto", h} as the cursor
+// moves and after each rebuild. Buffer the target so a message that arrives
+// before reveal is ready (e.g. right after the iframe reloads) still lands,
+// which is what keeps an edit from snapping the deck back to slide 1.
+var pendingGoto = null, revealReady = false;
+function applyGoto(){ if (revealReady && pendingGoto != null) Reveal.slide(pendingGoto); }
+window.addEventListener("message", function(e){
+  if (e.data && e.data.type === "mist-goto" && typeof e.data.h === "number") {
+    pendingGoto = e.data.h; applyGoto();
+  }
+});
 Reveal.initialize({plugins:revealPlugins,hash:false,controls:true,progress:true,keyboard:true,overview:true,scrollActivationWidth:null,width:1280,height:720,menu:{openButton:true,openSlideNumber:false,markers:true}}).then(async function(){
+  revealReady = true; applyGoto();
   Reveal.layout();
   if (window.ResizeObserver) new ResizeObserver(function(){ Reveal.layout(); }).observe(document.body);
   window.addEventListener("resize", function(){ Reveal.layout(); });

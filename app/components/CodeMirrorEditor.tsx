@@ -45,6 +45,7 @@ export default function CodeMirrorEditor({
   activeComment = null,
   bibLibrary = null,
   onTextChange,
+  onCursorChange,
   onViewReady,
   className,
 }: {
@@ -55,6 +56,7 @@ export default function CodeMirrorEditor({
   activeComment?: { from: number; to: number } | null;
   bibLibrary?: BibLibrary | null;
   onTextChange?: (text: string) => void;
+  onCursorChange?: (offset: number) => void;
   onViewReady?: (view: EditorView | null) => void;
   className?: string;
 }) {
@@ -62,6 +64,8 @@ export default function CodeMirrorEditor({
   const viewRef = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onTextChange);
   onChangeRef.current = onTextChange;
+  const onCursorRef = useRef(onCursorChange);
+  onCursorRef.current = onCursorChange;
   const onViewReadyRef = useRef(onViewReady);
   onViewReadyRef.current = onViewReady;
   // Live mode for the suggest filter, read at edit time so the editor never
@@ -119,6 +123,7 @@ export default function CodeMirrorEditor({
         yCollab(ytext, awareness, { undoManager }),
         EditorView.updateListener.of((u) => {
           if (u.docChanged) onChangeRef.current?.(ytext.toString());
+          if (u.docChanged || u.selectionSet) onCursorRef.current?.(u.state.selection.main.head);
         }),
       ],
     });

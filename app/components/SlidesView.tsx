@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useDocument } from "~/lib/DocumentContext";
 import { buildSlidesHtml } from "~/lib/slides-build";
+import { slideIndexForOffset } from "~/lib/slide-cursor";
 import { getDriveKey } from "~/lib/drive-key";
 
 export { isSlideDeck } from "~/lib/slides-build";
@@ -13,7 +14,7 @@ export { isSlideDeck } from "~/lib/slides-build";
  * sandboxed iframe. The deck's theme/css come from the document frontmatter.
  */
 export default function SlidesView() {
-  const { markdown, github, drive, frontmatter } = useDocument();
+  const { markdown, github, drive, frontmatter, cursorOffset } = useDocument();
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   const driveToken = drive ? getDriveKey() ?? "" : "";
   // Rebuilding the iframe reloads reveal, so debounce: refresh ~0.8s after edits
@@ -35,8 +36,27 @@ export default function SlidesView() {
     [debounced, github, drive, origin, driveToken, bust, frontmatter],
   );
 
+  // Cursor-driven sync: as the cursor moves in the editor, jump the deck to the
+  // slide it is in. The deck's slide split matches `slideIndexForOffset`. Sent
+  // by postMessage because the deck runs in a sandboxed (cross-origin) iframe.
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const slide = useMemo(() => slideIndexForOffset(markdown, cursorOffset), [markdown, cursorOffset]);
+  const slideRef = useRef(slide);
+  slideRef.current = slide;
+  const sendGoto = (h: number) => iframeRef.current?.contentWindow?.postMessage({ type: "mist-goto", h }, "*");
+  // On cursor move (no reload).
+  useEffect(() => {
+    sendGoto(slide);
+  }, [slide]);
+  // After a rebuild the iframe reloads and reveal resets to slide 1; re-send the
+  // current slide once the new document is ready so the edit does not snap the
+  // deck back to the start.
+  const onLoad = () => sendGoto(slideRef.current);
+
   return (
     <iframe
+      ref={iframeRef}
+      onLoad={onLoad}
       title="Slides preview"
       sandbox="allow-scripts"
       // allow + allowFullScreen let reveal's F key take the deck fullscreen from

@@ -17,6 +17,9 @@ export interface DocumentContextValue {
   /** The CodeMirror view backing the editor (Y.Text core). */
   view: EditorView | null;
   markdown: string;
+  /** Editor cursor offset, for cursor-driven slide-preview sync. */
+  cursorOffset: number;
+  setCursor: (offset: number) => void;
   /** The document's own YAML frontmatter (theme, css, format...), held in the
    *  doc so it survives import and round-trips on commit-back. "" if none. */
   frontmatter: string;
@@ -126,6 +129,8 @@ export function DocumentProvider({
   const backed = !!github || !!drive;
   const [markdown, setMarkdown] = useState("");
   const [view, setView] = useState<EditorView | null>(null);
+  const [cursorOffset, setCursorOffset] = useState(0);
+  const setCursor = useCallback((o: number) => setCursorOffset(o), []);
 
   // The editor body now carries the file's own YAML frontmatter (the Y.Text
   // core makes that safe), so derive it from the markdown. Fall back to the
@@ -388,6 +393,8 @@ export function DocumentProvider({
     yjs,
     view,
     markdown,
+    cursorOffset,
+    setCursor,
     frontmatter,
     role,
     docKey,

@@ -163,6 +163,7 @@ function DocumentLayout({ id }: { id: string }) {
     setEditorText,
     activeCommentRange,
     cleanView,
+    setCursor,
     mode,
     toggleMode,
     role,
@@ -576,6 +577,7 @@ function DocumentLayout({ id }: { id: string }) {
                 activeComment={activeCommentRange}
                 bibLibrary={bibLib}
                 onTextChange={setEditorText}
+                onCursorChange={setCursor}
                 onViewReady={handleViewReady}
                 className="min-h-full text-base"
               />
