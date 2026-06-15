@@ -456,7 +456,13 @@ function DocumentLayout({ id }: { id: string }) {
             <line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" />
           </svg>
         </button>
-        <div className="flex min-w-0 grow items-center px-4">
+        <div className="flex min-w-0 grow items-center gap-2 px-4">
+          <span
+            className="shrink-0 rounded border border-border px-1.5 py-0.5 text-xs uppercase tracking-wider text-muted"
+            title={deck ? "Slide deck (format: revealjs)" : "Document"}
+          >
+            {deck ? "Deck" : "Doc"}
+          </span>
           <span className="truncate font-medium" title={title}>{title}</span>
         </div>
         {/* Two separate radio pills so the grouping reads at a glance: Mode
