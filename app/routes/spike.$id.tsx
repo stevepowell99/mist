@@ -9,7 +9,16 @@ import { getCloudflare } from "~/lib/cloudflare.server";
 import { useYjsEditor } from "~/lib/useYjsEditor";
 import { useTextThreads } from "~/lib/useTextThreads";
 import { serializeThreads } from "~/lib/thread-serialization";
+import type { BibLibrary } from "~/lib/citations";
 import CodeMirrorEditor from "~/components/CodeMirrorEditor";
+
+// A small static library so the @-picker can be exercised on the spike. The
+// real editor will pass the document's loaded bib (the same shape).
+const DEMO_BIB: BibLibrary = new Map([
+  ["smith2020", { authors: ["Smith"], year: "2020", title: "Causal maps in practice" }],
+  ["jones2019", { authors: ["Jones", "Patel"], year: "2019", title: "Qualitative system dynamics" }],
+  ["powell2021", { authors: ["Powell"], year: "2021", title: "Theory of change methods" }],
+]);
 
 /**
  * Y.Text core (#13) rollout spike. A throwaway harness, NOT linked from the
@@ -99,6 +108,7 @@ function SpikeRoot({ id, docKey }: { id: string; docKey: string | null; role: Do
             mode={mode}
             cleanView={cleanView}
             activeComment={t.activeRange}
+            bibLibrary={DEMO_BIB}
             onTextChange={setBody}
             onViewReady={setView}
             className="h-full text-sm"

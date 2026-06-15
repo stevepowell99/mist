@@ -10,6 +10,8 @@ import { criticMarkup } from "~/lib/cm-criticmarkup";
 import { suggestMode } from "~/lib/cm-suggest";
 import { wrapKeymap, wrapOnSelection } from "~/lib/cm-shortcuts";
 import { activeCommentField, setActiveComment } from "~/lib/cm-active-comment";
+import { citations } from "~/lib/cm-citations";
+import type { BibLibrary } from "~/lib/citations";
 import type { DocMode } from "~/shared/types";
 
 /**
@@ -27,6 +29,7 @@ export default function CodeMirrorEditor({
   mode = "suggest",
   cleanView = false,
   activeComment = null,
+  bibLibrary = null,
   onTextChange,
   onViewReady,
   className,
@@ -36,6 +39,7 @@ export default function CodeMirrorEditor({
   mode?: DocMode;
   cleanView?: boolean;
   activeComment?: { from: number; to: number } | null;
+  bibLibrary?: BibLibrary | null;
   onTextChange?: (text: string) => void;
   onViewReady?: (view: EditorView | null) => void;
   className?: string;
@@ -50,6 +54,10 @@ export default function CodeMirrorEditor({
   // rebuilds when the mode flips.
   const modeRef = useRef<DocMode>(mode);
   modeRef.current = mode;
+  // Live bib library for the @-picker, read at completion time so the editor
+  // never rebuilds when the library loads.
+  const bibRef = useRef<BibLibrary | null>(bibLibrary);
+  bibRef.current = bibLibrary;
 
   useEffect(() => {
     const parent = ref.current;
@@ -70,6 +78,7 @@ export default function CodeMirrorEditor({
         wrapKeymap,
         markdown(),
         EditorView.lineWrapping,
+        citations(() => bibRef.current),
         criticMarkup,
         activeCommentField,
         yCollab(ytext, awareness, { undoManager }),

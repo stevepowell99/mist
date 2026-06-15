@@ -118,7 +118,22 @@ Next: step 3, comments (relative-position anchors, click handler, thread panel b
 
 Verified on dev and remote: create a range comment from a selection -> `{==brown==}{>>note<<}` in the text and `highlight: brown` folded into `mist:` frontmatter; panel binding, jump tint, reply, and resolve-removes-markup all work. 405 unit tests pass.
 
-This clears both genuinely hard parts (suggest mode, comment anchoring). Next: step 4, wire the CM6 component into the real `Editor.tsx` behind its existing props (citations, images, outline) as an opt-in core, then step 5 flip-and-delete.
+This clears both genuinely hard parts (suggest mode, comment anchoring).
+
+**`@`-citation picker on the CM6 core: done, 15 June 2026.** `app/lib/cm-citations.ts` is a CodeMirror autocomplete source over the same `BibLibrary` shape: typing `@` lists the document's entries (author, year, title), filtered live, and inserts Pandoc `[@key]`, matching the TipTap picker. `CodeMirrorEditor` takes a `bibLibrary` prop (read live via a ref); the spike feeds a static demo library. Verified on dev and remote: the popup opens, filters, and inserts `[@smith2020]`/`[@jones2019]`.
+
+**Editor feature parity reached.** The CM6 / Y.Text editor now matches the TipTap editor's editor-integral features: markdown-source editing with control-code decorations, suggest mode, comments (create/reply/resolve/delete/jump/tint), clean view, Mod-B/I and wrap-on-selection, the `@`-citation picker, collaborative cursors and byte-faithful save. So **step 4 is now a pure wiring job**, not new behaviour. (Deferred refinement: a citation inserted in suggest mode currently goes in plain rather than wrapped as `{++[@key]++}`; minor, note it.)
+
+## Step 4: wiring CM6 into the real app (plan, awaiting Steve)
+
+The CM6 editor is proven in isolation on `/spike`. Step 4 puts it into the real `/docs/:id` without regressing the live TipTap path. The blast radius is `docs.$id.tsx` and `DocumentContext.tsx` (the most important files), so do it with Steve, opt-in first:
+
+1. **Opt-in flag.** Gate on `?core=ytext` (default stays TipTap). Render either `<Editor>` (TipTap) or a new `<CodeMirrorDocEditor>` wrapper in the editor pane; share the navbar, preview, slides, save bar and comment panel.
+2. **Decouple the shared parts from the TipTap instance.** Today `DocumentContext` holds a `TiptapEditor`, derives `markdown` via `serializeWithCriticMarkup(editor.state.doc)`, and runs `useThreads(editor)`. For the CM6 path: `markdown` is just `ytext.toString()`; threads come from `useTextThreads`; the outline reads the text (port `extractOutline` to a text scan). Introduce a small editor-agnostic surface (current text, selection, a `jumpTo`, the thread API) so the page binds to that, not to TipTap directly.
+3. **Save path.** Unchanged in shape: `serializeThreads(ytext.toString(), threads, frontmatter)` over the existing socket `commitNow`. The unsaved indicator and `beforeunload` guard already key off the serialized hash, so they carry over.
+4. **Citations/images.** Pass the document's loaded `BibLibrary` (already fetched via `/drive/bib`) into `CodeMirrorEditor`'s `bibLibrary` prop. Inline image rendering in the source editor is a later nicety (Preview already renders images).
+5. **Flip and delete (step 5, Steve signs off).** Make CM6 the default, then delete the TipTap stack (`Editor.tsx` extensions, `critic-marks.ts`, `critic-serializer.ts`, `suggest-mode.ts`, `markdown-shortcuts.ts`, `markdown-decorations.ts`, `citation-suggest.ts`, `useThreads.ts`, the XmlFragment seed branch, `CollaborationCaret`).
+6. **Live save (step 6, the original goal).** With save now an identity, add the debounced conditional write + etag merge-guard and turn on auto-save with the saved-state indicator. This is the thing that needed the faithful core.
 
 ## What is reused vs deleted
 
