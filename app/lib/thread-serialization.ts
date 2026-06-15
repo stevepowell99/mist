@@ -23,7 +23,7 @@ export function stripFrontmatter(markdown: string): string {
 }
 
 /** The exact inner YAML text of the frontmatter (between the --- fences), or "". */
-function rawFrontmatter(markdown: string): string {
+export function rawFrontmatter(markdown: string): string {
   const m = FRONTMATTER_RE.exec(markdown);
   return m ? m[1] : "";
 }

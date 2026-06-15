@@ -4,7 +4,7 @@ import type { CapturedSelection, DocMode, DocRole, DriveMeta, GitHubMeta } from 
 import type { MatchedThread } from "~/lib/comment-threads";
 import type { useYjsEditor } from "~/lib/useYjsEditor";
 import { useTextThreads } from "~/lib/useTextThreads";
-import { serializeThreads } from "~/lib/thread-serialization";
+import { serializeThreads, rawFrontmatter } from "~/lib/thread-serialization";
 import { quickHash } from "~/shared/hash";
 import { rawAssetUrl } from "~/lib/github";
 import { getDriveKey } from "~/lib/drive-key";
@@ -125,19 +125,24 @@ export function DocumentProvider({
   // Either backend means edits are relayed for write-back to the source file.
   const backed = !!github || !!drive;
   const [markdown, setMarkdown] = useState("");
-  const [frontmatter, setFrontmatter] = useState("");
   const [view, setView] = useState<EditorView | null>(null);
 
-  // The file's frontmatter is kept verbatim in the Yjs "meta" map (seeded at
-  // import), separate from the editor body, so the editor round-trip cannot
-  // mangle multi-line YAML. Read it once synced and observe for changes.
+  // The editor body now carries the file's own YAML frontmatter (the Y.Text
+  // core makes that safe), so derive it from the markdown. Fall back to the
+  // legacy Yjs "meta" map for rooms created before this unification, so their
+  // frontmatter still round-trips on save.
+  const [metaFrontmatter, setMetaFrontmatter] = useState("");
   useEffect(() => {
     const meta = yjs.doc.getMap<string>("meta");
-    const read = () => setFrontmatter((meta.get("frontmatter") as string) ?? "");
+    const read = () => setMetaFrontmatter((meta.get("frontmatter") as string) ?? "");
     read();
     meta.observe(read);
     return () => meta.unobserve(read);
   }, [yjs.doc]);
+  const frontmatter = useMemo(
+    () => rawFrontmatter(markdown) || metaFrontmatter,
+    [markdown, metaFrontmatter],
+  );
   const [previewToggled, setPreviewToggled] = useState(initialPreview);
   const [previewHeld, setPreviewHeld] = useState(false);
   const [commentActive, setCommentActive] = useState(false);

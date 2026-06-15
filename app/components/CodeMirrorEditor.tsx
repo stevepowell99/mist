@@ -20,6 +20,7 @@ import { highlightSelectionMatches, searchKeymap } from "@codemirror/search";
 import { markdown } from "@codemirror/lang-markdown";
 import { yCollab, yUndoManagerKeymap } from "y-codemirror.next";
 import { criticMarkup } from "~/lib/cm-criticmarkup";
+import { markdownLineStyle } from "~/lib/cm-markdown-style";
 import { suggestMode } from "~/lib/cm-suggest";
 import { wrapKeymap, wrapOnSelection } from "~/lib/cm-shortcuts";
 import { activeCommentField, setActiveComment } from "~/lib/cm-active-comment";
@@ -112,6 +113,7 @@ export default function CodeMirrorEditor({
         markdown(),
         EditorView.lineWrapping,
         citations(() => bibRef.current),
+        markdownLineStyle,
         criticMarkup,
         activeCommentField,
         yCollab(ytext, awareness, { undoManager }),

@@ -3,7 +3,7 @@ import { getAgentByName } from "agents";
 import type { Route } from "./+types/new";
 import { generateDocumentId } from "~/shared/constants";
 import { getCloudflare } from "~/lib/cloudflare.server";
-import { deserializeThreads } from "~/lib/thread-serialization";
+import { deserializeThreads, serializeThreads } from "~/lib/thread-serialization";
 
 const MAX_CONTENT_BYTES = 1_000_000; // 1 MB
 
@@ -44,7 +44,9 @@ export async function action({ request, context }: Route.ActionArgs) {
     if (content.trim()) {
       const { body, threads, frontmatter } = deserializeThreads(content);
       init.headers = { "Content-Type": "application/json" };
-      init.body = JSON.stringify({ content: body, threads, frontmatter });
+      // The editor body carries the file's own YAML frontmatter (the mist:
+      // thread block removed); save folds the threads back into mist: on commit.
+      init.body = JSON.stringify({ content: serializeThreads(body, [], frontmatter), threads });
     }
 
     const res = await stub.fetch(new Request("https://do/", init));

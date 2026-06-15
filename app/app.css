@@ -210,6 +210,32 @@ body {
   outline: none;
 }
 
+/* Discrete heading styling in the source editor: weight gradient + a faint
+   background for the top levels. Font family and size stay constant (monospace,
+   one size everywhere) per the editor's source-view design. */
+.cm-h1 {
+  font-weight: 700;
+  background: color-mix(in srgb, var(--color-ink) 6%, transparent);
+}
+.cm-h2 {
+  font-weight: 700;
+  background: color-mix(in srgb, var(--color-ink) 3%, transparent);
+}
+.cm-h3 {
+  font-weight: 600;
+}
+.cm-h4,
+.cm-h5,
+.cm-h6 {
+  font-weight: 600;
+  color: var(--color-muted);
+}
+
+/* The YAML frontmatter block recedes (it is config, not prose). */
+.cm-frontmatter {
+  opacity: 0.5;
+}
+
 /* CriticMarkup delimiter tokens (widget decorations around mark ranges) */
 .cm-delimiter {
   opacity: 0.35;

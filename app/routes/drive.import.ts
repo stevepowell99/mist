@@ -2,7 +2,7 @@ import { getAgentByName } from "agents";
 import type { Route } from "./+types/drive.import";
 import { generateDocumentId } from "~/shared/constants";
 import { getCloudflare } from "~/lib/cloudflare.server";
-import { deserializeThreads } from "~/lib/thread-serialization";
+import { deserializeThreads, serializeThreads } from "~/lib/thread-serialization";
 import { DriveBackend } from "~/lib/backend.server";
 import {
   driveConfigured,
@@ -76,10 +76,11 @@ export async function action({ request, context }: Route.ActionArgs) {
     new Request("https://do/", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      // driveVersion is the file's headRevisionId at open: the baseline the
-      // relay writes conditionally against, so live save never clobbers a
-      // change made in Obsidian/Drive while the session is open.
-      body: JSON.stringify({ content: body, threads, frontmatter, drive, driveVersion }),
+      // The editor body carries the file's own YAML frontmatter (mist: block
+      // removed); save folds threads back into mist: on commit. driveVersion is
+      // the file's headRevisionId at open, the baseline for conditional writes
+      // so live save never clobbers a change made in Obsidian/Drive.
+      body: JSON.stringify({ content: serializeThreads(body, [], frontmatter), threads, drive, driveVersion }),
     }),
   );
 
