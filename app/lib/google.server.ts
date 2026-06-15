@@ -214,6 +214,33 @@ export async function driveCreateFile(
   return { id: f.id, name: f.name };
 }
 
+/** Create a binary file (e.g. a pasted image) in a folder. The multipart body
+ *  is a Blob so the raw bytes are sent verbatim, not stringified. */
+export async function driveCreateBinary(
+  token: string,
+  folderId: string,
+  name: string,
+  mimeType: string,
+  bytes: ArrayBuffer,
+): Promise<{ id: string; name: string }> {
+  const boundary = "mist-bin-boundary";
+  const metadata = { name, parents: [folderId], mimeType };
+  const pre =
+    `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n` +
+    `${JSON.stringify(metadata)}\r\n` +
+    `--${boundary}\r\nContent-Type: ${mimeType}\r\n\r\n`;
+  const post = `\r\n--${boundary}--`;
+  const body = new Blob([pre, new Uint8Array(bytes), post]);
+  const res = await fetch(`${UPLOAD}/files?uploadType=multipart&fields=id,name&${COMMON}`, {
+    method: "POST",
+    headers: { ...authHeaders(token), "Content-Type": `multipart/related; boundary=${boundary}` },
+    body,
+  });
+  if (!res.ok) throw new Error(`Drive upload failed (${res.status})`);
+  const f = (await res.json()) as { id: string; name: string };
+  return { id: f.id, name: f.name };
+}
+
 /** Rename a file. */
 export async function driveRename(token: string, fileId: string, name: string): Promise<void> {
   const res = await fetch(`${DRIVE}/files/${fileId}?fields=id&${COMMON}`, {

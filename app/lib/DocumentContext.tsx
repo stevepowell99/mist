@@ -50,6 +50,9 @@ export interface DocumentContextValue {
   bibLib: BibLibrary | null;
   /** Short-lived token for fetching private-Drive assets (slides + preview). */
   assetToken: string | null;
+  /** Upload a pasted image into the doc's Drive folder; resolves to the markdown
+   *  path to reference, or null if not a Drive doc / the upload failed. */
+  uploadImage: (file: File) => Promise<string | null>;
 
   // Mode
   mode: DocMode;
@@ -204,6 +207,27 @@ export function DocumentProvider({
   );
 
   const saveNow = useCallback(() => sendDoc(true), [sendDoc]);
+
+  // Upload a pasted image into the doc's own Drive folder; the editor inserts
+  // the returned filename as a relative image. Drive docs only.
+  const uploadImage = useCallback(
+    async (file: File): Promise<string | null> => {
+      if (!drive) return null;
+      try {
+        const res = await fetch(`/drive/upload?deck=${encodeURIComponent(drive.fileId)}`, {
+          method: "POST",
+          headers: { "Content-Type": file.type || "application/octet-stream", "X-Drive-Key": getDriveKey() ?? "" },
+          body: file,
+        });
+        if (!res.ok) return null;
+        const body = (await res.json()) as { path?: string };
+        return body.path ?? null;
+      } catch {
+        return null;
+      }
+    },
+    [drive],
+  );
 
   // Ask the relay to pull the current Drive version in (used to resolve an
   // upstream change when the body also has local edits: Drive wins).
@@ -441,6 +465,7 @@ export function DocumentProvider({
     reloadFromDrive,
     bibLib,
     assetToken,
+    uploadImage,
     // Suggest-role users are locked to suggest regardless of the shared mode
     mode: role === "suggest" ? "suggest" : yjs.mode,
     toggleMode,

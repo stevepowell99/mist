@@ -31,6 +31,48 @@ import type { BibLibrary } from "~/lib/citations";
 import type { DocMode } from "~/shared/types";
 
 /**
+ * Paste handler: when the clipboard holds an image (a screenshot, a copied
+ * picture), upload it and insert `![](path)` at the cursor. A placeholder marks
+ * the spot while the upload runs and is found by text (not position), so it
+ * lands right even after concurrent edits. The dispatches carry no user event,
+ * so suggest mode leaves them alone. Returns false for non-image pastes so text
+ * paste is untouched.
+ */
+function handleImagePaste(
+  event: ClipboardEvent,
+  view: EditorView,
+  onImagePaste: ((file: File) => Promise<string | null>) | undefined,
+): boolean {
+  if (!onImagePaste) return false;
+  const items = event.clipboardData?.items;
+  if (!items) return false;
+  const imageItem = Array.from(items).find((it) => it.kind === "file" && it.type.startsWith("image/"));
+  const file = imageItem?.getAsFile();
+  if (!file) return false;
+  event.preventDefault();
+
+  const marker = `![uploading ${Math.random().toString(36).slice(2, 8)}…]()`;
+  const sel = view.state.selection.main;
+  view.dispatch({
+    changes: { from: sel.from, to: sel.to, insert: marker },
+    selection: { anchor: sel.from + marker.length },
+  });
+
+  void (async () => {
+    let replacement = "";
+    try {
+      const path = await onImagePaste(file);
+      replacement = path ? `![](${path})` : "";
+    } catch {
+      replacement = "";
+    }
+    const idx = view.state.doc.toString().indexOf(marker);
+    if (idx >= 0) view.dispatch({ changes: { from: idx, to: idx + marker.length, insert: replacement } });
+  })();
+  return true;
+}
+
+/**
  * Y.Text core (#13). A CodeMirror 6 editor bound to `doc.getText("body")` via
  * y-codemirror.next, so the markdown source IS the CRDT. CriticMarkup is
  * literal text styled by decorations; suggest mode rewrites edits into
@@ -49,6 +91,7 @@ export default function CodeMirrorEditor({
   onTextChange,
   onCursorChange,
   onViewReady,
+  onImagePaste,
   className,
 }: {
   doc: Y.Doc;
@@ -60,6 +103,9 @@ export default function CodeMirrorEditor({
   onTextChange?: (text: string) => void;
   onCursorChange?: (offset: number) => void;
   onViewReady?: (view: EditorView | null) => void;
+  /** Upload a pasted image and return the markdown path to reference, or null
+   *  to let the paste fall through (e.g. non-Drive docs). */
+  onImagePaste?: (file: File) => Promise<string | null>;
   className?: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -70,6 +116,8 @@ export default function CodeMirrorEditor({
   onCursorRef.current = onCursorChange;
   const onViewReadyRef = useRef(onViewReady);
   onViewReadyRef.current = onViewReady;
+  const onImagePasteRef = useRef(onImagePaste);
+  onImagePasteRef.current = onImagePaste;
   // Live mode for the suggest filter, read at edit time so the editor never
   // rebuilds when the mode flips.
   const modeRef = useRef<DocMode>(mode);
@@ -127,6 +175,9 @@ export default function CodeMirrorEditor({
         fencedDivStyle,
         criticMarkup,
         activeCommentField,
+        EditorView.domEventHandlers({
+          paste: (event, v) => handleImagePaste(event, v, onImagePasteRef.current),
+        }),
         yCollab(ytext, awareness, { undoManager }),
         EditorView.updateListener.of((u) => {
           if (u.docChanged) onChangeRef.current?.(ytext.toString());

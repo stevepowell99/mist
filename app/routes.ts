@@ -9,6 +9,7 @@ export default [
   route("gh/import", "routes/gh.import.ts"),
   route("drive/import", "routes/drive.import.ts"),
   route("drive/asset", "routes/drive.asset.ts"),
+  route("drive/upload", "routes/drive.upload.ts"),
   route("drive/search", "routes/drive.search.ts"),
   route("drive/bib", "routes/drive.bib.ts"),
   route("drive/op", "routes/drive.op.ts"),

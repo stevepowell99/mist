@@ -184,6 +184,7 @@ function DocumentLayout({ id }: { id: string }) {
     setPreview,
     threads,
     docKey,
+    uploadImage,
   } = useDocument();
 
   const title = fileTitle(github, drive, id);
@@ -607,6 +608,7 @@ function DocumentLayout({ id }: { id: string }) {
                 onTextChange={setEditorText}
                 onCursorChange={setCursor}
                 onViewReady={handleViewReady}
+                onImagePaste={drive ? uploadImage : undefined}
                 className="min-h-full text-base"
               />
             </div>

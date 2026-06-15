@@ -1,0 +1,61 @@
+import type { Route } from "./+types/drive.upload";
+import { getCloudflare } from "~/lib/cloudflare.server";
+import {
+  driveConfigured,
+  getDriveAccessToken,
+  driveGetMeta,
+  driveCreateBinary,
+} from "~/lib/google.server";
+import { driveAccess, canAccessFile, driveUnauthenticated, driveForbidden } from "~/lib/drive-access.server";
+
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+}
+
+const EXT: Record<string, string> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/gif": "gif",
+  "image/webp": "webp",
+  "image/svg+xml": "svg",
+};
+
+const MAX_BYTES = 10 * 1024 * 1024; // 10 MB
+
+/**
+ * Upload a pasted image into the document's own Drive folder and return its
+ * filename, which the editor inserts as `![](name)`. The folder is the doc
+ * file's parent (resolved server-side), so the client never names a folder. The
+ * /drive/asset proxy then serves it back, resolving the doc-folder-relative path.
+ */
+export async function action({ request, context }: Route.ActionArgs) {
+  if (request.method !== "POST") return json({ error: "method not allowed" }, 405);
+  const { env } = getCloudflare(context);
+  const access = await driveAccess(request, env);
+  if (!access.ok) return driveUnauthenticated();
+  if (!driveConfigured(env)) return json({ error: "Drive not configured" }, 501);
+
+  const deck = new URL(request.url).searchParams.get("deck");
+  if (!deck) return json({ error: "deck (file id) required" }, 400);
+  if (!(await canAccessFile(env, deck, access.email))) return driveForbidden();
+
+  const mime = (request.headers.get("Content-Type") || "").split(";")[0].trim();
+  if (!mime.startsWith("image/")) return json({ error: "only image uploads are allowed" }, 415);
+
+  const bytes = await request.arrayBuffer();
+  if (!bytes.byteLength) return json({ error: "empty upload" }, 400);
+  if (bytes.byteLength > MAX_BYTES) return json({ error: "image too large (max 10 MB)" }, 413);
+
+  try {
+    const token = await getDriveAccessToken(env);
+    const meta = await driveGetMeta(token, deck);
+    const folder = meta.parents?.[0];
+    if (!folder) return json({ error: "document has no folder" }, 404);
+    const ext = EXT[mime] ?? "png";
+    const name = `pasted-${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 4)}.${ext}`;
+    await driveCreateBinary(token, folder, name, mime, bytes);
+    return json({ path: name }, 201);
+  } catch (err) {
+    return json({ error: err instanceof Error ? err.message : "upload failed" }, 502);
+  }
+}
