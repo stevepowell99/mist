@@ -99,7 +99,16 @@ Each step is web-testable in the same Playwright loop (`C:\tmp\mist-verify`) tha
 
 Known dev-only artifact: the first open of a brand-new room sometimes fails to sync/hydrate (workerd DO cold start plus vite on-demand chunk compile); it resolves on retry and does not occur on the deployed worker. The same provider backs TipTap, so this is not CM-specific.
 
-Next: step 2, CriticMarkup decorations plus suggest mode in CM6.
+**Step 2 (CriticMarkup decorations + suggest mode): done, 15 June 2026.** Deployed and verified (dev unit tests + Playwright on dev and remote).
+- `app/lib/cm-criticmarkup.ts`: a shared span parser (`criticSpans`) and a `ViewPlugin` that decorates the five CriticMarkup types in the visible document, reusing the existing classes (`cm-addition`, `cm-deletion`, `cm-comment`, `cm-highlight`, `cm-delimiter`), so editor, clean-view and dark-mode CSS carry over. Substitutions render old as deletion, new as addition.
+- `app/lib/cm-suggest.ts`: the pure `suggestEdit` (typing wraps `{++…++}`, deleting wraps `{--…--}`, replace strikes-and-adds, adjacent same-type runs merge, typing inside an addition extends it, deleting the last char drops the wrapper) plus a `transactionFilter` that rewrites only this user's typing/deleting/pasting; remote (collab) and programmatic changes pass through untouched. 15 unit tests.
+- `app/lib/cm-shortcuts.ts`: Mod-B/I wrap and type-a-wrapper-over-a-selection (`*_=\`"'([{`), as "input.wrap" so suggest mode leaves them as plain formatting.
+- Clean view toggles a `clean-view` class on the editor, reusing the existing CSS to hide delimiters.
+- The spike route gained mode and clean-view toggles for testing. All 395 unit tests pass.
+
+Verified visually: seeded CriticMarkup renders exactly like the TipTap editor (green additions, struck-red deletions, highlight/comment underlines, dimmed delimiters); suggest-typing yields `{++…++}`, backspace yields `{--…--}`, and the save bytes stay verbatim.
+
+Next: step 3, comments (relative-position anchors, click handler, thread panel binding).
 
 ## What is reused vs deleted
 

@@ -3,7 +3,7 @@ import { useCallback, useMemo, useState } from "react";
 import type { Route } from "./+types/spike.$id";
 import { getAgentByName } from "agents";
 import { isValidDocumentId } from "~/shared/constants";
-import type { DocRole } from "~/shared/types";
+import type { DocMode, DocRole } from "~/shared/types";
 import { getCloudflare } from "~/lib/cloudflare.server";
 import { useYjsEditor } from "~/lib/useYjsEditor";
 import { serializeThreads } from "~/lib/thread-serialization";
@@ -41,6 +41,8 @@ function SpikeRoot({ id, docKey }: { id: string; docKey: string | null; role: Do
   const yjs = useYjsEditor(id, docKey);
   const [body, setBody] = useState("");
   const [committed, setCommitted] = useState<string | null>(null);
+  const [mode, setMode] = useState<DocMode>("suggest");
+  const [cleanView, setCleanView] = useState(false);
 
   const frontmatter = useMemo(() => {
     return (yjs.doc.getMap<string>("meta").get("frontmatter") as string) ?? "";
@@ -71,6 +73,20 @@ function SpikeRoot({ id, docKey }: { id: string; docKey: string | null; role: Do
         </span>
         <button
           type="button"
+          onClick={() => setMode((m) => (m === "suggest" ? "edit" : "suggest"))}
+          className="cursor-pointer rounded border border-border px-3 py-1 hover:bg-border"
+        >
+          mode: {mode}
+        </button>
+        <button
+          type="button"
+          onClick={() => setCleanView((c) => !c)}
+          className="cursor-pointer rounded border border-border px-3 py-1 hover:bg-border"
+        >
+          clean view: {cleanView ? "on" : "off"}
+        </button>
+        <button
+          type="button"
           onClick={commit}
           className="ml-auto cursor-pointer rounded border border-border px-3 py-1 hover:bg-border"
         >
@@ -83,6 +99,8 @@ function SpikeRoot({ id, docKey }: { id: string; docKey: string | null; role: Do
           <CodeMirrorEditor
             doc={yjs.doc}
             awareness={yjs.awareness}
+            mode={mode}
+            cleanView={cleanView}
             onTextChange={setBody}
             className="h-full text-sm"
           />
