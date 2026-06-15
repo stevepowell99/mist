@@ -55,6 +55,22 @@ export function activeRangeFor(
   return null;
 }
 
+/** The comment text at a document position: the cursor is inside the comment
+ *  span, or inside its paired highlight. Null if not on a comment. */
+export function commentTextAt(text: string, pos: number): string | null {
+  const spans = criticSpans(text);
+  for (let i = 0; i < spans.length; i++) {
+    const s = spans[i];
+    if (s.type !== "comment") continue;
+    if (pos >= s.from && pos <= s.to) return text.slice(s.contentFrom, s.contentTo);
+    const prev = spans[i - 1];
+    if (prev && prev.type === "highlight" && prev.to === s.from && pos >= prev.from && pos <= prev.to) {
+      return text.slice(s.contentFrom, s.contentTo);
+    }
+  }
+  return null;
+}
+
 export interface CommentChange {
   changes: { from: number; to: number; insert: string }[];
   /** Cursor after applying, placed just inside the comment for a point note. */

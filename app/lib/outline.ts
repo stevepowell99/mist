@@ -1,5 +1,3 @@
-import type { Editor as TiptapEditor } from "@tiptap/core";
-
 /** A heading in the document, for the outline panel. */
 export interface OutlineItem {
   level: number;
@@ -39,22 +37,24 @@ export function toggleHiddenText(text: string): string {
   return `${trimmed} {visibility="hidden"}`;
 }
 
-/** Extract the heading outline from the editor document, with positions so the
- *  panel can scroll to and edit each heading. */
-export function extractOutline(editor: TiptapEditor): OutlineItem[] {
+/** Extract the heading outline from raw markdown text (CodeMirror / Y.Text
+ *  core). `pos` is the document offset of the heading line's start, so the
+ *  panel can scroll to it and replace the line on hide/unhide. */
+export function extractOutlineFromText(text: string): OutlineItem[] {
   const items: OutlineItem[] = [];
-  editor.state.doc.descendants((node, pos) => {
-    if (node.type.name !== "paragraph") return;
-    const text = node.textContent;
-    const m = HEADING_RE.exec(text);
-    if (!m) return;
-    items.push({
-      level: m[1].length,
-      title: headingTitle(m[2]),
-      pos,
-      len: text.length,
-      hidden: isHiddenHeading(text),
-    });
-  });
+  let offset = 0;
+  for (const line of text.split("\n")) {
+    const m = HEADING_RE.exec(line);
+    if (m) {
+      items.push({
+        level: m[1].length,
+        title: headingTitle(m[2]),
+        pos: offset,
+        len: line.length,
+        hidden: isHiddenHeading(line),
+      });
+    }
+    offset += line.length + 1; // account for the split-out newline
+  }
   return items;
 }

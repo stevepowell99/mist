@@ -7,7 +7,7 @@ import type { DocRole, DriveMeta, GitHubMeta } from "~/shared/types";
 import { getCloudflare } from "~/lib/cloudflare.server";
 import { useYjsEditor } from "~/lib/useYjsEditor";
 import { DocumentProvider, useDocument } from "~/lib/DocumentContext";
-import Editor from "~/components/Editor";
+import CodeMirrorEditor from "~/components/CodeMirrorEditor";
 import Preview from "~/components/Preview";
 import ConnectionStatus from "~/components/ConnectionStatus";
 import UserName from "~/components/UserName";
@@ -158,16 +158,12 @@ function DocumentRoot({
 function DocumentLayout({ id }: { id: string }) {
   const {
     yjs,
-    editorInstance,
+    view: editorView,
     showPreview,
-    handleEditorReady,
-    handleCommentClick,
-    commentHighlight,
+    handleViewReady,
+    setEditorText,
     activeCommentRange,
     cleanView,
-    openCommentInput,
-    handleResolveAtCursor,
-    handleDeleteAtCursor,
     mode,
     toggleMode,
     role,
@@ -380,7 +376,7 @@ function DocumentLayout({ id }: { id: string }) {
     if (!splitOpen || slidesMode) return;
     const ed = mainRef.current;
     const pv = previewScrollRef.current;
-    const edRoot = editorInstance?.view.dom as HTMLElement | undefined;
+    const edRoot = editorView?.contentDOM as HTMLElement | undefined;
     if (!ed || !pv || !edRoot) return;
 
     const offsetIn = (el: Element, container: HTMLElement) =>
@@ -436,7 +432,7 @@ function DocumentLayout({ id }: { id: string }) {
       ed.removeEventListener("scroll", onEd);
       pv.removeEventListener("scroll", onPv);
     };
-  }, [splitOpen, slidesMode, editorInstance]);
+  }, [splitOpen, slidesMode, editorView]);
 
   return (
     <div className="flex h-screen flex-col">
@@ -552,7 +548,8 @@ function DocumentLayout({ id }: { id: string }) {
         <div ref={contentRef} className="flex flex-1 overflow-hidden">
           {outlineOpen && (
             <OutlinePanel
-              editor={editorInstance}
+              view={editorView}
+              text={markdown}
               deck={deck}
               canEdit={role === "edit"}
               onClose={() => setOutlineOpen(false)}
@@ -570,21 +567,19 @@ function DocumentLayout({ id }: { id: string }) {
             }`}
             style={splitOpen ? { width: `${editorPct}%` } : undefined}
           >
-            <Editor
-              yjs={yjs}
-              forceSuggest={role === "suggest"}
-              github={github}
-              bibLib={bibLib}
-              hidden={splitOpen ? false : showPreview}
-              onEditorReady={handleEditorReady}
-              onCommentClick={handleCommentClick}
-              commentHighlight={commentHighlight}
-              activeCommentRange={activeCommentRange}
-              cleanView={cleanView}
-              onNewComment={openCommentInput}
-              onResolveAtCursor={handleResolveAtCursor}
-              onDeleteAtCursor={handleDeleteAtCursor}
-            />
+            <div className={`min-h-full ${(splitOpen ? false : showPreview) ? "hidden" : ""}`}>
+              <CodeMirrorEditor
+                doc={yjs.doc}
+                awareness={yjs.awareness}
+                mode={mode}
+                cleanView={cleanView}
+                activeComment={activeCommentRange}
+                bibLibrary={bibLib}
+                onTextChange={setEditorText}
+                onViewReady={handleViewReady}
+                className="min-h-full text-base"
+              />
+            </div>
             {/* Full-screen document preview stays inside main (it scrolls with
                 the editor). A deck preview instead renders in the section below. */}
             {!splitOpen && showPreview && !deck && <Preview />}

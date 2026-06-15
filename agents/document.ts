@@ -377,34 +377,12 @@ class DocumentAgent extends Agent {
             `;
           }
           if (body.content) {
-            // Y.Text core (#13, spike): seed the raw markdown body verbatim into
+            // Y.Text core (#13): seed the raw markdown body verbatim into
             // getText("body"). The CodeMirror editor binds to this, and save is
             // ytext.toString() (an identity), so the round-trip is byte-faithful.
-            // Seeded first because a raw insert cannot throw, unlike the
-            // CriticMarkup parse below. Additive: the old XmlFragment core still
-            // seeds "default", so both editors work during the migration.
             const ytextBody = doc.getText("body");
             if (ytextBody.length === 0) {
               ytextBody.insert(0, body.content);
-            }
-            // Parse CriticMarkup and apply as marks on XmlText
-            const { parseCriticMarkupToContent } = await import("../app/lib/critic-parser");
-            const frag = doc.getXmlFragment("default");
-            if (frag.length === 0) {
-              const lines = body.content.split("\n");
-              for (const line of lines) {
-                const { cleanText, marks } = parseCriticMarkupToContent(line);
-                const para = new Y.XmlElement("paragraph");
-                const ytext = new Y.XmlText(cleanText);
-                // Apply marks via Yjs formatting attributes
-                for (const mark of marks) {
-                  const attrs: Record<string, Record<string, unknown>> = {};
-                  attrs[mark.type] = mark.attrs ?? {};
-                  ytext.format(mark.from, mark.to - mark.from, attrs);
-                }
-                para.insert(0, [ytext]);
-                frag.insert(frag.length, [para]);
-              }
             }
           }
           if (body.threads && Array.isArray(body.threads)) {

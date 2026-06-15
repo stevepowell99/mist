@@ -1,61 +1,36 @@
-import { useCallback, useState, useEffect } from "react";
+import { useCallback, useMemo } from "react";
 import { useDocument } from "~/lib/DocumentContext";
-import {
-  hasSuggestionMarkup,
-  isCursorInSuggestion,
-  processAllRanges,
-  processRangeAtCursor,
-} from "~/lib/suggestion-actions";
+import { hasSuggestions, resolveAtCursor, resolveAll } from "~/lib/cm-suggestion-actions";
 
 export default function SuggestionActions() {
-  const { editorInstance: editor, mode, role } = useDocument();
-  const [hasSuggestions, setHasSuggestions] = useState(false);
-  const [cursorInRange, setCursorInRange] = useState(false);
+  const { view, markdown, mode, role } = useDocument();
+  const suggestionsPresent = useMemo(() => hasSuggestions(markdown), [markdown]);
 
-  useEffect(() => {
-    if (!editor) return;
-    const updateSuggestions = () => setHasSuggestions(hasSuggestionMarkup(editor));
-    const updateCursor = () => setCursorInRange(isCursorInSuggestion(editor));
-    const update = () => {
-      updateSuggestions();
-      updateCursor();
-    };
-    update();
-    editor.on("update", update);
-    editor.on("selectionUpdate", updateCursor);
-    return () => {
-      editor.off("update", update);
-      editor.off("selectionUpdate", updateCursor);
-    };
-  }, [editor]);
+  const atCursor = useCallback(
+    (accept: boolean) => {
+      if (!view) return;
+      const change = resolveAtCursor(view.state.doc.toString(), view.state.selection.main.head, accept);
+      if (change) view.dispatch({ changes: change, userEvent: "input.accept" });
+      view.focus();
+    },
+    [view],
+  );
 
-  const handleAcceptAll = useCallback(() => {
-    if (!editor) return;
-    processAllRanges(editor, true);
-  }, [editor]);
-
-  const handleRejectAll = useCallback(() => {
-    if (!editor) return;
-    processAllRanges(editor, false);
-  }, [editor]);
-
-  const handleAcceptAtCursor = useCallback(() => {
-    if (!editor) return;
-    processRangeAtCursor(editor, true);
-  }, [editor]);
-
-  const handleRejectAtCursor = useCallback(() => {
-    if (!editor) return;
-    processRangeAtCursor(editor, false);
-  }, [editor]);
+  const all = useCallback(
+    (accept: boolean) => {
+      if (!view) return;
+      const changes = resolveAll(view.state.doc.toString(), accept);
+      if (changes.length) view.dispatch({ changes, userEvent: "input.accept" });
+      view.focus();
+    },
+    [view],
+  );
 
   const isSuggest = mode === "suggest";
-
   // Accepting or rejecting applies edits, so only edit-link users see these
   if (role !== "edit") return null;
-
   // In edit mode, hide when no suggestions. In suggest mode, always show.
-  if (!isSuggest && !hasSuggestions) return null;
+  if (!isSuggest && !suggestionsPresent) return null;
 
   const enabledClass =
     "flex-1 cursor-pointer border border-border px-2 py-1.5 text-sm uppercase tracking-wider text-muted transition-colors hover:bg-border";
@@ -65,34 +40,18 @@ export default function SuggestionActions() {
   return (
     <div className="flex flex-col gap-1 p-3">
       <div className="flex gap-1">
-        <button
-          onClick={handleAcceptAtCursor}
-          disabled={!cursorInRange}
-          className={cursorInRange ? enabledClass : disabledClass}
-        >
+        <button onClick={() => atCursor(true)} disabled={!suggestionsPresent} className={suggestionsPresent ? enabledClass : disabledClass}>
           Accept
         </button>
-        <button
-          onClick={handleRejectAtCursor}
-          disabled={!cursorInRange}
-          className={cursorInRange ? enabledClass : disabledClass}
-        >
+        <button onClick={() => atCursor(false)} disabled={!suggestionsPresent} className={suggestionsPresent ? enabledClass : disabledClass}>
           Reject
         </button>
       </div>
       <div className="flex gap-1">
-        <button
-          onClick={handleAcceptAll}
-          disabled={!hasSuggestions}
-          className={hasSuggestions ? enabledClass : disabledClass}
-        >
+        <button onClick={() => all(true)} disabled={!suggestionsPresent} className={suggestionsPresent ? enabledClass : disabledClass}>
           Accept all
         </button>
-        <button
-          onClick={handleRejectAll}
-          disabled={!hasSuggestions}
-          className={hasSuggestions ? enabledClass : disabledClass}
-        >
+        <button onClick={() => all(false)} disabled={!suggestionsPresent} className={suggestionsPresent ? enabledClass : disabledClass}>
           Reject all
         </button>
       </div>

@@ -1,11 +1,9 @@
 import { createContext, useContext, useState, useCallback, useMemo, useEffect, useRef } from "react";
-import { getMarkRange, type Editor as TiptapEditor } from "@tiptap/core";
+import type { EditorView } from "@codemirror/view";
 import type { CapturedSelection, DocMode, DocRole, DriveMeta, GitHubMeta } from "~/shared/types";
 import type { MatchedThread } from "~/lib/comment-threads";
 import type { useYjsEditor } from "~/lib/useYjsEditor";
-import { useThreads } from "~/lib/useThreads";
-import { findCommentTextAtCursor } from "~/lib/comment-threads";
-import { serializeWithCriticMarkup } from "~/lib/critic-serializer";
+import { useTextThreads } from "~/lib/useTextThreads";
 import { serializeThreads } from "~/lib/thread-serialization";
 import { quickHash } from "~/shared/hash";
 import { rawAssetUrl } from "~/lib/github";
@@ -16,7 +14,8 @@ export interface DocumentContextValue {
   docId: string;
   createdAt: number | null;
   yjs: ReturnType<typeof useYjsEditor>;
-  editorInstance: TiptapEditor | null;
+  /** The CodeMirror view backing the editor (Y.Text core). */
+  view: EditorView | null;
   markdown: string;
   /** The document's own YAML frontmatter (theme, css, format...), held in the
    *  doc so it survives import and round-trips on commit-back. "" if none. */
@@ -60,7 +59,8 @@ export interface DocumentContextValue {
   commentHighlight: { from: number; to: number } | null;
   openCommentInput: () => void;
   handleCommentActiveChange: (active: boolean) => void;
-  activateComment: (commentText: string) => void;
+  /** Insert a comment (on the captured selection, or a point at the cursor). */
+  insertComment: (text: string) => void;
   handleResolveAtCursor: () => void;
   handleDeleteAtCursor: () => void;
 
@@ -78,7 +78,8 @@ export interface DocumentContextValue {
   clearDocument: () => void;
 
   // Editor lifecycle
-  handleEditorReady: (editor: TiptapEditor) => void;
+  handleViewReady: (view: EditorView | null) => void;
+  setEditorText: (text: string) => void;
   handleCommentClick: (commentText: string) => void;
 }
 
@@ -120,7 +121,7 @@ export function DocumentProvider({
   const backed = !!github || !!drive;
   const [markdown, setMarkdown] = useState("");
   const [frontmatter, setFrontmatter] = useState("");
-  const [editorInstance, setEditorInstance] = useState<TiptapEditor | null>(null);
+  const [view, setView] = useState<EditorView | null>(null);
 
   // The file's frontmatter is kept verbatim in the Yjs "meta" map (seeded at
   // import), separate from the editor body, so the editor round-trip cannot
@@ -143,14 +144,16 @@ export function DocumentProvider({
 
   const {
     threads,
-    activateComment,
+    createComment,
     addReply,
     resolveThread,
     deleteThread,
+    resolveAtCursor,
+    deleteAtCursor,
     activeThreadId,
     setActiveThreadId,
-    suppressSelectionRef,
-  } = useThreads({ doc: yjs.doc, editor: editorInstance, user: yjs.user });
+    activeRange,
+  } = useTextThreads({ doc: yjs.doc, view, text: markdown, user: yjs.user });
 
   const toggleMode = useCallback(() => {
     if (role !== "edit") return;
@@ -279,29 +282,26 @@ export function DocumentProvider({
     setCleanView((v) => !v);
   }, []);
 
-  const handleEditorReady = useCallback((editor: TiptapEditor) => {
-    setEditorInstance(editor);
-    const update = () => setMarkdown(serializeWithCriticMarkup(editor.state.doc));
-    update();
-    editor.on("update", update);
+  const handleViewReady = useCallback((v: EditorView | null) => {
+    setView(v);
   }, []);
+  // The CodeMirror editor pushes its text on every change; markdown IS the body
+  // (an identity, no serialization), so save and preview read it directly.
+  const setEditorText = useCallback((text: string) => setMarkdown(text), []);
 
   const handleCommentClick = useCallback(
     (commentText: string) => {
       const match = threads.find((t) => t.commentText === commentText);
-      if (match) {
-        suppressSelectionRef.current = true;
-        setActiveThreadId(activeThreadId === match.id ? null : match.id);
-      }
+      if (match) setActiveThreadId(activeThreadId === match.id ? null : match.id);
     },
-    [threads, activeThreadId, setActiveThreadId, suppressSelectionRef],
+    [threads, activeThreadId, setActiveThreadId],
   );
 
   const openCommentInput = useCallback(() => {
-    if (editorInstance) {
-      const { from, to, empty } = editorInstance.state.selection;
-      if (!empty) {
-        const text = editorInstance.state.doc.textBetween(from, to);
+    if (view) {
+      const { from, to } = view.state.selection.main;
+      if (to > from) {
+        const text = view.state.doc.sliceString(from, to);
         setCommentSelection({ from, to, text });
         setCommentHighlight({ from, to });
       } else {
@@ -310,7 +310,18 @@ export function DocumentProvider({
       }
     }
     setCommentActive(true);
-  }, [editorInstance]);
+  }, [view]);
+
+  // Insert a comment on the captured selection (or a point at the cursor).
+  const insertComment = useCallback(
+    (text: string) => {
+      createComment(text, commentSelection ? { from: commentSelection.from, to: commentSelection.to } : undefined);
+      setCommentActive(false);
+      setCommentSelection(null);
+      setCommentHighlight(null);
+    },
+    [createComment, commentSelection],
+  );
 
   const handleCommentActiveChange = useCallback(
     (active: boolean) => {
@@ -326,68 +337,32 @@ export function DocumentProvider({
   );
 
   const clearDocument = useCallback(() => {
-    if (!editorInstance) return;
-    // Wrap in a Yjs transaction so all changes are atomic —
-    // clearing threads before content prevents reconcile from
-    // re-creating thread entries from still-present inline marks.
+    // One Yjs transaction so it is atomic: clear threads before the body so the
+    // thread reconcile does not re-create entries from still-present markup.
     yjs.doc.transact(() => {
       const threadsMap = yjs.doc.getMap<string>("threads");
-      const keys = Array.from(threadsMap.keys());
-      for (const key of keys) threadsMap.delete(key);
+      for (const key of Array.from(threadsMap.keys())) threadsMap.delete(key);
+      const body = yjs.doc.getText("body");
+      if (body.length > 0) body.delete(0, body.length);
       yjs.docState.delete("onboarding");
       yjs.docState.set("mode", "edit");
     });
-    editorInstance.commands.clearContent();
-    // Reset local UI state
     setCommentActive(false);
     setCommentSelection(null);
     setCommentHighlight(null);
-  }, [editorInstance, yjs]);
+  }, [yjs]);
 
-  const handleResolveAtCursor = useCallback(() => {
-    if (!editorInstance) return;
-    const text = findCommentTextAtCursor(editorInstance);
-    if (!text) return;
-    const match = threads.find((t) => t.commentText === text);
-    if (match) resolveThread(match.id);
-  }, [editorInstance, threads, resolveThread]);
+  const handleResolveAtCursor = useCallback(() => resolveAtCursor(), [resolveAtCursor]);
+  const handleDeleteAtCursor = useCallback(() => deleteAtCursor(), [deleteAtCursor]);
 
-  const handleDeleteAtCursor = useCallback(() => {
-    if (!editorInstance) return;
-    const text = findCommentTextAtCursor(editorInstance);
-    if (!text) return;
-    const match = threads.find((t) => t.commentText === text);
-    if (match) deleteThread(match.id);
-  }, [editorInstance, threads, deleteThread]);
-
-  const activeCommentRange = useMemo(() => {
-    if (!activeThreadId) return null;
-    const thread = threads.find((t) => t.id === activeThreadId);
-    if (!thread?.position || !thread.endPosition) return null;
-
-    let from = thread.position;
-    const to = thread.endPosition;
-
-    // Expand range to include preceding highlight if present
-    if (editorInstance && thread.highlightText && from > 0) {
-      const highlightType = editorInstance.schema.marks.criticHighlight;
-      if (highlightType) {
-        const $pos = editorInstance.state.doc.resolve(from - 1);
-        const hlRange = getMarkRange($pos, highlightType);
-        if (hlRange && hlRange.to === from) {
-          from = hlRange.from;
-        }
-      }
-    }
-
-    return { from, to };
-  }, [activeThreadId, threads, editorInstance]);
+  // The range to tint for the active comment, derived from the live text.
+  const activeCommentRange = activeRange;
 
   const value: DocumentContextValue = {
     docId,
     createdAt,
     yjs,
-    editorInstance,
+    view,
     markdown,
     frontmatter,
     role,
@@ -413,7 +388,7 @@ export function DocumentProvider({
     commentHighlight,
     openCommentInput,
     handleCommentActiveChange,
-    activateComment,
+    insertComment,
     handleResolveAtCursor,
     handleDeleteAtCursor,
     threads,
@@ -425,7 +400,8 @@ export function DocumentProvider({
     deleteThread,
     isOnboarding: yjs.isOnboarding,
     clearDocument,
-    handleEditorReady,
+    handleViewReady,
+    setEditorText,
     handleCommentClick,
   };
 

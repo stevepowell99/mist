@@ -1,67 +1,49 @@
-import { useCallback, useEffect, useState } from "react";
-import type { Editor as TiptapEditor } from "@tiptap/core";
-import { extractOutline, toggleHiddenText, type OutlineItem } from "~/lib/outline";
+import { useCallback, useMemo, useState } from "react";
+import type { EditorView } from "@codemirror/view";
+import { extractOutlineFromText, toggleHiddenText, type OutlineItem } from "~/lib/outline";
 
 /**
- * Header-only outline for the open document. For a deck it lists the slide
- * titles (level 1 and 2); for a document it lists headings down to a chosen
- * level. Clicking an item scrolls the editor to that heading. For a deck each
- * item also has a hide/unhide toggle that marks the slide `visibility="hidden"`,
- * so it drops out of the preview without being deleted.
+ * Header-only outline for the open document (CodeMirror / Y.Text core). For a
+ * deck it lists the slide titles (level 1 and 2); for a document it lists
+ * headings down to a chosen level. Clicking an item scrolls the editor to that
+ * heading. For a deck each item also has a hide/unhide toggle that marks the
+ * slide `visibility="hidden"`, so it drops out of the preview without deletion.
  */
 export default function OutlinePanel({
-  editor,
+  view,
+  text,
   deck,
   canEdit,
   onClose,
 }: {
-  editor: TiptapEditor | null;
+  view: EditorView | null;
+  text: string;
   deck: boolean;
   canEdit: boolean;
   onClose: () => void;
 }) {
-  const [items, setItems] = useState<OutlineItem[]>([]);
   const [maxLevel, setMaxLevel] = useState(3);
-
-  useEffect(() => {
-    if (!editor) return;
-    const update = () => setItems(extractOutline(editor));
-    update();
-    editor.on("update", update);
-    return () => {
-      editor.off("update", update);
-    };
-  }, [editor]);
+  const items = useMemo(() => extractOutlineFromText(text), [text]);
 
   const jump = useCallback(
     (pos: number) => {
-      if (!editor) return;
-      const dom = editor.view.nodeDOM(pos) as HTMLElement | null;
-      dom?.scrollIntoView({ behavior: "smooth", block: "start" });
-      editor.chain().setTextSelection(pos + 1).run();
+      if (!view) return;
+      view.dispatch({ selection: { anchor: pos }, scrollIntoView: true });
+      view.focus();
     },
-    [editor],
+    [view],
   );
 
   const toggleHidden = useCallback(
     (item: OutlineItem) => {
-      if (!editor || !canEdit) return;
-      const node = editor.state.doc.nodeAt(item.pos);
-      if (!node) return;
-      const text = node.textContent;
-      const next = toggleHiddenText(text);
-      const from = item.pos + 1;
-      const to = from + text.length;
-      editor
-        .chain()
-        .focus()
-        .command(({ tr }) => {
-          tr.insertText(next, from, to);
-          return true;
-        })
-        .run();
+      if (!view || !canEdit) return;
+      const line = view.state.doc.sliceString(item.pos, item.pos + item.len);
+      view.dispatch({
+        changes: { from: item.pos, to: item.pos + item.len, insert: toggleHiddenText(line) },
+        userEvent: "input.hide",
+      });
     },
-    [editor, canEdit],
+    [view, canEdit],
   );
 
   const shown = deck ? items.filter((i) => i.level <= 2) : items.filter((i) => i.level <= maxLevel);

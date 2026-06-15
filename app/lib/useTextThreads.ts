@@ -8,6 +8,7 @@ import {
   insertCommentChange,
   removeCommentChange,
   activeRangeFor,
+  commentTextAt,
 } from "~/lib/cm-comments";
 
 function generateId(): string {
@@ -119,9 +120,9 @@ export function useTextThreads({
   }, [reconcile]);
 
   const createComment = useCallback(
-    (note: string) => {
+    (note: string, range?: { from: number; to: number }) => {
       if (!view || !note.trim()) return;
-      const { from, to } = view.state.selection.main;
+      const { from, to } = range ?? view.state.selection.main;
       const { changes, cursor } = insertCommentChange(view.state.doc.toString(), from, to, note);
       pendingActivateRef.current = note;
       view.dispatch({
@@ -182,6 +183,23 @@ export function useTextThreads({
     [removeInline],
   );
 
+  const threadAtCursor = useCallback((): MatchedThread | null => {
+    if (!view) return null;
+    const ct = commentTextAt(view.state.doc.toString(), view.state.selection.main.head);
+    if (!ct) return null;
+    return threads.find((t) => t.commentText === ct) ?? null;
+  }, [view, threads]);
+
+  const resolveAtCursor = useCallback(() => {
+    const t = threadAtCursor();
+    if (t) resolveThread(t.id);
+  }, [threadAtCursor, resolveThread]);
+
+  const deleteAtCursor = useCallback(() => {
+    const t = threadAtCursor();
+    if (t) deleteThread(t.id);
+  }, [threadAtCursor, deleteThread]);
+
   const jumpToThread = useCallback(
     (thread: MatchedThread) => {
       setActiveThreadId(thread.id);
@@ -209,6 +227,8 @@ export function useTextThreads({
     addReply,
     resolveThread,
     deleteThread,
+    resolveAtCursor,
+    deleteAtCursor,
     jumpToThread,
   };
 }
