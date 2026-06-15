@@ -161,7 +161,12 @@ export async function driveResolvePath(
     }
     const entries = await driveListFolder(token, current);
     const match = entries.find((e) => e.name === seg && (last ? !e.isFolder : e.isFolder));
-    if (!match) return null;
+    if (!match) {
+      // Report which segment failed and what the folder did contain, so a 404
+      // is diagnosable (e.g. the `img` subfolder is missing or named differently).
+      const near = entries.filter((e) => (last ? !e.isFolder : e.isFolder)).map((e) => e.name).slice(0, 12);
+      throw new Error(`path segment "${seg}" not found in folder ${current}; available: ${near.join(", ") || "(none)"}`);
+    }
     current = match.id;
   }
   return current;

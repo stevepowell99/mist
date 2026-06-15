@@ -183,9 +183,6 @@ function buildSection(slideMd: string, ctx: AssetCtx): string {
 
 const PREVIEW_CSS = `
 html,body{margin:0;height:100%}
-/* Hidden until reveal has initialised and jumped to the cursor's slide, so a
-   rebuild does not flash slide 1 before snapping back. */
-.reveal{visibility:hidden}
 .columns{display:flex;gap:1em;align-items:flex-start}
 .column{flex:1;min-width:0}
 .columns .columns{width:100%}
@@ -324,12 +321,8 @@ if (window.RevealMenu) revealPlugins.push(RevealMenu);
 // moves and after each rebuild. Buffer the target so a message that arrives
 // before reveal is ready (e.g. right after the iframe reloads) still lands,
 // which is what keeps an edit from snapping the deck back to slide 1.
-var pendingGoto = null, revealReady = false, shown = false;
-function show(){ if (!shown) { shown = true; var r = document.querySelector('.reveal'); if (r) r.style.visibility = 'visible'; } }
-function applyGoto(){ if (revealReady && pendingGoto != null) { Reveal.slide(pendingGoto); show(); } }
-// Guaranteed reveal: scheduled before init so the deck is never left hidden,
-// even if reveal initialisation throws (a white-screen safety net).
-setTimeout(show, 1200);
+var pendingGoto = null, revealReady = false;
+function applyGoto(){ if (revealReady && pendingGoto != null) Reveal.slide(pendingGoto); }
 window.addEventListener("message", function(e){
   if (e.data && e.data.type === "mist-goto" && typeof e.data.h === "number") {
     pendingGoto = e.data.h; applyGoto();
