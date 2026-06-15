@@ -132,7 +132,15 @@ Deleted: `Editor`, `BubbleToolbar`, `CitationPopup`, `critic-marks`, `critic-ser
 
 Verified on remote `/docs`: editor loads, CriticMarkup renders, suggest typing wraps `{++..++}`, comment create yields `{==sel==}{>>note<<}` and shows in the aside, Accept all clears suggestions and keeps comments, navbar pills / preview / slides all work, no console errors. 247 unit tests pass; typecheck and production build clean.
 
-Remaining: step 6 (live save) only.
+## Step 6: live save (DONE, 15 June 2026)
+
+With save now a faithful identity, auto-save is safe. The client flushes on a 2.5s edit-idle debounce (`AUTOSAVE_DEBOUNCE_MS` in `DocumentContext`, reusing the `commitNow` socket path). The relay writes conditionally on the file's `headRevisionId` (captured at import in `drive.import.ts`, stored as `driveVersion`, updated after each successful write), so an edit made in Obsidian/Drive while a session is open is never clobbered: on a version mismatch `DriveBackend.write` throws, the relay broadcasts `{type:"conflict"}`, the client sets a `conflict` flag that gates (pauses) auto-save, and `SaveStatus` shows an honest amber "Conflict" badge. Otherwise `SaveStatus` shows "Saving…/Saved". The `beforeunload` guard covers the in-flight window.
+
+This largely resolves #33: edits reach the Drive file within seconds with a visible saved state, instead of looking live but unsaved. Conflict **reconciliation** (auto-merge of mist's edits with the upstream change) is the cloud bridge (#9) and is deliberately not built; the no-clobber floor is in place.
+
+**The #13 migration is complete (steps 1-6).** Remaining related work is #9 (diff-merge on conflict / external-change sync) and #12 (idle auto-close), both separate tasks.
+
+Verification note: end-to-end auto-save to an actual Drive file needs Steve's Drive auth (the `/new` demo docs are not backend-bound, so their save is a no-op and `SaveStatus` is hidden). The editor, the no-op-on-unbacked path, and the absence of console errors are verified on remote.
 
 ### Original step-4 approach (superseded by the clean replacement above)
 
