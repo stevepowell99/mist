@@ -124,9 +124,17 @@ This clears both genuinely hard parts (suggest mode, comment anchoring).
 
 **Editor feature parity reached.** The CM6 / Y.Text editor now matches the TipTap editor's editor-integral features: markdown-source editing with control-code decorations, suggest mode, comments (create/reply/resolve/delete/jump/tint), clean view, Mod-B/I and wrap-on-selection, the `@`-citation picker, collaborative cursors and byte-faithful save. So **step 4 is now a pure wiring job**, not new behaviour. (Deferred refinement: a citation inserted in suggest mode currently goes in plain rather than wrapped as `{++[@key]++}`; minor, note it.)
 
-## Step 4: wiring CM6 into the real app (plan, awaiting Steve)
+## Steps 4-5: CM6 is the only editor (DONE, 15 June 2026)
 
-The CM6 editor is proven in isolation on `/spike`. Step 4 puts it into the real `/docs/:id` without regressing the live TipTap path. The blast radius is `docs.$id.tsx` and `DocumentContext.tsx` (the most important files), so do it with Steve, opt-in first:
+Steve chose a clean replacement over an opt-in flag ("no-one using it yet"), so steps 4 and 5 landed together: the live `/docs` page renders the CodeMirror 6 / Y.Text editor and the entire TipTap stack is deleted. `DocumentContext` keeps its value shape (so `ThreadList`, `SaveStatus`, `CleanViewToggle`, `MobilePanel`, `OnboardingBanner` are untouched) but its internals are CM6: `markdown` is `ytext.toString()`, threads come from `useTextThreads`, comments and suggestions are text edits. `SuggestionActions`, `CommentInput` and `OutlinePanel` were reworked onto the view; `BubbleToolbar` was dropped (its actions are the aside's Accept/Reject and the "New comment" button). New pure logic: `cm-suggestion-actions.ts` (accept/reject at cursor and all) and `extractOutlineFromText`, both unit-tested.
+
+Deleted: `Editor`, `BubbleToolbar`, `CitationPopup`, `critic-marks`, `critic-serializer`, `critic-parser`, `critic-constants`, `critic-markup`, `suggest-mode`, `markdown-shortcuts`, `markdown-decorations`, `citation-suggest`, `useThreads`, `suggestion-actions`, the `/spike` harness, and all their tests; the `@tiptap/*`, `y-tiptap` and `critic-markup` deps; the relay's XmlFragment seed. `comment-threads` keeps only its pure matching helpers. No `@tiptap` imports remain.
+
+Verified on remote `/docs`: editor loads, CriticMarkup renders, suggest typing wraps `{++..++}`, comment create yields `{==sel==}{>>note<<}` and shows in the aside, Accept all clears suggestions and keeps comments, navbar pills / preview / slides all work, no console errors. 247 unit tests pass; typecheck and production build clean.
+
+Remaining: step 6 (live save) only.
+
+### Original step-4 approach (superseded by the clean replacement above)
 
 1. **Opt-in flag.** Gate on `?core=ytext` (default stays TipTap). Render either `<Editor>` (TipTap) or a new `<CodeMirrorDocEditor>` wrapper in the editor pane; share the navbar, preview, slides, save bar and comment panel.
 2. **Decouple the shared parts from the TipTap instance.** Today `DocumentContext` holds a `TiptapEditor`, derives `markdown` via `serializeWithCriticMarkup(editor.state.doc)`, and runs `useThreads(editor)`. For the CM6 path: `markdown` is just `ytext.toString()`; threads come from `useTextThreads`; the outline reads the text (port `extractOutline` to a text scan). Introduce a small editor-agnostic surface (current text, selection, a `jumpTo`, the thread API) so the page binds to that, not to TipTap directly.

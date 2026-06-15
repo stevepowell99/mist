@@ -39,10 +39,9 @@ Import: paste a `github.com/<owner>/<repo>/blob/<branch>/<path>.md` URL on the h
 
 ### Local dev gotchas
 
-- `npm run dev` serves at `http://localhost:5173`. On a cold Vite cache, the first click on New document or drag-and-drop 504s ("Outdated Optimize Dep") because the editor route lazy-loads TipTap/Yjs and Vite re-optimises mid-navigation. Hard-reload the browser or restart the dev server; deployed builds are unaffected.
+- `npm run dev` serves at `http://localhost:5173`. On a cold Vite cache, the first open of a fresh room can fail to sync ("Outdated Optimize Dep" / a dynamic-import error) because the editor route lazy-loads CodeMirror/Yjs and Vite re-optimises mid-navigation. Hard-reload or open the doc a second time; deployed builds are unaffected.
 - Scratch work goes in `_tmp/` (gitignored locally); Playwright here is the Python package, not the npm one.
-- Keep every `@tiptap/*` package on the same version. `@tiptap/core` and `@tiptap/pm` are pinned to an exact version (not `^`) because installing a newer extension (e.g. `@tiptap/suggestion`) otherwise pulls core and pm up while the other extensions stay behind, putting two copies of ProseMirror in one editor and freezing the browser on edit. After adding any TipTap package, check `node_modules/@tiptap/*/package.json` all report one version.
-- Editor highlighting is incremental: `markdown-decorations.ts` holds the DecorationSet in plugin state, maps it per keystroke, and recomputes the whole document only on a 120ms debounce. Do not move the full `computeMarkdownDecorations` back into the `decorations` prop; that rebuilt everything on every keystroke and made long documents unusable.
+- **The editor is the CodeMirror 6 / Y.Text core (#13).** The CRDT is a single `Y.Text` of raw markdown (`doc.getText("body")`), bound to CodeMirror via `y-codemirror.next`; save is `ytext.toString()`, an identity. CriticMarkup is literal delimiter text styled by decorations (`cm-criticmarkup.ts`), suggest mode rewrites edits into CriticMarkup (`cm-suggest.ts`), comments are `{>>..<<}`/`{==..==}` text matched to the Yjs `threads` map by content (`cm-comments.ts`, `useTextThreads.ts`), and the `@`-picker is a CM autocomplete (`cm-citations.ts`). The old TipTap/ProseMirror stack was deleted; do not reintroduce marks or a node model. Design notes in `plans/ytext-core.md`.
 
 ## Start of Session
 
