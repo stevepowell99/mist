@@ -57,6 +57,39 @@ function splitSlides(body: string): string[] {
   return slides.length ? slides : [body];
 }
 
+/** The heading level of a slide (1 for `#`, 2 for `##`, 0 for none), skipping
+ *  any leading blank lines left by the frontmatter split. */
+function headingLevel(slideMd: string): number {
+  const lines = slideMd.split("\n");
+  let h = 0;
+  while (h < lines.length && lines[h].trim() === "") h++;
+  const m = (lines[h] ?? "").match(/^(#{1,6})\s/);
+  return m ? m[1].length : 0;
+}
+
+/**
+ * Group the flat slide list into reveal vertical stacks, Quarto-style
+ * (slide-level 2): a level-1 `#` starts a section that following deeper slides
+ * nest under, so reveal renders a 2D grid (sections across, sub-slides down).
+ * Slides before the first `#` stay top-level (horizontal). Order is preserved,
+ * so a flat index still maps straight onto reveal's slide order.
+ */
+function groupSlides(flat: string[]): string[][] {
+  const groups: string[][] = [];
+  let stack: string[] | null = null;
+  for (const s of flat) {
+    if (headingLevel(s) === 1) {
+      stack = [s];
+      groups.push(stack);
+    } else if (stack) {
+      stack.push(s);
+    } else {
+      groups.push([s]);
+    }
+  }
+  return groups;
+}
+
 function classesFrom(attr: string): string[] {
   // Drop quoted values first so a path like "../img/a.png" inside
   // background-image="..." does not yield a bogus ".png" class.
@@ -212,6 +245,17 @@ function extractTheme(frontmatter: string): string {
   return REVEAL_THEMES.has(t) ? t : "white";
 }
 
+/** Map the deck's `navigation-mode:` to a reveal navigationMode. Quarto's
+ *  `vertical` is reveal's `default` (up/down walks the stack); `linear` and
+ *  `grid` pass through. Default `linear` to match the repo's _quarto.yml. */
+function extractNavMode(frontmatter: string): "linear" | "grid" | "default" {
+  const m = frontmatter.match(/^\s*navigation-mode:\s*(\w+)/m);
+  const v = m ? m[1].toLowerCase() : "linear";
+  if (v === "grid") return "grid";
+  if (v === "vertical" || v === "default") return "default";
+  return "linear";
+}
+
 /** Pull the deck's `css:` entries from the frontmatter (inline or list form). */
 function extractCssPaths(frontmatter: string): string[] {
   const lines = frontmatter.split("\n");
@@ -287,11 +331,19 @@ export function buildSlidesHtml(md: string, opts: BuildSlidesOptions): string {
   const { body: bodyNoStyles, styles: inlineStyles } = extractStyleBlocks(rawBody);
   let body = stripCritic(bodyNoStyles);
   body = rewriteImages(body, ctx); // relative images -> backend URLs (GitHub raw / Drive proxy)
-  const sections = splitSlides(body)
-    .map((s) => buildSection(s, ctx))
+  // Nest deeper slides under each `#` section so reveal draws a 2D grid; a
+  // single-slide group stays a flat horizontal section, a multi-slide group is
+  // wrapped in an outer <section> (reveal's vertical stack).
+  const sections = groupSlides(splitSlides(body))
+    .map((group) =>
+      group.length === 1
+        ? buildSection(group[0], ctx)
+        : `<section>\n${group.map((s) => buildSection(s, ctx)).join("\n")}\n</section>`,
+    )
     .join("\n");
 
   const theme = extractTheme(frontmatter);
+  const navigationMode = extractNavMode(frontmatter);
   const deckCss = extractCssPaths(frontmatter)
     .map((p) => cssUrl(p, github, drive, origin, driveToken))
     .filter((u): u is string => u !== null)
@@ -327,7 +379,17 @@ if (window.RevealMenu) revealPlugins.push(RevealMenu);
 // before reveal is ready (e.g. right after the iframe reloads) still lands,
 // which is what keeps an edit from snapping the deck back to slide 1.
 var pendingGoto = null, revealReady = false;
-function applyGoto(){ if (revealReady && pendingGoto != null) Reveal.slide(pendingGoto); }
+// The editor sends a flat slide index (its split is flat). With 2D nesting a
+// flat index is not reveal's horizontal index, so map it through the slide
+// element to reveal's (h,v).
+function gotoFlat(n){
+  var slides = Reveal.getSlides();
+  if (!slides.length) return;
+  if (n < 0) n = 0; else if (n >= slides.length) n = slides.length - 1;
+  var idx = Reveal.getIndices(slides[n]);
+  Reveal.slide(idx.h, idx.v);
+}
+function applyGoto(){ if (revealReady && pendingGoto != null) gotoFlat(pendingGoto); }
 window.addEventListener("message", function(e){
   if (e.data && e.data.type === "mist-goto" && typeof e.data.h === "number") {
     pendingGoto = e.data.h; applyGoto();
@@ -337,14 +399,15 @@ window.addEventListener("message", function(e){
 // every slide's content block is vertically centred, which drags a
 // bottom-pinned .shot-cap caption up to the middle; off, slides top-align and
 // absolute positioning lands where the deck's CSS intends.
-Reveal.initialize({plugins:revealPlugins,hash:false,controls:true,progress:true,keyboard:true,overview:true,center:false,scrollActivationWidth:null,width:1280,height:720,menu:{openButton:true,openSlideNumber:false,markers:true}}).then(async function(){
+Reveal.initialize({plugins:revealPlugins,hash:false,controls:true,progress:true,keyboard:true,overview:true,center:false,navigationMode:'${navigationMode}',scrollActivationWidth:null,width:1280,height:720,menu:{openButton:true,openSlideNumber:false,markers:true}}).then(async function(){
   // Rebuild slide backgrounds: the markdown plugin sets data-background-image
   // (from the <!-- .slide: --> comment) during init, after reveal first built
   // its background layer, so without a sync the backgrounds come up blank.
   if (Reveal.sync) Reveal.sync();
   revealReady = true; applyGoto();
-  // Report the current slide to the parent so it can put it in the URL.
-  Reveal.on('slidechanged', function(){ try { parent.postMessage({ type: 'mist-slide', h: Reveal.getIndices().h }, '*'); } catch (e) {} });
+  // Report the current slide to the parent as a flat index (matching the
+  // editor's flat split) so the URL ?slide= round-trips through 2D nesting.
+  Reveal.on('slidechanged', function(){ try { parent.postMessage({ type: 'mist-slide', h: Reveal.getSlides().indexOf(Reveal.getCurrentSlide()) }, '*'); } catch (e) {} });
   // Re-run layout across a few frames. In a sandboxed iframe reveal can init
   // before the pane has its real size (the split is still settling), leaving
   // the deck unscaled, a single tall column. These retries catch that without
