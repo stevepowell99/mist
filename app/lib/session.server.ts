@@ -84,6 +84,47 @@ export async function verifySession(
   }
 }
 
+/**
+ * Short-lived asset token for the sandboxed slides iframe, which cannot send the
+ * session cookie cross-origin. The doc page (which has the session) mints one
+ * and the iframe passes it on /drive/asset requests as `?token=`. It carries no
+ * email, only an expiry; it is the session-derived replacement for the shared
+ * passphrase on asset fetches.
+ */
+const ASSET_TTL_SECONDS = 60 * 60 * 6; // 6 hours
+
+export async function signAssetToken(
+  secret: string,
+  ttlSeconds: number = ASSET_TTL_SECONDS,
+  now: number = Date.now(),
+): Promise<string> {
+  const payload = b64urlEncode(
+    new TextEncoder().encode(JSON.stringify({ a: 1, exp: Math.floor(now / 1000) + ttlSeconds })),
+  );
+  const sig = b64urlEncode(await hmac(secret, payload));
+  return `${payload}.${sig}`;
+}
+
+export async function verifyAssetToken(
+  value: string | null | undefined,
+  secret: string,
+  now: number = Date.now(),
+): Promise<boolean> {
+  if (!value || !secret) return false;
+  const dot = value.indexOf(".");
+  if (dot < 1) return false;
+  const payload = value.slice(0, dot);
+  const sig = value.slice(dot + 1);
+  const expected = b64urlEncode(await hmac(secret, payload));
+  if (!timingSafeEqual(sig, expected)) return false;
+  try {
+    const claims = JSON.parse(new TextDecoder().decode(b64urlDecode(payload))) as { a?: number; exp?: number };
+    return claims.a === 1 && typeof claims.exp === "number" && claims.exp >= Math.floor(now / 1000);
+  } catch {
+    return false;
+  }
+}
+
 /** Read the raw session cookie value from a request, or null. */
 export function readSessionCookie(request: Request): string | null {
   const header = request.headers.get("Cookie");

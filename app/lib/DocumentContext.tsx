@@ -43,6 +43,8 @@ export interface DocumentContextValue {
   conflict: boolean;
   /** Parsed BibTeX library for citation rendering, if found in the repo */
   bibLib: BibLibrary | null;
+  /** Short-lived token for fetching private-Drive assets (slides + preview). */
+  assetToken: string | null;
 
   // Mode
   mode: DocMode;
@@ -112,6 +114,7 @@ export function DocumentProvider({
   github = null,
   drive = null,
   initialPreview = false,
+  assetToken = null,
   children,
 }: {
   docId: string;
@@ -123,6 +126,7 @@ export function DocumentProvider({
   github?: GitHubMeta | null;
   drive?: DriveMeta | null;
   initialPreview?: boolean;
+  assetToken?: string | null;
   children: React.ReactNode;
 }) {
   // Either backend means edits are relayed for write-back to the source file.
@@ -406,6 +410,7 @@ export function DocumentProvider({
     unsaved,
     conflict,
     bibLib,
+    assetToken,
     // Suggest-role users are locked to suggest regardless of the shared mode
     mode: role === "suggest" ? "suggest" : yjs.mode,
     toggleMode,

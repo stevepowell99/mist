@@ -38,7 +38,7 @@ const PUBLISHED_SITES: Record<string, string> = {
 };
 
 export default function Preview() {
-  const { markdown, github, drive, bibLib } = useDocument();
+  const { markdown, github, drive, bibLib, assetToken } = useDocument();
   const containerRef = useRef<HTMLDivElement>(null);
 
   // DOMPurify needs a DOM, which the Cloudflare Worker has none of, so the
@@ -53,7 +53,7 @@ export default function Preview() {
       github,
       drive,
       origin: typeof window !== "undefined" ? window.location.origin : "",
-      driveToken: drive ? getDriveKey() ?? "" : "",
+      driveToken: drive ? assetToken ?? getDriveKey() ?? "" : "",
     };
     // The editor body now carries the document's YAML frontmatter (so it is
     // visible and editable), but it is metadata, so strip it from the preview.
@@ -70,7 +70,7 @@ export default function Preview() {
     const withCritic = renderCriticMarkup(body);
     const raw = (marked.parse(withCritic, { async: false }) as string) + references;
     return DOMPurify.sanitize(raw);
-  }, [mounted, markdown, github, drive, bibLib]);
+  }, [mounted, markdown, github, drive, bibLib, assetToken]);
 
   // Render any mermaid code blocks into diagrams once the HTML is in the DOM.
   useEffect(() => {

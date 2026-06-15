@@ -5,6 +5,7 @@ import { getAgentByName } from "agents";
 import { isValidDocumentId } from "~/shared/constants";
 import type { DocRole, DriveMeta, GitHubMeta } from "~/shared/types";
 import { getCloudflare } from "~/lib/cloudflare.server";
+import { mintAssetToken, type DriveSessionEnv } from "~/lib/drive-access.server";
 import { useYjsEditor } from "~/lib/useYjsEditor";
 import { DocumentProvider, useDocument } from "~/lib/DocumentContext";
 import CodeMirrorEditor from "~/components/CodeMirrorEditor";
@@ -69,7 +70,11 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
     throw data(null, { status: 404 });
   }
 
-  return { id, createdAt, role, suggestKey: suggestKey ?? null, docKey, github, drive, initialPreview };
+  // Short-lived token so the sandboxed slides iframe (and document preview) can
+  // fetch private-Drive assets without the session cookie. Null if unauthorised.
+  const assetToken = await mintAssetToken(request, env as unknown as DriveSessionEnv);
+
+  return { id, createdAt, role, suggestKey: suggestKey ?? null, docKey, github, drive, initialPreview, assetToken };
 }
 
 // Navbar toggle icons. Stroke-only 18px glyphs so they sit quietly in the bar.
@@ -134,6 +139,7 @@ function DocumentRoot({
   github,
   drive,
   initialPreview,
+  assetToken,
 }: Route.ComponentProps["loaderData"]) {
   const yjs = useYjsEditor(id, docKey);
 
@@ -148,6 +154,7 @@ function DocumentRoot({
       github={github}
       drive={drive}
       initialPreview={initialPreview}
+      assetToken={assetToken}
     >
       <DocumentLayout id={id} />
     </DocumentProvider>

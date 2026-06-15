@@ -8,7 +8,7 @@
  * link). Drive sharing stays the single source of truth; mist keeps no separate
  * allowlist.
  */
-import { verifySession, readSessionCookie } from "./session.server";
+import { verifySession, readSessionCookie, signAssetToken, verifyAssetToken } from "./session.server";
 import {
   driveListPermissions,
   emailHasAccess,
@@ -42,7 +42,20 @@ export async function driveAccess(request: Request, env: DriveSessionEnv): Promi
   const email = await getRequestEmail(request, env);
   if (email) return { ok: true, email };
   if (driveKeyOk(request, env)) return { ok: true, email: null };
+  // A signed asset token (minted by the doc page for the sandboxed slides
+  // iframe, which cannot send the session cookie). Coarse access, like the
+  // passphrase: email null, so per-file ACL is not enforced for assets.
+  const token = new URL(request.url).searchParams.get("token");
+  if (token && (await verifyAssetToken(token, env.SESSION_SECRET ?? ""))) return { ok: true, email: null };
   return { ok: false, email: null };
+}
+
+/** Mint a short-lived asset token if the request is authorised; else null. */
+export async function mintAssetToken(request: Request, env: DriveSessionEnv): Promise<string | null> {
+  if (!env.SESSION_SECRET) return null;
+  const access = await driveAccess(request, env);
+  if (!access.ok) return null;
+  return signAssetToken(env.SESSION_SECRET);
 }
 
 /**

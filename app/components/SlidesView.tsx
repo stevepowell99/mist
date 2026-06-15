@@ -14,9 +14,11 @@ export { isSlideDeck } from "~/lib/slides-build";
  * sandboxed iframe. The deck's theme/css come from the document frontmatter.
  */
 export default function SlidesView() {
-  const { markdown, github, drive, frontmatter, cursorOffset } = useDocument();
+  const { markdown, github, drive, frontmatter, cursorOffset, assetToken } = useDocument();
   const origin = typeof window !== "undefined" ? window.location.origin : "";
-  const driveToken = drive ? getDriveKey() ?? "" : "";
+  // Prefer the session-minted asset token (works for Google sign-in); fall back
+  // to the shared passphrase during the transition.
+  const driveToken = drive ? assetToken ?? getDriveKey() ?? "" : "";
   // Rebuilding the iframe reloads reveal, so debounce: refresh ~0.8s after edits
   // settle rather than on every keystroke.
   const [debounced, setDebounced] = useState(markdown);
