@@ -1,5 +1,24 @@
 # Plan: the plain Y.Text document core (#13) and safe live save
 
+## SESSION OF 15 JUNE 2026 (afternoon). READ FIRST.
+
+**The #13 migration is COMPLETE and deployed.** CM6 + Y.Text is the only editor; the TipTap stack is deleted; live save to Drive works (debounced, etag-conditional, conflict-guarded); frontmatter lives in the editor (#29); plus multi-cursor/search/folding, deck/doc badge, cursor-driven slide sync, slide-in-URL, fenced-div shading, share-menu PDF, clickable search breadcrumbs. Latest deploy: `eb95826c` (mist.broad-smoke-cc64.workers.dev). All committed/pushed.
+
+**Two OPEN issues at compaction (both about the slides PREVIEW, not the editor):**
+
+1. **~50% of loads show a completely BLANK slide preview (intermittent).** Prime suspect was the visibility-masking added to hide the rebuild flash (`.reveal{visibility:hidden}` plus a `show()` gate). **Just removed it** (commit `dd386d2`) so the deck is always visible. NEEDS Steve to confirm whether blanks stop. If blanks persist after `dd386d2`, investigate: (a) the iframe/reveal init race, (b) the Yjs doc-body sync not arriving (cold room) so `markdown` is empty and the deck is empty, (c) the `srcDoc` rebuild on the debounced markdown reloading the iframe at a bad moment. The editor itself is fine; only the deck iframe blanks.
+
+2. **Slide BACKGROUND images 404 (CSS now loads, images do not).** The deck's `../_shared/styles.css` resolves and the deck is styled (2D layout back), but `../_shared/img/*.png` background images 404 via `/drive/asset`. Token is accepted (404 not 401), so it is path resolution: `../_shared` resolves (styles.css works) but the extra `img/` subfolder level does not, on DRIVE (the files DO exist in the local sync). Just deployed a diagnostic: `driveResolvePath` now throws with the failed segment plus the folder's actual contents, surfaced in the `/drive/asset` 5xx body. **Next step: Steve opens the deck, shares the `/drive/asset` error body for a failing background; it will name the missing segment (likely `img`), telling us if Drive's `_shared` lacks an `img` subfolder or it is named differently.** Decks in question: `9oj3znu5`, `1CfFelkfexIrAPiK` (the coffee-break deck, `cp-coffee-break-2026/slides.qmd`).
+
+**Asset reliability fix already in (`efe06b0`):** the relay was doing a fresh Google OAuth refresh per `/drive/asset` call; a deck fires a dozen at once and Google rate-limited them, so CSS/images came and went. Now the access token is cached (~1h) and concurrent refreshes coalesced. This fixed the CSS "come and go"; the remaining image 404 is the path issue above, not rate-limiting.
+
+**Slide background mechanism (so it is not re-broken):** reveal `data-markdown` slides take their background via a leading `<!-- .slide: ... -->` comment (NOT a section attribute), the path proxied through `/drive/asset`; and `Reveal.sync()` runs after init because the markdown plugin sets the background attribute after reveal first built its background layer (without sync, backgrounds are blank). `slides.qmd` title slides use `# {.title-page background-color="#1F1F36"}` (dark bg via the comment).
+
+**Other parked todos:** #34 clipboard image paste (needs a Drive upload endpoint), #35 YAML header UX (frontmatter is inline plus foldable now; open whether to do more). #9 external-change sync still pending. The `/spike` route is deleted; verify against the real `/docs` page.
+
+---
+
+
 Status: design, 15 June 2026. Implements build-order step 1 of [`live-collab.md`](live-collab.md) in full. No code until this is agreed. This is the foundational fidelity fix: it is the prerequisite for safe live save (#33), the cloud-bridge diff-merge (#9), showing YAML in the editor (#29), and line-accurate scroll sync.
 
 ## Why this, why now
