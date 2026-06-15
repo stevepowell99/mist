@@ -28,6 +28,7 @@ import { wrapKeymap, wrapOnSelection } from "~/lib/cm-shortcuts";
 import { activeCommentField, setActiveComment } from "~/lib/cm-active-comment";
 import { citationSource } from "~/lib/cm-citations";
 import { classSource } from "~/lib/cm-classes";
+import { modAltChord } from "~/lib/chord";
 import type { BibLibrary } from "~/lib/citations";
 import type { DocMode } from "~/shared/types";
 
@@ -94,6 +95,7 @@ export default function CodeMirrorEditor({
   onCursorChange,
   onViewReady,
   onImagePaste,
+  onShortcut,
   className,
 }: {
   doc: Y.Doc;
@@ -110,6 +112,9 @@ export default function CodeMirrorEditor({
   /** Upload a pasted image and return the markdown path to reference, or null
    *  to let the paste fall through (e.g. non-Drive docs). */
   onImagePaste?: (file: File) => Promise<string | null>;
+  /** Run a mod+alt layout shortcut caught while the editor is focused; returns
+   *  true if it was handled (so the key is consumed). */
+  onShortcut?: (chord: string) => boolean;
   className?: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -122,6 +127,8 @@ export default function CodeMirrorEditor({
   onViewReadyRef.current = onViewReady;
   const onImagePasteRef = useRef(onImagePaste);
   onImagePasteRef.current = onImagePaste;
+  const onShortcutRef = useRef(onShortcut);
+  onShortcutRef.current = onShortcut;
   // Live mode for the suggest filter, read at edit time so the editor never
   // rebuilds when the mode flips.
   const modeRef = useRef<DocMode>(mode);
@@ -188,6 +195,18 @@ export default function CodeMirrorEditor({
         activeCommentField,
         EditorView.domEventHandlers({
           paste: (event, v) => handleImagePaste(event, v, onImagePasteRef.current),
+          // Layout shortcuts: catch the chord here (e.code based) so a focused
+          // editor never swallows it, then hand it to the layout.
+          keydown: (event) => {
+            const chord = modAltChord(event);
+            if (chord && onShortcutRef.current?.(chord)) {
+              event.preventDefault();
+              // Stop it reaching the window listener, which would run it again.
+              event.stopPropagation();
+              return true;
+            }
+            return false;
+          },
         }),
         yCollab(ytext, awareness, { undoManager }),
         EditorView.updateListener.of((u) => {

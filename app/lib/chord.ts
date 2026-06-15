@@ -7,7 +7,10 @@
  * digits still resolve; it falls back to e.key for anything unmapped.
  */
 export function modAltChord(e: KeyboardEvent): string | null {
-  if (!(e.ctrlKey || e.metaKey) || !e.altKey) return null;
+  // AltGr (common on Windows/UK layouts) can report as the AltGraph modifier
+  // rather than altKey, so accept either.
+  const alt = e.altKey || (typeof e.getModifierState === "function" && e.getModifierState("AltGraph"));
+  if (!(e.ctrlKey || e.metaKey) || !alt) return null;
   const c = e.code;
   if (c.startsWith("Key")) return c.slice(3).toLowerCase(); // KeyE -> "e"
   if (c.startsWith("Digit")) return c.slice(5); // Digit1 -> "1"

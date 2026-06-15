@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { useDocument } from "~/lib/DocumentContext";
-import { modAltChord } from "~/lib/chord";
 import DriveBrowser, { KindIcon, Spinner } from "~/components/DriveBrowser";
 import type { GitHubMeta } from "~/shared/types";
 
@@ -155,19 +154,16 @@ export default function FolderSidebar() {
     setEverOpened(true);
   }, [cancelClose]);
 
-  // Ctrl/Cmd+Alt+F toggles the Drive/files sidebar (pinned), matching the
-  // mod+alt shortcut scheme the rest of the layout uses. Owned here because the
-  // open state lives here.
+  // The layout's shortcut handler (Ctrl/Cmd+Alt+F, from any focus) fires this
+  // custom event; the open state lives here, so we toggle it here.
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (modAltChord(e) !== "f") return;
-      e.preventDefault();
+    const toggle = () => {
       setPeek(false);
       setPinned((v) => !v);
       setEverOpened(true);
     };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
+    window.addEventListener("mist-toggle-folder", toggle);
+    return () => window.removeEventListener("mist-toggle-folder", toggle);
   }, []);
 
   if (!github && !drive) return null;

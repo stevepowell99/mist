@@ -395,6 +395,21 @@ window.addEventListener("message", function(e){
     pendingGoto = e.data.h; applyGoto();
   }
 });
+// Forward mod+alt layout shortcuts to the parent: this sandboxed iframe has its
+// own window, so its key events never reach the app otherwise. Reveal's own keys
+// carry no modifier, so they are untouched.
+window.addEventListener("keydown", function(e){
+  var alt = e.altKey || (e.getModifierState && e.getModifierState("AltGraph"));
+  if (!(e.ctrlKey || e.metaKey) || !alt) return;
+  var c = e.code, chord = null;
+  if (c.indexOf("Key") === 0) chord = c.slice(3).toLowerCase();
+  else if (c.indexOf("Digit") === 0) chord = c.slice(5);
+  else if (c.indexOf("Numpad") === 0 && /\\d$/.test(c)) chord = c.slice(-1);
+  else if (c === "BracketLeft") chord = "[";
+  else if (c === "BracketRight") chord = "]";
+  else if (c === "Slash") chord = "/";
+  if (chord) { e.preventDefault(); parent.postMessage({ type: "mist-key", chord: chord }, "*"); }
+}, true);
 // center:false matches Quarto (reveal's own default is true). With centring on,
 // every slide's content block is vertically centred, which drags a
 // bottom-pinned .shot-cap caption up to the middle; off, slides top-align and

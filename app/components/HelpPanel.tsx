@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { modAltChord } from "~/lib/chord";
 
 /**
  * Keyboard shortcuts and tips, opened by the ? button (bottom-right) or
@@ -115,19 +114,18 @@ export default function HelpPanel() {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
+    // Toggled by the layout's shortcut handler (Ctrl/Cmd+Alt+/, from any focus).
+    const toggle = () => setOpen((v) => !v);
     const onKey = (e: KeyboardEvent) => {
-      if (e.code === "Escape" && open) {
-        setOpen(false);
-        return;
-      }
-      if (modAltChord(e) === "/") {
-        e.preventDefault();
-        setOpen((v) => !v);
-      }
+      if (e.key === "Escape") setOpen(false);
     };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, [open]);
+    window.addEventListener("mist-toggle-help", toggle);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("mist-toggle-help", toggle);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, []);
 
   return (
     <>

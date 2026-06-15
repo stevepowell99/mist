@@ -290,37 +290,53 @@ function DocumentLayout({ id }: { id: string }) {
     window.history.replaceState(window.history.state, "", url.toString());
   }, [view]);
 
-  // Keyboard shortcuts (mod+alt+key). Mode: E edit, S suggest. View: 1 editor,
-  // 2 split, 3 preview. Panels: O outline, C comments (right). Resize: [ and ]
-  // shrink/grow the editor pane. One handler keeps it DRY; mod+alt avoids
-  // clashing with typing and browser keys. (The LHS Drive sidebar owns its own
-  // shortcut, since it owns its open state.)
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const k = modAltChord(e);
-      if (!k) return;
-      const actions: Record<string, () => void> = {
-        e: () => role === "edit" && mode !== "edit" && toggleMode(),
-        s: () => mode !== "suggest" && role === "edit" && toggleMode(),
-        "1": () => setView("editor"),
-        "2": () => isDesktop && setView("split"),
-        "3": () => setView("preview"),
-        o: () => setOutlineOpen((v) => !v),
-        c: () => setAsideCollapsedPersist(!asideCollapsed),
-        "[": () => nudgeSplit(-5),
-        "]": () => nudgeSplit(5),
-      };
-      const action = actions[k];
-      if (action) {
-        e.preventDefault();
-        action();
+  // One place runs every mod+alt shortcut, fed by three sources so focus never
+  // matters: the window (page/toolbar), the editor (a CodeMirror keydown
+  // handler), and the sandboxed slides iframe (which forwards chords by
+  // postMessage, since its keys never reach this window). Mode: E/S. View:
+  // 1/2/3. Panels: O outline, C comments, F Drive sidebar, / help. Resize: [ ].
+  // The folder and help panels own their open state, so they are toggled by a
+  // custom event rather than reaching into them here.
+  const runChord = useCallback(
+    (c: string): boolean => {
+      switch (c) {
+        case "e": if (role === "edit" && mode !== "edit") toggleMode(); return true;
+        case "s": if (role === "edit" && mode !== "suggest") toggleMode(); return true;
+        case "1": setView("editor"); return true;
+        case "2": if (isDesktop) setView("split"); return true;
+        case "3": setView("preview"); return true;
+        case "o": setOutlineOpen((v) => !v); return true;
+        case "c": setAsideCollapsedPersist(!asideCollapsed); return true;
+        case "[": nudgeSplit(-5); return true;
+        case "]": nudgeSplit(5); return true;
+        case "f": window.dispatchEvent(new CustomEvent("mist-toggle-folder")); return true;
+        case "/": window.dispatchEvent(new CustomEvent("mist-toggle-help")); return true;
+        default: return false;
       }
+    },
+    [role, mode, toggleMode, setView, isDesktop, setAsideCollapsedPersist, asideCollapsed, nudgeSplit],
+  );
+
+  useEffect(() => {
+    // Bubble phase: the editor handles its own keydown first and stops
+    // propagation, so this only runs when focus is elsewhere (toolbar, body),
+    // avoiding a double-toggle.
+    const onKey = (e: KeyboardEvent) => {
+      const c = modAltChord(e);
+      if (c && runChord(c)) e.preventDefault();
     };
-    // Capture phase so the chord is caught before the focused editor (or any
-    // input) can consume the key, which made the shortcuts feel flaky.
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, [role, mode, toggleMode, setView, isDesktop, setAsideCollapsedPersist, asideCollapsed, nudgeSplit]);
+    window.addEventListener("keydown", onKey);
+    // The slides iframe can't share our window, so it posts chords to us.
+    const onMsg = (e: MessageEvent) => {
+      const d = e.data as { type?: string; chord?: string };
+      if (d?.type === "mist-key" && typeof d.chord === "string") runChord(d.chord);
+    };
+    window.addEventListener("message", onMsg);
+    return () => {
+      window.removeEventListener("keydown", onKey, true);
+      window.removeEventListener("message", onMsg);
+    };
+  }, [runChord]);
 
   const startDrag = useCallback((e: ReactMouseEvent) => {
     e.preventDefault();
@@ -613,6 +629,7 @@ function DocumentLayout({ id }: { id: string }) {
                 onCursorChange={setCursor}
                 onViewReady={handleViewReady}
                 onImagePaste={drive ? uploadImage : undefined}
+                onShortcut={runChord}
                 className="min-h-full text-base"
               />
             </div>
