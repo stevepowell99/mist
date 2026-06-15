@@ -315,8 +315,10 @@ function DocumentLayout({ id }: { id: string }) {
         action();
       }
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    // Capture phase so the chord is caught before the focused editor (or any
+    // input) can consume the key, which made the shortcuts feel flaky.
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
   }, [role, mode, toggleMode, setView, isDesktop, setAsideCollapsedPersist, asideCollapsed, nudgeSplit]);
 
   const startDrag = useCallback((e: ReactMouseEvent) => {

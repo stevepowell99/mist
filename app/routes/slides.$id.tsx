@@ -12,7 +12,7 @@ import type { DocRole, DriveMeta, GitHubMeta } from "~/shared/types";
  * Standalone deck page, built server-side from the backend source, for printing
  * to PDF: open with `?print-pdf` and reveal lays the deck out one slide per page
  * for the browser's Save as PDF. Authorised by the doc's secret key; Drive asset
- * links carry the passphrase token so the printed deck keeps its css/images.
+ * links carry a signed asset token so the printed deck keeps its css/images.
  */
 export async function loader({ params, request, context }: Route.LoaderArgs) {
   const id = params.id;

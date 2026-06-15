@@ -88,8 +88,7 @@ export default function Home(_props: Route.ComponentProps) {
         </div>
         <h1 className="mb-1 font-bold">{APP_NAME}</h1>
         <p className="mb-3 text-muted">Open a Google Drive markdown file</p>
-        {/* Renders nothing until Google sign-in is configured, so the passphrase
-            flow is unaffected. */}
+        {/* Renders nothing until Google sign-in is configured. */}
         <div className="mb-3 flex min-h-[1.5rem] items-center justify-center">
           <GoogleSignIn />
         </div>

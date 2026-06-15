@@ -7,7 +7,6 @@ import { useTextThreads } from "~/lib/useTextThreads";
 import { serializeThreads, rawFrontmatter } from "~/lib/thread-serialization";
 import { quickHash } from "~/shared/hash";
 import { rawAssetUrl } from "~/lib/github";
-import { getDriveKey } from "~/lib/drive-key";
 import { parseBib, type BibLibrary } from "~/lib/citations";
 
 export interface DocumentContextValue {
@@ -216,7 +215,7 @@ export function DocumentProvider({
       try {
         const res = await fetch(`/drive/upload?deck=${encodeURIComponent(drive.fileId)}`, {
           method: "POST",
-          headers: { "Content-Type": file.type || "application/octet-stream", "X-Drive-Key": getDriveKey() ?? "" },
+          headers: { "Content-Type": file.type || "application/octet-stream" },
           body: file,
         });
         if (!res.ok) return null;
@@ -318,10 +317,7 @@ export function DocumentProvider({
       if (drive) {
         if (!drive.folderId) return;
         try {
-          const key = getDriveKey() ?? "";
-          const res = await fetch(`/drive/bib?folder=${encodeURIComponent(drive.folderId)}`, {
-            headers: { "X-Drive-Key": key },
-          });
+          const res = await fetch(`/drive/bib?folder=${encodeURIComponent(drive.folderId)}`);
           if (res.ok && !cancelled) setBibLib(parseBib(await res.text()));
         } catch {
           // no library available

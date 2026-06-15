@@ -3,7 +3,6 @@ import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { serializeThreads } from "~/lib/thread-serialization";
 import { useDocument } from "~/lib/DocumentContext";
 import { isSlideDeck } from "~/components/SlidesView";
-import { getDriveKey } from "~/lib/drive-key";
 
 /** Build a share URL on the current document, optionally opening in Preview. */
 export function shareLink(href: string, key: string | null, asPreview: boolean): string {
@@ -17,11 +16,11 @@ export function shareLink(href: string, key: string | null, asPreview: boolean):
 }
 
 export default function ShareButton() {
-  const { docId, markdown, threads, frontmatter, role, docKey, suggestKey } = useDocument();
+  const { docId, markdown, threads, frontmatter, role, docKey, suggestKey, assetToken } = useDocument();
   const [copied, setCopied] = useState<"edit" | "suggest" | null>(null);
   const [asPreview, setAsPreview] = useState(false);
   const deck = isSlideDeck(markdown, frontmatter);
-  const pdfHref = `/slides/${docId}?k=${encodeURIComponent(docKey ?? "")}&token=${encodeURIComponent(getDriveKey() ?? "")}&print-pdf`;
+  const pdfHref = `/slides/${docId}?k=${encodeURIComponent(docKey ?? "")}&token=${encodeURIComponent(assetToken ?? "")}&print-pdf`;
 
   const handleCopy = useCallback(
     async (kind: "edit" | "suggest", key: string | null) => {

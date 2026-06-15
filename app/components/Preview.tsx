@@ -3,7 +3,6 @@ import { marked } from "marked";
 import DOMPurify from "dompurify";
 import { useDocument } from "~/lib/DocumentContext";
 import { rewriteImages } from "~/lib/asset-urls";
-import { getDriveKey } from "~/lib/drive-key";
 import { runMermaid } from "~/lib/mermaid";
 import { renderWikiLinks } from "~/lib/wikilinks";
 import { convertCitations, formatReferenceList } from "~/lib/citations";
@@ -53,7 +52,7 @@ export default function Preview() {
       github,
       drive,
       origin: typeof window !== "undefined" ? window.location.origin : "",
-      driveToken: drive ? assetToken ?? getDriveKey() ?? "" : "",
+      driveToken: drive ? assetToken ?? "" : "",
     };
     // The editor body now carries the document's YAML frontmatter (so it is
     // visible and editable), but it is metadata, so strip it from the preview.

@@ -1,7 +1,6 @@
 /**
- * Access gate for the /drive/* endpoints. Replaces the single shared passphrase
- * with Google sign-in plus per-file Drive sharing, while still accepting the
- * passphrase during the transition so nothing breaks before sign-in is set up.
+ * Access gate for the /drive/* endpoints: Google sign-in plus per-file Drive
+ * sharing. The interim shared passphrase has been retired (#7).
  *
  * Authorisation model (decided 15 June 2026): a user may open a file iff the
  * file's own Drive sharing grants their email (or their domain, or anyone-with-
@@ -15,12 +14,10 @@ import {
   getDriveAccessToken,
   type DriveEnv,
 } from "./google.server";
-import { driveKeyOk } from "./drive-auth.server";
 
 export interface DriveSessionEnv extends DriveEnv {
   SESSION_SECRET?: string;
   GOOGLE_SIGNIN_CLIENT_ID?: string;
-  DRIVE_ACCESS_KEY?: string;
 }
 
 export interface DriveAccess {
@@ -41,10 +38,9 @@ export async function getRequestEmail(request: Request, env: DriveSessionEnv): P
 export async function driveAccess(request: Request, env: DriveSessionEnv): Promise<DriveAccess> {
   const email = await getRequestEmail(request, env);
   if (email) return { ok: true, email };
-  if (driveKeyOk(request, env)) return { ok: true, email: null };
-  // A signed asset token (minted by the doc page for the sandboxed slides
-  // iframe, which cannot send the session cookie). Coarse access, like the
-  // passphrase: email null, so per-file ACL is not enforced for assets.
+  // A signed asset token (minted from a valid session by the doc page) lets the
+  // sandboxed slides iframe fetch assets without the session cookie. Coarse
+  // access: email null, so per-file ACL is not enforced for assets.
   const token = new URL(request.url).searchParams.get("token");
   if (token && (await verifyAssetToken(token, env.SESSION_SECRET ?? ""))) return { ok: true, email: null };
   return { ok: false, email: null };

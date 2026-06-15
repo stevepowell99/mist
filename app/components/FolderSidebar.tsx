@@ -166,8 +166,8 @@ export default function FolderSidebar() {
       setPinned((v) => !v);
       setEverOpened(true);
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
   }, []);
 
   if (!github && !drive) return null;

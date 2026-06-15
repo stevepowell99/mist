@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useDocument } from "~/lib/DocumentContext";
 import { buildSlidesHtml } from "~/lib/slides-build";
 import { slideIndexForOffset } from "~/lib/slide-cursor";
-import { getDriveKey } from "~/lib/drive-key";
 
 export { isSlideDeck } from "~/lib/slides-build";
 
@@ -16,9 +15,9 @@ export { isSlideDeck } from "~/lib/slides-build";
 export default function SlidesView() {
   const { markdown, github, drive, frontmatter, cursorOffset, assetToken } = useDocument();
   const origin = typeof window !== "undefined" ? window.location.origin : "";
-  // Prefer the session-minted asset token (works for Google sign-in); fall back
-  // to the shared passphrase during the transition.
-  const driveToken = drive ? assetToken ?? getDriveKey() ?? "" : "";
+  // The session-minted asset token lets the sandboxed iframe fetch private-Drive
+  // assets (it cannot send the session cookie).
+  const driveToken = drive ? assetToken ?? "" : "";
   // Rebuilding the iframe reloads reveal, so debounce: refresh ~0.8s after edits
   // settle rather than on every keystroke.
   const [debounced, setDebounced] = useState(markdown);

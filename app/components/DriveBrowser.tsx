@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router";
-import { ensureDriveKey, getDriveKey, clearDriveKey } from "~/lib/drive-key";
 import { getRecentOpened, addRecentOpened, type RecentItem } from "~/lib/drive-recent";
 import type { DriveKind } from "~/lib/google.server";
 import type { SearchResult } from "~/routes/drive.search";
@@ -10,8 +9,11 @@ import type { SearchResult } from "~/routes/drive.search";
  * it serves both the home page and the folder sidebar. Searches all of Drive,
  * browses folders, filters by type, and opens markdown in mist, folders inline,
  * and anything else in a Drive tab. A click that opens or navigates shows a
- * waiter over the page. Gated by the shared Drive passphrase (drive-key.ts).
+ * waiter over the page. Access is by Google sign-in plus the file's own Drive
+ * sharing; a 401 means the session has lapsed.
  */
+
+const SIGN_IN_MSG = "Sign in with Google on the home page to use Drive.";
 
 interface Item {
   id: string;
@@ -142,8 +144,6 @@ export default function DriveBrowser({
   }, []);
 
   const refresh = useCallback(async () => {
-    const key = ensureDriveKey();
-    if (!key) return;
     const mine = ++reqId.current;
     setLoading(true);
     setError(null);
@@ -153,11 +153,8 @@ export default function DriveBrowser({
       const q = query.trim();
       if (q) p.set("q", q);
       else if (folderRef) p.set("folder", folderRef);
-      const res = await fetch(`/drive/search?${p.toString()}`, { headers: { "X-Drive-Key": key } });
-      if (res.status === 401) {
-        clearDriveKey();
-        throw new Error("wrong passphrase, try again");
-      }
+      const res = await fetch(`/drive/search?${p.toString()}`);
+      if (res.status === 401) throw new Error(SIGN_IN_MSG);
       const body = (await res.json()) as {
         results?: SearchResult[];
         folder?: { trail: Crumb[] } | null;
@@ -197,16 +194,12 @@ export default function DriveBrowser({
       setBusy(true);
       setError(null);
       try {
-        const key = getDriveKey();
         const res = await fetch("/drive/import", {
           method: "POST",
-          headers: { "Content-Type": "application/json", ...(key ? { "X-Drive-Key": key } : {}) },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ url: item.id }),
         });
-        if (res.status === 401) {
-          clearDriveKey();
-          throw new Error("wrong passphrase, try again");
-        }
+        if (res.status === 401) throw new Error(SIGN_IN_MSG);
         const body = (await res.json()) as { url?: string; error?: string };
         if (body.url) {
           addRecentOpened({ id: item.id, name: item.name, path: item.path });
@@ -242,17 +235,12 @@ export default function DriveBrowser({
   // File operations (create / rename / duplicate / trash) via /drive/op.
   const driveOp = useCallback(
     async (payload: Record<string, unknown>): Promise<{ file?: { id: string; name: string } }> => {
-      const key = getDriveKey();
-      if (!key) throw new Error("no passphrase");
       const res = await fetch("/drive/op", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-Drive-Key": key },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      if (res.status === 401) {
-        clearDriveKey();
-        throw new Error("wrong passphrase, try again");
-      }
+      if (res.status === 401) throw new Error(SIGN_IN_MSG);
       const body = (await res.json()) as { file?: { id: string; name: string }; error?: string };
       if (!res.ok) throw new Error(body.error ?? "operation failed");
       return body;
