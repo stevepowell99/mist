@@ -144,6 +144,19 @@ Drive backend (read/write/list/permissions); open-by-link; folder sidebar for Dr
 
 **Drive deck CSS finding (not a bug).** A deck opened from a stripped copy in a bare "folder1" lost its styling because none of its stylesheets (`../_shared/styles.css`, `../fontawesome/...`, same-folder `minimalist.css`) were present at that location. mist's `..` resolution and the `/drive/asset` proxy work; the assets simply were not there. Opening the deck from its real `19c-slides/005-minimalist-coding` folder (siblings intact) loads all four sheets.
 
+## Sign-in (#7): built 15 June 2026, awaiting one Console step
+
+Model (decided): Google sign-in proves identity; the relay still does Drive I/O as Steve; a user may open a file iff that file's Drive sharing grants their email (or domain, or anyone-with-link). Drive sharing is the single source of truth, no separate allowlist.
+
+Built (server + UI), non-breaking, accepts a session OR the passphrase during transition: `session.server.ts` (HMAC cookie, tested), `drive-access.server.ts` (gate + `canAccessFile` + Google token verify via tokeninfo), structured `driveListPermissions` + `emailHasAccess` (user/domain/anyone), `/auth/google` and `/auth/logout`, all `/drive/*` routes gated, open/asset/op/bib enforce per-file sharing, `GoogleSignIn` button on home (inert until configured).
+
+Secrets to set (names only; values never here): `GOOGLE_SIGNIN_CLIENT_ID` (a NEW OAuth 2.0 Web client, separate from the relay's Desktop client), `SESSION_SECRET` (random, for the cookie HMAC). Console: APIs & Services > Credentials under hello@causalmap.app, create OAuth client ID > Web application, authorised JS origin `https://mist.broad-smoke-cc64.workers.dev` (add `http://localhost:5173` to test on dev); ensure the consent screen lets colleagues sign in (add as test users or publish; openid/email are non-sensitive, no verification).
+
+Follow-ups before the passphrase can be removed:
+- The sandboxed slides iframe cannot send the session cookie, so its css/image asset requests still need the `?token=` passphrase; replace with a short-lived signed asset token.
+- `DriveBrowser`'s 401 path still falls back to the passphrase prompt; switch it to prompt sign-in once the passphrase is gone.
+- Search is gated by session but not per-file filtered (open-time is the enforced boundary); per-result filtering is a later refinement.
+
 ## Remaining (tracked in the task list)
 
 Google sign-in plus per-file ACL to replace the passphrase (#7); external-change sync so Obsidian/desktop edits merge into open sessions (#9, cloud-bridge poll plus diff-merge); TagFox open-in-mist icon (#11, separate Electron repo); idle auto-close (#12, lower value now save is explicit); the plain `Y.Text` document core (#13, the foundational fidelity fix). These remaining items each need Steve: #7 a Cloud Console step and his Google login; #9 and #13 are data-path rewrites best done with him; #11 is a different repo. Drive write ops (#10/#18) shipped but still need Steve's passphrase to verify the actual writes end to end.
