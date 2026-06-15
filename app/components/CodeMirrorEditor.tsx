@@ -14,7 +14,8 @@ import {
   crosshairCursor,
 } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
-import { bracketMatching } from "@codemirror/language";
+import { bracketMatching, codeFolding, foldGutter, foldKeymap } from "@codemirror/language";
+import { mistFolds } from "~/lib/cm-folding";
 import { closeBrackets, closeBracketsKeymap, completionKeymap } from "@codemirror/autocomplete";
 import { highlightSelectionMatches, searchKeymap } from "@codemirror/search";
 import { markdown } from "@codemirror/lang-markdown";
@@ -89,6 +90,9 @@ export default function CodeMirrorEditor({
       doc: ytext.toString(),
       extensions: [
         lineNumbers(),
+        foldGutter(),
+        codeFolding(),
+        mistFolds,
         highlightActiveLine(),
         highlightActiveLineGutter(),
         history(),
@@ -112,6 +116,7 @@ export default function CodeMirrorEditor({
           ...searchKeymap,
           ...historyKeymap,
           ...completionKeymap,
+          ...foldKeymap,
           indentWithTab,
         ]),
         wrapKeymap,
