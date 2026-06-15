@@ -227,6 +227,18 @@ function DocumentLayout({ id }: { id: string }) {
     [setPreview],
   );
 
+  // Nudge the split ratio by `delta` percent (editor width). Opens the split
+  // from a baseline of 50 if it is not open yet, so the resize keys also enter
+  // split. Desktop only; clamped to the drag range.
+  const nudgeSplit = useCallback(
+    (delta: number) => {
+      if (!isDesktop) return;
+      setPreview(false);
+      setEditorPct((p) => Math.min(95, Math.max(20, (p <= 95 ? p : 50) + delta)));
+    },
+    [isDesktop, setPreview],
+  );
+
   // Publish the header height so the sidebar/overlays can sit below it.
   useEffect(() => {
     const h = headerRef.current;
@@ -275,8 +287,10 @@ function DocumentLayout({ id }: { id: string }) {
   }, [view]);
 
   // Keyboard shortcuts (mod+alt+key). Mode: E edit, S suggest. View: 1 editor,
-  // 2 split, 3 preview. One handler keeps it DRY; mod+alt avoids clashing with
-  // typing and browser keys.
+  // 2 split, 3 preview. Panels: O outline, C comments (right). Resize: [ and ]
+  // shrink/grow the editor pane. One handler keeps it DRY; mod+alt avoids
+  // clashing with typing and browser keys. (The LHS Drive sidebar owns its own
+  // shortcut, since it owns its open state.)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!(e.ctrlKey || e.metaKey) || !e.altKey) return;
@@ -286,6 +300,10 @@ function DocumentLayout({ id }: { id: string }) {
         "1": () => setView("editor"),
         "2": () => isDesktop && setView("split"),
         "3": () => setView("preview"),
+        o: () => setOutlineOpen((v) => !v),
+        c: () => setAsideCollapsedPersist(!asideCollapsed),
+        "[": () => nudgeSplit(-5),
+        "]": () => nudgeSplit(5),
       };
       const action = actions[e.key.toLowerCase()];
       if (action) {
@@ -295,7 +313,7 @@ function DocumentLayout({ id }: { id: string }) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [role, mode, toggleMode, setView, isDesktop]);
+  }, [role, mode, toggleMode, setView, isDesktop, setAsideCollapsedPersist, asideCollapsed, nudgeSplit]);
 
   const startDrag = useCallback((e: ReactMouseEvent) => {
     e.preventDefault();
@@ -454,7 +472,7 @@ function DocumentLayout({ id }: { id: string }) {
         <button
           type="button"
           onClick={() => setOutlineOpen((v) => !v)}
-          title={deck ? "Slide list" : "Outline"}
+          title={`${deck ? "Slide list" : "Outline"} (Ctrl/Cmd+Alt+O)`}
           aria-label="Toggle outline"
           aria-pressed={outlineOpen}
           className={`flex shrink-0 cursor-pointer items-center border-r border-border px-3 transition-colors ${outlineOpen ? "bg-ink text-paper" : "hover:bg-border hover:text-ink"}`}
@@ -626,7 +644,7 @@ function DocumentLayout({ id }: { id: string }) {
             <button
               type="button"
               onClick={() => setAsideCollapsedPersist(false)}
-              title="Expand panel"
+              title="Expand comments (Ctrl/Cmd+Alt+C)"
               aria-label="Expand panel"
               className="cursor-pointer p-1 text-muted hover:text-ink"
             >
@@ -652,7 +670,7 @@ function DocumentLayout({ id }: { id: string }) {
               <button
                 type="button"
                 onClick={() => setAsideCollapsedPersist(true)}
-                title="Collapse panel"
+                title="Collapse comments (Ctrl/Cmd+Alt+C)"
                 aria-label="Collapse panel"
                 className="flex cursor-pointer items-center px-2 text-muted hover:text-ink"
               >

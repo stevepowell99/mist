@@ -154,6 +154,22 @@ export default function FolderSidebar() {
     setEverOpened(true);
   }, [cancelClose]);
 
+  // Ctrl/Cmd+Alt+F toggles the Drive/files sidebar (pinned), matching the
+  // mod+alt shortcut scheme the rest of the layout uses. Owned here because the
+  // open state lives here.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || !e.altKey) return;
+      if (e.key.toLowerCase() !== "f") return;
+      e.preventDefault();
+      setPeek(false);
+      setPinned((v) => !v);
+      setEverOpened(true);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   if (!github && !drive) return null;
 
   return (
@@ -174,7 +190,7 @@ export default function FolderSidebar() {
         }}
         onMouseEnter={openPeek}
         onMouseLeave={scheduleClose}
-        title="Open from Drive"
+        title="Open from Drive (Ctrl/Cmd+Alt+F)"
         aria-label="Open from Drive"
         className="flex shrink-0 cursor-pointer items-center border-r border-border px-3 transition-colors hover:bg-chartreuse hover:text-[#1a1a1a]"
       >
