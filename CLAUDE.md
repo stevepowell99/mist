@@ -10,6 +10,7 @@ This is Steve Powell's fork of [inanimate-tech/mist](https://github.com/inanimat
 - Purpose of the fork: share a markdown file (or later a folder) from Steve's Google Drive or GitHub with collaborators via a secret link, for async review with CriticMarkup suggestions and comments. Collaborators need no account; only Steve's GitHub is involved. Separate from the Qualia apps.
 - Global guidance: read `C:\Users\Zoom\.claude\CLAUDE.md`. This project is registered in its Project Index.
 - Editor: Claude Code.
+- **Always deploy to remote after changes** (`npm run deploy`) so Steve can test on the live worker, then give him the URL. The dev server has cold-start flakiness on first open of a fresh room; the deployed worker does not, so remote is the source of truth for verification.
 
 ### Current state (14 June 2026). READ THIS FIRST.
 
