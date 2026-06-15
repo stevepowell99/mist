@@ -5,6 +5,10 @@ import { slideIndexForOffset } from "~/lib/slide-cursor";
 
 export { isSlideDeck } from "~/lib/slides-build";
 
+/** Wait this long after the last edit before rebuilding the deck preview. A
+ *  deck reload is heavier than a document re-render, so it gets a longer pause. */
+const SLIDES_REFRESH_DEBOUNCE_MS = 5000;
+
 /**
  * Inline slides renderer for `.qmd` / RevealJS decks. It is the Preview for a
  * deck: when Preview is on and the source is a deck, this renders instead of the
@@ -18,11 +22,12 @@ export default function SlidesView() {
   // The session-minted asset token lets the sandboxed iframe fetch private-Drive
   // assets (it cannot send the session cookie).
   const driveToken = drive ? assetToken ?? "" : "";
-  // Rebuilding the iframe reloads reveal, so debounce: refresh ~0.8s after edits
-  // settle rather than on every keystroke.
+  // Rebuilding the iframe reloads reveal (a brief flash and a reflow), so wait
+  // for a real pause in typing before refreshing the deck rather than chasing
+  // every keystroke.
   const [debounced, setDebounced] = useState(markdown);
   useEffect(() => {
-    const t = setTimeout(() => setDebounced(markdown), 800);
+    const t = setTimeout(() => setDebounced(markdown), SLIDES_REFRESH_DEBOUNCE_MS);
     return () => clearTimeout(t);
   }, [markdown]);
 

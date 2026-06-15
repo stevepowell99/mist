@@ -18,8 +18,9 @@ export function useYjsEditor(docId: string, docKey: string | null = null) {
   const docState = useMemo(() => doc.getMap<string>("docState"), [doc]);
   const providerRef = useRef<YjsProvider | null>(null);
   const [synced, setSynced] = useState(false);
-  // Suggest is the default; edit-link users can switch to Edit deliberately
-  const [mode, setModeState] = useState<DocMode>("suggest");
+  // Edit is the default for an edit-link user; suggest-link users are forced to
+  // suggest in DocumentContext regardless. Either can switch deliberately.
+  const [mode, setModeState] = useState<DocMode>("edit");
   const [isOnboarding, setIsOnboarding] = useState(false);
 
   const socket = useAgent({
