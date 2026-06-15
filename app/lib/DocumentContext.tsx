@@ -7,6 +7,9 @@ import { useTextThreads } from "~/lib/useTextThreads";
 import { serializeThreads, rawFrontmatter } from "~/lib/thread-serialization";
 import { quickHash } from "~/shared/hash";
 import { rawAssetUrl } from "~/lib/github";
+import { driveAssetUrl } from "~/lib/asset-urls";
+import { extractCssPaths } from "~/lib/slides-build";
+import { parseCssClasses } from "~/lib/cm-classes";
 import { parseBib, type BibLibrary } from "~/lib/citations";
 
 export interface DocumentContextValue {
@@ -47,6 +50,8 @@ export interface DocumentContextValue {
   reloadFromDrive: () => void;
   /** Parsed BibTeX library for citation rendering, if found in the repo */
   bibLib: BibLibrary | null;
+  /** Class names from the deck's CSS, for the editor's `.`-class picker. */
+  cssClasses: string[];
   /** Short-lived token for fetching private-Drive assets (slides + preview). */
   assetToken: string | null;
   /** Upload a pasted image into the doc's Drive folder; resolves to the markdown
@@ -308,6 +313,30 @@ export function DocumentProvider({
   // candidate names are tried; Drive resolves them through the asset proxy.
   const [bibLib, setBibLib] = useState<BibLibrary | null>(null);
   const bibFetchedRef = useRef(false);
+  // Class names from the deck's own CSS, for the editor's `.`-class picker.
+  const [cssClasses, setCssClasses] = useState<string[]>([]);
+  const cssKey = useMemo(() => extractCssPaths(frontmatter).join("|"), [frontmatter]);
+  useEffect(() => {
+    if (!drive || !assetToken || !cssKey) return;
+    const origin = window.location.origin;
+    let cancelled = false;
+    (async () => {
+      const all = new Set<string>();
+      for (const path of cssKey.split("|")) {
+        try {
+          const res = await fetch(driveAssetUrl(drive, origin, path, assetToken));
+          if (!res.ok) continue;
+          for (const c of parseCssClasses(await res.text())) all.add(c);
+        } catch {
+          // a missing stylesheet just yields no classes
+        }
+      }
+      if (!cancelled) setCssClasses([...all].sort());
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [drive, assetToken, cssKey]);
   useEffect(() => {
     if ((!github && !drive) || bibFetchedRef.current) return;
     bibFetchedRef.current = true;
@@ -460,6 +489,7 @@ export function DocumentProvider({
     upstreamChanged,
     reloadFromDrive,
     bibLib,
+    cssClasses,
     assetToken,
     uploadImage,
     // Suggest-role users are locked to suggest regardless of the shared mode

@@ -257,7 +257,7 @@ function extractNavMode(frontmatter: string): "linear" | "grid" | "default" {
 }
 
 /** Pull the deck's `css:` entries from the frontmatter (inline or list form). */
-function extractCssPaths(frontmatter: string): string[] {
+export function extractCssPaths(frontmatter: string): string[] {
   const lines = frontmatter.split("\n");
   const paths: string[] = [];
   for (let i = 0; i < lines.length; i++) {

@@ -1,8 +1,8 @@
 import {
-  autocompletion,
   type Completion,
   type CompletionContext,
   type CompletionResult,
+  type CompletionSource,
 } from "@codemirror/autocomplete";
 import type { BibLibrary } from "./citations";
 
@@ -11,10 +11,11 @@ import type { BibLibrary } from "./citations";
  * opens a list of the document's bibliography entries (author, year, title),
  * filtered as you type, and inserts a Pandoc `[@key]` that Preview renders to
  * APA, matching the TipTap `citation-suggest.ts`. The library getter is read
- * live, so the picker reflects whatever bib the document has loaded.
+ * live, so the picker reflects whatever bib the document has loaded. Exported as
+ * a source so it can share one autocompletion config with the class picker.
  */
-export function citations(getLibrary: () => BibLibrary | null) {
-  const source = (ctx: CompletionContext): CompletionResult | null => {
+export function citationSource(getLibrary: () => BibLibrary | null): CompletionSource {
+  return (ctx: CompletionContext): CompletionResult | null => {
     const token = ctx.matchBefore(/@[\p{L}\d:_-]*/u);
     if (!token || (token.from === token.to && !ctx.explicit)) return null;
     const lib = getLibrary();
@@ -33,6 +34,4 @@ export function citations(getLibrary: () => BibLibrary | null) {
     if (options.length === 0) return null;
     return { from: token.from, options, filter: false };
   };
-
-  return autocompletion({ override: [source], icons: false });
 }

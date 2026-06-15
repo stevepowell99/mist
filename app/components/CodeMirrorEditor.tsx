@@ -16,7 +16,7 @@ import {
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { bracketMatching, codeFolding, foldGutter, foldKeymap } from "@codemirror/language";
 import { mistFolds } from "~/lib/cm-folding";
-import { closeBrackets, closeBracketsKeymap, completionKeymap } from "@codemirror/autocomplete";
+import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } from "@codemirror/autocomplete";
 import { highlightSelectionMatches, searchKeymap } from "@codemirror/search";
 import { markdown } from "@codemirror/lang-markdown";
 import { yCollab, yUndoManagerKeymap } from "y-codemirror.next";
@@ -26,7 +26,8 @@ import { fencedDivStyle } from "~/lib/cm-fenced-divs";
 import { suggestMode } from "~/lib/cm-suggest";
 import { wrapKeymap, wrapOnSelection } from "~/lib/cm-shortcuts";
 import { activeCommentField, setActiveComment } from "~/lib/cm-active-comment";
-import { citations } from "~/lib/cm-citations";
+import { citationSource } from "~/lib/cm-citations";
+import { classSource } from "~/lib/cm-classes";
 import type { BibLibrary } from "~/lib/citations";
 import type { DocMode } from "~/shared/types";
 
@@ -88,6 +89,7 @@ export default function CodeMirrorEditor({
   cleanView = false,
   activeComment = null,
   bibLibrary = null,
+  classList = null,
   onTextChange,
   onCursorChange,
   onViewReady,
@@ -100,6 +102,8 @@ export default function CodeMirrorEditor({
   cleanView?: boolean;
   activeComment?: { from: number; to: number } | null;
   bibLibrary?: BibLibrary | null;
+  /** Pandoc class names from the deck CSS, for the `.`-class picker. */
+  classList?: string[] | null;
   onTextChange?: (text: string) => void;
   onCursorChange?: (offset: number) => void;
   onViewReady?: (view: EditorView | null) => void;
@@ -126,6 +130,10 @@ export default function CodeMirrorEditor({
   // never rebuilds when the library loads.
   const bibRef = useRef<BibLibrary | null>(bibLibrary);
   bibRef.current = bibLibrary;
+  // Live class list for the `.`-picker, read at completion time so the editor
+  // never rebuilds when the deck CSS loads.
+  const classRef = useRef<string[]>(classList ?? []);
+  classRef.current = classList ?? [];
 
   useEffect(() => {
     const parent = ref.current;
@@ -170,7 +178,10 @@ export default function CodeMirrorEditor({
         wrapKeymap,
         markdown(),
         EditorView.lineWrapping,
-        citations(() => bibRef.current),
+        autocompletion({
+          override: [citationSource(() => bibRef.current), classSource(() => classRef.current)],
+          icons: false,
+        }),
         markdownLineStyle,
         fencedDivStyle,
         criticMarkup,

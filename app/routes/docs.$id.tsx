@@ -185,6 +185,7 @@ function DocumentLayout({ id }: { id: string }) {
     threads,
     docKey,
     uploadImage,
+    cssClasses,
   } = useDocument();
 
   const title = fileTitle(github, drive, id);
@@ -607,6 +608,7 @@ function DocumentLayout({ id }: { id: string }) {
                 cleanView={cleanView}
                 activeComment={activeCommentRange}
                 bibLibrary={bibLib}
+                classList={cssClasses}
                 onTextChange={setEditorText}
                 onCursorChange={setCursor}
                 onViewReady={handleViewReady}

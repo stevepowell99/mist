@@ -54,6 +54,22 @@ const SLIDES: Shortcut[] = [
   { keys: ["←", "→"], label: "Previous / next slide" },
 ];
 
+// Composable Pandoc class system (the slides app's "style map"): pick a
+// component, a colour and optional modifiers. Type `.` inside `{ }` or after a
+// `:::` to autocomplete from the deck's own CSS.
+const CLASS_GROUPS: { title: string; items: string }[] = [
+  { title: "Components", items: ".flare .hl .panel .bg .chip .card .cards .bignum .columns .column .callout" },
+  { title: "Colours", items: ".blue .cyan .teal .green .mint .yellow .pink .mag .navy .grey" },
+  { title: "Modifiers", items: ".light .dark .cascade-2…5 .scale-* .left .center .right" },
+  { title: "Slide", items: ".title-page .no-title .center .shot-cap .brand" },
+];
+
+const CLASS_EXAMPLES: { code: string; note: string }[] = [
+  { code: "[big idea]{.flare .yellow}", note: "highlight a phrase" },
+  { code: "::: {.panel .teal}\n  body\n:::", note: "a tinted panel" },
+  { code: "# Section {.center .no-title}", note: "section divider" },
+];
+
 const TIPS = [
   "Edits save to Drive automatically, on a short pause after you stop typing.",
   "Edit the file in Obsidian or Drive and it appears here on reload (Drive wins if both changed).",
@@ -163,6 +179,38 @@ export default function HelpPanel() {
                       <li key={t}>{t}</li>
                     ))}
                   </ul>
+                </div>
+              </div>
+            </div>
+
+            <div className="border-t border-border px-5 py-4">
+              <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted">Slide classes</h3>
+              <p className="mb-3 text-sm text-muted">
+                Style an element by composing a <span className="text-ink">component</span> + a{" "}
+                <span className="text-ink">colour</span> + optional <span className="text-ink">modifiers</span>. Type{" "}
+                <Kbd>.</Kbd> inside <span className="font-mono text-ink">{"{ }"}</span> or after a{" "}
+                <span className="font-mono text-ink">:::</span> to autocomplete from this deck&apos;s CSS.
+              </p>
+              <div className="grid gap-x-10 gap-y-3 sm:grid-cols-2">
+                <div className="space-y-2">
+                  {CLASS_GROUPS.map((g) => (
+                    <div key={g.title} className="text-sm">
+                      <span className="mr-2 inline-block w-24 shrink-0 text-xs uppercase tracking-wider text-muted">
+                        {g.title}
+                      </span>
+                      <span className="font-mono text-ink">{g.items}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="space-y-2">
+                  {CLASS_EXAMPLES.map((e) => (
+                    <div key={e.code}>
+                      <pre className="overflow-x-auto rounded border border-border bg-border/30 px-2 py-1 font-mono text-xs text-ink">
+                        {e.code}
+                      </pre>
+                      <span className="text-xs text-muted">{e.note}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
