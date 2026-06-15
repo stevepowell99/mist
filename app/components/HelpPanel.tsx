@@ -44,6 +44,8 @@ const EDITOR: Shortcut[] = [
   { keys: ["@"], label: "Insert citation (if a .bib is found)" },
   { keys: ["Tab"], label: "Indent" },
   { keys: [MOD, "Z"], label: "Undo (collaborative-safe)" },
+  { keys: [MOD, "Shift", "[ / ]"], label: "Fold / unfold block" },
+  { keys: [MOD, "Alt", "[ / ]"], label: "Fold / unfold all" },
 ];
 
 const SLIDES: Shortcut[] = [
