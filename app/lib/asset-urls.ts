@@ -10,7 +10,12 @@ import { resolveImageSrc } from "~/lib/github";
 /** /drive/asset proxy URL for a deck/doc-relative path; token rides as a query
  *  param since iframe/img tags cannot set a header. */
 export function driveAssetUrl(drive: DriveMeta, origin: string, relPath: string, token: string): string {
-  return `${origin}/drive/asset?deck=${encodeURIComponent(drive.fileId)}&path=${encodeURIComponent(relPath)}&token=${encodeURIComponent(token)}`;
+  // Encode each path segment but keep literal "/" separators. The full reveal.js
+  // markdown renderer re-encodes URLs in slide content, so an escaped "%2F"
+  // becomes "%252F" and the proxy can no longer split the path. Real slashes
+  // survive that pass untouched.
+  const encPath = relPath.split("/").map(encodeURIComponent).join("/");
+  return `${origin}/drive/asset?deck=${encodeURIComponent(drive.fileId)}&path=${encPath}&token=${encodeURIComponent(token)}`;
 }
 
 export interface AssetCtx {
