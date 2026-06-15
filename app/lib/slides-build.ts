@@ -338,6 +338,8 @@ Reveal.initialize({plugins:revealPlugins,hash:false,controls:true,progress:true,
   // its background layer, so without a sync the backgrounds come up blank.
   if (Reveal.sync) Reveal.sync();
   revealReady = true; applyGoto();
+  // Report the current slide to the parent so it can put it in the URL.
+  Reveal.on('slidechanged', function(){ try { parent.postMessage({ type: 'mist-slide', h: Reveal.getIndices().h }, '*'); } catch (e) {} });
   // Fallback: reveal even if no goto arrives (e.g. preview-only, no editor).
   setTimeout(show, 500);
   Reveal.layout();
