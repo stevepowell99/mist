@@ -295,7 +295,7 @@ function DocumentLayout({ id }: { id: string }) {
   // matters: the window (page/toolbar), the editor (a CodeMirror keydown
   // handler), and the sandboxed slides iframe (which forwards chords by
   // postMessage, since its keys never reach this window). Mode: E/S. View:
-  // 1/2/3. Panels: O outline, C comments, F Drive sidebar, / help. Resize: [ ].
+  // 1/2/3. Panels: O outline, C comments, F Drive sidebar, / help. Resize: - =.
   // The folder and help panels own their open state, so they are toggled by a
   // custom event rather than reaching into them here.
   // Reverse sync: move the editor cursor to the source of the slide currently
@@ -323,8 +323,9 @@ function DocumentLayout({ id }: { id: string }) {
         case "3": setView("preview"); return true;
         case "o": setOutlineOpen((v) => !v); return true;
         case "c": setAsideCollapsedPersist(!asideCollapsed); return true;
-        case "[": nudgeSplit(-5); return true;
-        case "]": nudgeSplit(5); return true;
+        // Resize on - / = (not [ / ], which CodeMirror uses for fold-all).
+        case "-": nudgeSplit(-5); return true;
+        case "=": nudgeSplit(5); return true;
         case "f": window.dispatchEvent(new CustomEvent("mist-toggle-folder")); return true;
         case "g": syncEditorToSlideRef.current(); return true;
         case "/": window.dispatchEvent(new CustomEvent("mist-toggle-help")); return true;

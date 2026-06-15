@@ -53,6 +53,7 @@ const authUrl =
     scope: SCOPE,
     access_type: "offline",
     prompt: "consent",
+    login_hint: "hello@causalmap.app",
   }).toString();
 
 const server = createServer(async (req, res) => {

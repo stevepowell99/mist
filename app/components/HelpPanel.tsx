@@ -21,8 +21,8 @@ const LAYOUT: Shortcut[] = [
   { keys: [MOD, "Alt", "1"], label: "Editor only" },
   { keys: [MOD, "Alt", "2"], label: "Split editor + preview" },
   { keys: [MOD, "Alt", "3"], label: "Preview only" },
-  { keys: [MOD, "Alt", "["], label: "Shrink editor pane" },
-  { keys: [MOD, "Alt", "]"], label: "Grow editor pane" },
+  { keys: [MOD, "Alt", "-"], label: "Shrink editor pane" },
+  { keys: [MOD, "Alt", "="], label: "Grow editor pane" },
 ];
 
 const PANELS: Shortcut[] = [

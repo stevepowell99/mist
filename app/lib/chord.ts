@@ -17,6 +17,8 @@ export function modAltChord(e: KeyboardEvent): string | null {
   if (c.startsWith("Numpad") && /\d$/.test(c)) return c.slice(-1); // Numpad1 -> "1"
   if (c === "BracketLeft") return "[";
   if (c === "BracketRight") return "]";
+  if (c === "Minus") return "-";
+  if (c === "Equal") return "=";
   if (c === "Slash") return "/";
   const k = e.key.toLowerCase();
   return k.length === 1 ? k : null;
