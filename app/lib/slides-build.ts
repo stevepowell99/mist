@@ -183,6 +183,9 @@ function buildSection(slideMd: string, ctx: AssetCtx): string {
 
 const PREVIEW_CSS = `
 html,body{margin:0;height:100%}
+/* Hidden until reveal has initialised and jumped to the cursor's slide, so a
+   rebuild does not flash slide 1 before snapping back. */
+.reveal{visibility:hidden}
 .columns{display:flex;gap:1em;align-items:flex-start}
 .column{flex:1;min-width:0}
 .columns .columns{width:100%}
@@ -321,8 +324,9 @@ if (window.RevealMenu) revealPlugins.push(RevealMenu);
 // moves and after each rebuild. Buffer the target so a message that arrives
 // before reveal is ready (e.g. right after the iframe reloads) still lands,
 // which is what keeps an edit from snapping the deck back to slide 1.
-var pendingGoto = null, revealReady = false;
-function applyGoto(){ if (revealReady && pendingGoto != null) Reveal.slide(pendingGoto); }
+var pendingGoto = null, revealReady = false, shown = false;
+function show(){ if (!shown) { shown = true; var r = document.querySelector('.reveal'); if (r) r.style.visibility = 'visible'; } }
+function applyGoto(){ if (revealReady && pendingGoto != null) { Reveal.slide(pendingGoto); show(); } }
 window.addEventListener("message", function(e){
   if (e.data && e.data.type === "mist-goto" && typeof e.data.h === "number") {
     pendingGoto = e.data.h; applyGoto();
@@ -330,6 +334,8 @@ window.addEventListener("message", function(e){
 });
 Reveal.initialize({plugins:revealPlugins,hash:false,controls:true,progress:true,keyboard:true,overview:true,scrollActivationWidth:null,width:1280,height:720,menu:{openButton:true,openSlideNumber:false,markers:true}}).then(async function(){
   revealReady = true; applyGoto();
+  // Fallback: reveal even if no goto arrives (e.g. preview-only, no editor).
+  setTimeout(show, 500);
   Reveal.layout();
   if (window.ResizeObserver) new ResizeObserver(function(){ Reveal.layout(); }).observe(document.body);
   window.addEventListener("resize", function(){ Reveal.layout(); });
