@@ -110,6 +110,16 @@ Verified visually: seeded CriticMarkup renders exactly like the TipTap editor (g
 
 Next: step 3, comments (relative-position anchors, click handler, thread panel binding).
 
+**Step 3 (comments): done, 15 June 2026. Anchoring turned out simpler than planned.** Because a comment is literal `{>>...<<}` / `{==...==}` text in the Y.Text, the CRDT moves it through concurrent edits on its own, so NO `Y.RelativePosition` side map is needed: we just re-scan. The thread metadata model is unchanged (the Yjs `threads` map folded into `mist:` frontmatter), and the existing `matchThreadsToComments` is reused as-is.
+- `app/lib/cm-comments.ts`: `scanTextComments` (point and highlight-paired comments, offsets are CM positions), `insertCommentChange` (wrap a selection as `{==sel==}{>>note<<}`, or insert a point `{>>note<<}`), `removeCommentChange` (drop the comment, unwrap the highlight on resolve/delete), `activeRangeFor`. 10 unit tests, including the concurrent-edit survival property.
+- `app/lib/useTextThreads.ts`: the CM6 analogue of `useThreads` (reconcile by scanning text, auto-create thread metadata, reply/resolve/delete, jump-to, active range), reusing `matchThreadsToComments`.
+- `app/lib/cm-active-comment.ts`: a `StateField` + effect that tints the active comment with `cm-comment-active`, mapped through edits.
+- `CodeMirrorEditor` exposes its view (`onViewReady`) and takes an `activeComment` range; the spike route gained a working comment panel (create, list, reply, resolve, delete, click-to-jump).
+
+Verified on dev and remote: create a range comment from a selection -> `{==brown==}{>>note<<}` in the text and `highlight: brown` folded into `mist:` frontmatter; panel binding, jump tint, reply, and resolve-removes-markup all work. 405 unit tests pass.
+
+This clears both genuinely hard parts (suggest mode, comment anchoring). Next: step 4, wire the CM6 component into the real `Editor.tsx` behind its existing props (citations, images, outline) as an opt-in core, then step 5 flip-and-delete.
+
 ## What is reused vs deleted
 
 Reused: the relay and SQLite persistence, the CriticMarkup parser and delimiter constants, the `threads` map and `mist:`-frontmatter thread serialization, the verbatim-frontmatter handling (`thread-serialization.ts`, now even simpler because the body never touches frontmatter), the Drive backend read/write, the citation library and `@`-picker logic (rehosted), the outline scanner, the deploy.

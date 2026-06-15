@@ -9,6 +9,7 @@ import { yCollab, yUndoManagerKeymap } from "y-codemirror.next";
 import { criticMarkup } from "~/lib/cm-criticmarkup";
 import { suggestMode } from "~/lib/cm-suggest";
 import { wrapKeymap, wrapOnSelection } from "~/lib/cm-shortcuts";
+import { activeCommentField, setActiveComment } from "~/lib/cm-active-comment";
 import type { DocMode } from "~/shared/types";
 
 /**
@@ -25,20 +26,26 @@ export default function CodeMirrorEditor({
   awareness,
   mode = "suggest",
   cleanView = false,
+  activeComment = null,
   onTextChange,
+  onViewReady,
   className,
 }: {
   doc: Y.Doc;
   awareness: Awareness;
   mode?: DocMode;
   cleanView?: boolean;
+  activeComment?: { from: number; to: number } | null;
   onTextChange?: (text: string) => void;
+  onViewReady?: (view: EditorView | null) => void;
   className?: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onTextChange);
   onChangeRef.current = onTextChange;
+  const onViewReadyRef = useRef(onViewReady);
+  onViewReadyRef.current = onViewReady;
   // Live mode for the suggest filter, read at edit time so the editor never
   // rebuilds when the mode flips.
   const modeRef = useRef<DocMode>(mode);
@@ -64,6 +71,7 @@ export default function CodeMirrorEditor({
         markdown(),
         EditorView.lineWrapping,
         criticMarkup,
+        activeCommentField,
         yCollab(ytext, awareness, { undoManager }),
         EditorView.updateListener.of((u) => {
           if (u.docChanged) onChangeRef.current?.(ytext.toString());
@@ -74,13 +82,22 @@ export default function CodeMirrorEditor({
     const view = new EditorView({ state, parent });
     viewRef.current = view;
     onChangeRef.current?.(ytext.toString());
+    onViewReadyRef.current?.(view);
 
     return () => {
+      onViewReadyRef.current?.(null);
       view.destroy();
       viewRef.current = null;
       undoManager.destroy();
     };
   }, [doc, awareness]);
+
+  // Reflect the active comment range (from the panel or cursor) as a tint.
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    view.dispatch({ effects: setActiveComment.of(activeComment) });
+  }, [activeComment]);
 
   // Clean view hides CriticMarkup delimiters (reuses the `.clean-view` CSS).
   useEffect(() => {
