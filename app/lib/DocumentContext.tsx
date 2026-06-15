@@ -6,7 +6,7 @@ import type { useYjsEditor } from "~/lib/useYjsEditor";
 import { useThreads } from "~/lib/useThreads";
 import { findCommentTextAtCursor } from "~/lib/comment-threads";
 import { serializeWithCriticMarkup } from "~/lib/critic-serializer";
-import { serializeThreads } from "~/lib/thread-serialization";
+import { serializeThreads, rawFrontmatter } from "~/lib/thread-serialization";
 import { quickHash } from "~/shared/hash";
 import { rawAssetUrl } from "~/lib/github";
 import { getDriveKey } from "~/lib/drive-key";
@@ -119,7 +119,10 @@ export function DocumentProvider({
   // Either backend means edits are relayed for write-back to the source file.
   const backed = !!github || !!drive;
   const [markdown, setMarkdown] = useState("");
-  const [frontmatter, setFrontmatter] = useState("");
+  // The document's frontmatter now lives in the editor text (shown and editable),
+  // so derive it from the markdown rather than a separate store. Edits to the
+  // YAML flow straight into the preview/slides.
+  const frontmatter = useMemo(() => rawFrontmatter(markdown), [markdown]);
   const [editorInstance, setEditorInstance] = useState<TiptapEditor | null>(null);
   const [previewToggled, setPreviewToggled] = useState(initialPreview);
   const [previewHeld, setPreviewHeld] = useState(false);
@@ -145,17 +148,6 @@ export function DocumentProvider({
     if (role !== "edit") return;
     yjs.setMode(yjs.mode === "edit" ? "suggest" : "edit");
   }, [yjs, role]);
-
-  // The file's frontmatter lives in the Yjs "meta" map (seeded at import). Read
-  // it once synced and observe so the preview and commit-back use the real
-  // theme/css/format rather than refetching the source file.
-  useEffect(() => {
-    const meta = yjs.doc.getMap<string>("meta");
-    const read = () => setFrontmatter((meta.get("frontmatter") as string) ?? "");
-    read();
-    meta.observe(read);
-    return () => meta.unobserve(read);
-  }, [yjs.doc]);
 
   // Relay the serialized document to the agent for GitHub-backed docs. The
   // agent auto-commits on a throttle (and after the last editor disconnects),

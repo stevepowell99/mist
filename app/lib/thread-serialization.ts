@@ -23,9 +23,25 @@ export function stripFrontmatter(markdown: string): string {
 }
 
 /** The exact inner YAML text of the frontmatter (between the --- fences), or "". */
-function rawFrontmatter(markdown: string): string {
+export function rawFrontmatter(markdown: string): string {
   const m = FRONTMATTER_RE.exec(markdown);
   return m ? m[1] : "";
+}
+
+/**
+ * The document with only the internal `mist:` threads block removed from its
+ * frontmatter, leaving the user's YAML (title/format/css...) in place so it is
+ * shown and edited in the editor. Byte-exact when there is no mist block to
+ * remove (the common case); only a mist-bearing file is reconstructed.
+ */
+function stripMistFromDoc(markdown: string): string {
+  const raw = rawFrontmatter(markdown);
+  if (!raw || !/^mist\s*:/m.test(raw)) return markdown;
+  const cleaned = stripMistKey(raw);
+  const body = stripFrontmatter(markdown);
+  if (!cleaned.trim()) return body;
+  const fmText = cleaned.endsWith("\n") ? cleaned : `${cleaned}\n`;
+  return `---\n${fmText}---\n\n${body}`;
 }
 
 /** Remove a top-level `mist:` block from raw frontmatter text, leaving the rest
@@ -64,12 +80,16 @@ export function serializeThreads(
   baseFrontmatter = "",
 ): string {
   const body = stripFrontmatter(markdown);
-  // The editor body carries no frontmatter; the doc-level frontmatter is the
-  // reliable source. Keep it verbatim (the raw text) so a commit-back does not
-  // strip quotes or reorder keys, so the file round-trips faithfully.
-  const raw = baseFrontmatter || rawFrontmatter(markdown);
+  // The editor text now carries its own frontmatter; prefer it so edits to the
+  // YAML are saved. baseFrontmatter is a fallback for callers that still pass
+  // body-only markdown. Keeping the raw text verbatim means quotes and key order
+  // survive a commit-back.
+  const ownRaw = rawFrontmatter(markdown);
+  const raw = ownRaw || baseFrontmatter;
 
   if (threads.length === 0) {
+    // Frontmatter already in the text: return it untouched, byte-faithful.
+    if (ownRaw) return markdown;
     if (!raw.trim()) return body;
     const fmText = raw.endsWith("\n") ? raw : `${raw}\n`;
     return `---\n${fmText}---\n\n${body}`;
@@ -120,11 +140,13 @@ export function deserializeThreads(markdown: string): {
    *  Carried into the doc so theme/css/format round-trip on commit-back. */
   frontmatter: string;
 } {
-  const body = stripFrontmatter(markdown);
+  // The editor shows the user's frontmatter, so keep it in the body. Only the
+  // internal mist threads block is removed. The body is byte-exact unless a mist
+  // block had to be stripped.
+  const body = stripMistFromDoc(markdown);
   const fm = parseFrontmatter(markdown);
 
-  // Keep the file's own frontmatter VERBATIM (raw text, only the mist block
-  // removed) so theme/css/quotes/key-order survive the round-trip unchanged.
+  // Still surfaced (raw, mist removed) for callers that read it directly.
   const frontmatter = stripMistKey(rawFrontmatter(markdown));
 
   const mist = fm.mist as Record<string, unknown> | undefined;
