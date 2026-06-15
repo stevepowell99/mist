@@ -539,6 +539,12 @@ function DocumentLayout({ id }: { id: string }) {
         </div>
       </header>
       <div className="relative flex flex-1 overflow-hidden">
+        {!yjs.synced && (
+          <div className="absolute inset-0 z-40 flex flex-col items-center justify-center gap-3 bg-paper">
+            <span className="h-7 w-7 animate-spin rounded-full border-2 border-border border-t-ink" />
+            <span className="text-sm uppercase tracking-wider text-muted">Loading document…</span>
+          </div>
+        )}
         <div ref={contentRef} className="flex flex-1 overflow-hidden">
           {outlineOpen && (
             <OutlinePanel
