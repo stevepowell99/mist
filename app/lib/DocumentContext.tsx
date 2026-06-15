@@ -36,6 +36,8 @@ export interface DocumentContextValue {
   saveNow: () => void;
   /** True when the document has edits not yet written back to its backend */
   unsaved: boolean;
+  /** True when the backend rejected a write because the file changed upstream */
+  conflict: boolean;
   /** Parsed BibTeX library for citation rendering, if found in the repo */
   bibLib: BibLibrary | null;
 
@@ -82,6 +84,9 @@ export interface DocumentContextValue {
   setEditorText: (text: string) => void;
   handleCommentClick: (commentText: string) => void;
 }
+
+/** Idle delay before a live save flushes to the backend. */
+const AUTOSAVE_DEBOUNCE_MS = 2500;
 
 // Named _DocumentContext so test helpers can provide mock values directly
 export const _DocumentContext = createContext<DocumentContextValue | null>(null);
@@ -179,12 +184,13 @@ export function DocumentProvider({
     [backed, yjs.socket, markdown, threads, frontmatter],
   );
 
-  // Explicit save only: no auto-commit effect here. Writing back happens solely
-  // when the user presses save (saveNow -> sendDoc(true)).
   const saveNow = useCallback(() => sendDoc(true), [sendDoc]);
 
   // Track whether the shown document matches what was last committed to GitHub.
   const [lastCommittedHash, setLastCommittedHash] = useState<string | null>(null);
+  // True when the backend rejected a write because the file changed upstream
+  // (edited in Obsidian/Drive). Auto-save never clobbers; the user reloads.
+  const [conflict, setConflict] = useState(false);
   const baselineSetRef = useRef(false);
   const currentHash = useMemo(
     () => (backed ? quickHash(serializeThreads(markdown, threads, frontmatter)) : null),
@@ -208,6 +214,9 @@ export function DocumentProvider({
         const m = JSON.parse(e.data) as { type?: string; hash?: string };
         if (m.type === "committed" && typeof m.hash === "string") {
           setLastCommittedHash(m.hash);
+          setConflict(false);
+        } else if (m.type === "conflict") {
+          setConflict(true);
         }
       } catch {
         // not a JSON control message
@@ -218,6 +227,16 @@ export function DocumentProvider({
   }, [yjs.socket]);
 
   const unsaved = backed && !!currentHash && currentHash !== lastCommittedHash;
+
+  // Live save: once the document core became a faithful Y.Text (#13), a save is
+  // byte-identical, so auto-save is safe. Debounce on edit-idle and let the
+  // relay write conditionally (it rejects rather than clobbering an upstream
+  // edit). A conflict pauses auto-save until the user reloads.
+  useEffect(() => {
+    if (!unsaved || conflict) return;
+    const t = setTimeout(saveNow, AUTOSAVE_DEBOUNCE_MS);
+    return () => clearTimeout(t);
+  }, [unsaved, conflict, saveNow]);
 
   // Fetch and parse the backend's BibTeX library once, so the `@`-citation
   // picker and rendering work for both GitHub repos and Drive folders. The same
@@ -373,6 +392,7 @@ export function DocumentProvider({
     backed,
     saveNow,
     unsaved,
+    conflict,
     bibLib,
     // Suggest-role users are locked to suggest regardless of the shared mode
     mode: role === "suggest" ? "suggest" : yjs.mode,

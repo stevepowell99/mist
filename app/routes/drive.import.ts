@@ -52,6 +52,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 
   let drive: DriveMeta;
   let content: string;
+  let driveVersion: string | null = null;
   try {
     const token = await getDriveAccessToken(env);
     const meta = await driveGetMeta(token, fileId);
@@ -60,8 +61,9 @@ export async function action({ request, context }: Route.ActionArgs) {
       return json({ error: "only .md or .qmd files can be opened" }, 400);
     }
     drive = { fileId: meta.id, name: meta.name, folderId: meta.parents?.[0] };
-    const { text } = await new DriveBackend(drive, env).read();
-    content = stripMistBanner(text);
+    const read = await new DriveBackend(drive, env).read();
+    content = stripMistBanner(read.text);
+    driveVersion = read.version;
   } catch (err) {
     return json({ error: err instanceof Error ? err.message : "Drive read failed" }, 502);
   }
@@ -74,7 +76,10 @@ export async function action({ request, context }: Route.ActionArgs) {
     new Request("https://do/", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: body, threads, frontmatter, drive }),
+      // driveVersion is the file's headRevisionId at open: the baseline the
+      // relay writes conditionally against, so live save never clobbers a
+      // change made in Obsidian/Drive while the session is open.
+      body: JSON.stringify({ content: body, threads, frontmatter, drive, driveVersion }),
     }),
   );
 

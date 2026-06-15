@@ -292,24 +292,30 @@ class DocumentAgent extends Agent {
     const bound = this.backendFor();
     if (!bound) return; // commit-back not configured on this server
 
+    // Write conditionally on the version we last saw, so an edit made in
+    // Obsidian/Drive while a session is open is never clobbered. On a version
+    // mismatch the backend throws; we surface a conflict and leave the edits
+    // pending rather than overwriting.
+    const expected = this.readStoredText("driveVersion");
     try {
-      await bound.backend.write(pending, null, `Update ${bound.label} via mist`);
+      const { version } = await bound.backend.write(pending, expected, `Update ${bound.label} via mist`);
       this.sql`
         INSERT INTO doc_state (key, value) VALUES ('lastCommitMd', ${textBlob(pending)})
         ON CONFLICT(key) DO UPDATE SET value = excluded.value
       `;
-      // Tell connected clients which content is now saved, so they can show a
-      // clean state and clear the unsaved warning.
-      const ack = JSON.stringify({ type: "committed", hash: quickHash(pending) });
-      for (const conn of this.getConnections()) {
-        try {
-          conn.send(ack);
-        } catch {
-          // connection gone; ignore
-        }
+      if (version) {
+        this.sql`
+          INSERT INTO doc_state (key, value) VALUES ('driveVersion', ${textBlob(version)})
+          ON CONFLICT(key) DO UPDATE SET value = excluded.value
+        `;
       }
-    } catch {
-      // Leave pending in place; the next edit or alarm retries.
+      // broadcast() is the agents framework's send-to-all-connections helper.
+      this.broadcast(JSON.stringify({ type: "committed", hash: quickHash(pending) }));
+    } catch (err) {
+      const conflict = err instanceof Error && /changed upstream/.test(err.message);
+      if (conflict) this.broadcast(JSON.stringify({ type: "conflict" }));
+      // Leave the edits pending: a conflict pauses auto-save (the client gates
+      // on it) until the two versions are reconciled. We never clobber.
     }
   }
 
@@ -355,7 +361,7 @@ class DocumentAgent extends Agent {
       const contentType = request.headers.get("Content-Type") || "";
       if (contentType.includes("application/json")) {
         try {
-          const body = await request.json() as { content?: string; threads?: unknown[]; onboarding?: boolean; github?: GitHubMeta; drive?: DriveMeta; frontmatter?: string };
+          const body = await request.json() as { content?: string; threads?: unknown[]; onboarding?: boolean; github?: GitHubMeta; drive?: DriveMeta; frontmatter?: string; driveVersion?: string | null };
           if (body.frontmatter) {
             // The file's own YAML frontmatter (theme, css, format, title...),
             // kept in the doc so it round-trips on commit-back rather than being
@@ -375,6 +381,13 @@ class DocumentAgent extends Agent {
               INSERT INTO doc_state (key, value) VALUES ('drive', ${textBlob(JSON.stringify({ fileId: d.fileId, name: d.name, folderId: d.folderId }))})
               ON CONFLICT(key) DO UPDATE SET value = excluded.value
             `;
+            // The file's version at open: the baseline for conditional writes.
+            if (body.driveVersion) {
+              this.sql`
+                INSERT INTO doc_state (key, value) VALUES ('driveVersion', ${textBlob(body.driveVersion)})
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value
+              `;
+            }
           }
           if (body.content) {
             // Y.Text core (#13): seed the raw markdown body verbatim into
