@@ -236,6 +236,12 @@ body {
   opacity: 0.5;
 }
 
+/* Quarto `::: {.class}` fenced divs, shaded darker the deeper they nest. */
+.cm-fence-d1 { background: color-mix(in srgb, var(--color-ink) 4%, transparent); }
+.cm-fence-d2 { background: color-mix(in srgb, var(--color-ink) 8%, transparent); }
+.cm-fence-d3 { background: color-mix(in srgb, var(--color-ink) 12%, transparent); }
+.cm-fence-d4 { background: color-mix(in srgb, var(--color-ink) 16%, transparent); }
+
 /* CriticMarkup delimiter tokens (widget decorations around mark ranges) */
 .cm-delimiter {
   opacity: 0.35;

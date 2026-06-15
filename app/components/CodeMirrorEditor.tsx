@@ -21,6 +21,7 @@ import { markdown } from "@codemirror/lang-markdown";
 import { yCollab, yUndoManagerKeymap } from "y-codemirror.next";
 import { criticMarkup } from "~/lib/cm-criticmarkup";
 import { markdownLineStyle } from "~/lib/cm-markdown-style";
+import { fencedDivStyle } from "~/lib/cm-fenced-divs";
 import { suggestMode } from "~/lib/cm-suggest";
 import { wrapKeymap, wrapOnSelection } from "~/lib/cm-shortcuts";
 import { activeCommentField, setActiveComment } from "~/lib/cm-active-comment";
@@ -118,6 +119,7 @@ export default function CodeMirrorEditor({
         EditorView.lineWrapping,
         citations(() => bibRef.current),
         markdownLineStyle,
+        fencedDivStyle,
         criticMarkup,
         activeCommentField,
         yCollab(ytext, awareness, { undoManager }),
