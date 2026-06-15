@@ -15,6 +15,17 @@ import type { SearchResult } from "~/routes/drive.search";
 
 const SIGN_IN_MSG = "Sign in with Google on the home page to use Drive.";
 
+/** Parse a JSON response, but if the body is not JSON (e.g. a sanitised server
+ *  error page), surface the text as a clean error instead of a parse crash. */
+async function readJson(res: Response): Promise<Record<string, unknown>> {
+  const text = await res.text();
+  try {
+    return text ? (JSON.parse(text) as Record<string, unknown>) : {};
+  } catch {
+    throw new Error(text.trim().slice(0, 200) || `request failed (${res.status})`);
+  }
+}
+
 interface Item {
   id: string;
   name: string;
@@ -155,7 +166,7 @@ export default function DriveBrowser({
       else if (folderRef) p.set("folder", folderRef);
       const res = await fetch(`/drive/search?${p.toString()}`);
       if (res.status === 401) throw new Error(SIGN_IN_MSG);
-      const body = (await res.json()) as {
+      const body = (await readJson(res)) as {
         results?: SearchResult[];
         folder?: { trail: Crumb[] } | null;
         error?: string;
@@ -200,7 +211,7 @@ export default function DriveBrowser({
           body: JSON.stringify({ url: item.id }),
         });
         if (res.status === 401) throw new Error(SIGN_IN_MSG);
-        const body = (await res.json()) as { url?: string; error?: string };
+        const body = (await readJson(res)) as { url?: string; error?: string };
         if (body.url) {
           addRecentOpened({ id: item.id, name: item.name, path: item.path });
           // Carry the current View (editor/split/preview) onto the new doc so
@@ -241,7 +252,7 @@ export default function DriveBrowser({
         body: JSON.stringify(payload),
       });
       if (res.status === 401) throw new Error(SIGN_IN_MSG);
-      const body = (await res.json()) as { file?: { id: string; name: string }; error?: string };
+      const body = (await readJson(res)) as { file?: { id: string; name: string }; error?: string };
       if (!res.ok) throw new Error(body.error ?? "operation failed");
       return body;
     },

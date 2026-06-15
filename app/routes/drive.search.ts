@@ -45,26 +45,29 @@ function toResult(e: DriveSearchEntry): SearchResult {
  * data junk does not crowd out documents). Gated by the shared Drive passphrase.
  */
 export async function loader({ request, context }: Route.LoaderArgs) {
-  const { env } = getCloudflare(context);
-  // Search runs as the relay over its own tree, so it cannot be scoped per file
-  // without a permission call per result. v1 gates it behind a valid session (or
-  // passphrase); opening a specific file IS enforced per-file in drive.import.
-  const access = await driveAccess(request, env);
-  if (!access.ok) return driveUnauthenticated();
-  if (!driveConfigured(env)) {
-    return Response.json({ error: "Drive not configured" }, { status: 501 });
-  }
-
-  const url = new URL(request.url);
-  const q = (url.searchParams.get("q") ?? "").trim();
-  const folder = url.searchParams.get("folder") ?? undefined;
-  const requested = (url.searchParams.get("types") ?? "")
-    .split(",")
-    .map((t) => t.trim())
-    .filter((t): t is DriveKind => (FILTERABLE as string[]).includes(t));
-  const types = requested.length ? requested : (["markdown", "folder"] as DriveKind[]);
-
+  // Whole body in one try so the loader ALWAYS returns JSON: an uncaught throw
+  // would otherwise surface as React Router's plain-text "Unexpected Server
+  // Error", which the client cannot parse.
   try {
+    const { env } = getCloudflare(context);
+    // Search runs as the relay over its own tree, so it cannot be scoped per file
+    // without a permission call per result. v1 gates it behind a valid session;
+    // opening a specific file IS enforced per-file in drive.import.
+    const access = await driveAccess(request, env);
+    if (!access.ok) return driveUnauthenticated();
+    if (!driveConfigured(env)) {
+      return Response.json({ error: "Drive not configured" }, { status: 501 });
+    }
+
+    const url = new URL(request.url);
+    const q = (url.searchParams.get("q") ?? "").trim();
+    const folder = url.searchParams.get("folder") ?? undefined;
+    const requested = (url.searchParams.get("types") ?? "")
+      .split(",")
+      .map((t) => t.trim())
+      .filter((t): t is DriveKind => (FILTERABLE as string[]).includes(t));
+    const types = requested.length ? requested : (["markdown", "folder"] as DriveKind[]);
+
     const token = await getDriveAccessToken(env);
     const entries = await driveFiles(token, { nameQuery: q || undefined, folderId: folder, types });
     // When browsing a folder, also return its trail (top -> current) so the
