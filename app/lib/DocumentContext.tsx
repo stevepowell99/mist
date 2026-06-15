@@ -6,7 +6,7 @@ import type { useYjsEditor } from "~/lib/useYjsEditor";
 import { useThreads } from "~/lib/useThreads";
 import { findCommentTextAtCursor } from "~/lib/comment-threads";
 import { serializeWithCriticMarkup } from "~/lib/critic-serializer";
-import { serializeThreads, rawFrontmatter } from "~/lib/thread-serialization";
+import { serializeThreads } from "~/lib/thread-serialization";
 import { quickHash } from "~/shared/hash";
 import { rawAssetUrl } from "~/lib/github";
 import { getDriveKey } from "~/lib/drive-key";
@@ -119,23 +119,19 @@ export function DocumentProvider({
   // Either backend means edits are relayed for write-back to the source file.
   const backed = !!github || !!drive;
   const [markdown, setMarkdown] = useState("");
+  const [frontmatter, setFrontmatter] = useState("");
   const [editorInstance, setEditorInstance] = useState<TiptapEditor | null>(null);
-  // The document's frontmatter now lives in the editor text (shown and editable),
-  // so derive it from the markdown; edits to the YAML flow straight into the
-  // preview/slides. Fall back to the Yjs meta map for documents opened before
-  // this change (their body has no frontmatter), so deck detection still works.
-  const [metaFrontmatter, setMetaFrontmatter] = useState("");
+
+  // The file's frontmatter is kept verbatim in the Yjs "meta" map (seeded at
+  // import), separate from the editor body, so the editor round-trip cannot
+  // mangle multi-line YAML. Read it once synced and observe for changes.
   useEffect(() => {
     const meta = yjs.doc.getMap<string>("meta");
-    const read = () => setMetaFrontmatter((meta.get("frontmatter") as string) ?? "");
+    const read = () => setFrontmatter((meta.get("frontmatter") as string) ?? "");
     read();
     meta.observe(read);
     return () => meta.unobserve(read);
   }, [yjs.doc]);
-  const frontmatter = useMemo(
-    () => rawFrontmatter(markdown) || metaFrontmatter,
-    [markdown, metaFrontmatter],
-  );
   const [previewToggled, setPreviewToggled] = useState(initialPreview);
   const [previewHeld, setPreviewHeld] = useState(false);
   const [commentActive, setCommentActive] = useState(false);

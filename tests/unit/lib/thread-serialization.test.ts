@@ -205,9 +205,7 @@ Some text`;
 
     const { body, threads } = deserializeThreads(md);
     expect(threads).toEqual([]);
-    // The user frontmatter stays in the body (shown and edited in the editor);
-    // only the internal mist block is removed, so this file is byte-exact.
-    expect(body).toBe(md);
+    expect(body).toBe("Some text");
   });
 
   it("no frontmatter → empty threads array", () => {
@@ -396,9 +394,9 @@ describe("roundtrip", () => {
     expect(committed).toBe(file); // exact round-trip, no quote-stripping or reorder
   });
 
-  it("deck frontmatter is shown in the editor and round-trips byte-for-byte", () => {
-    // The editor now carries the user's frontmatter so it is visible and
-    // editable; the whole file round-trips unchanged through import and save.
+  it("deck frontmatter survives import then commit-back via the doc", () => {
+    // The frontmatter is kept separate (verbatim in the doc), not in the editor
+    // body, so the editor round-trip cannot mangle the multi-line YAML.
     const file = `---
 format:
   revealjs:
@@ -409,11 +407,14 @@ css: assets/deck.css
 ## Slide one
 
 Body`;
-    const { body } = deserializeThreads(file);
-    // body reaches the editor WITH its frontmatter, byte-exact
-    expect(body).toBe(file);
-    expect(body).toContain("theme:");
-    // committing it back is faithful
-    expect(serializeThreads(body, [])).toBe(file);
+    const { body, frontmatter } = deserializeThreads(file);
+    // body reaches the editor with no frontmatter
+    expect(body).toContain("## Slide one");
+    expect(body).not.toContain("theme:");
+    // committing the edited body back, with the doc's frontmatter, re-emits it
+    const committed = serializeThreads(body, [], frontmatter);
+    expect(committed).toContain("theme: dark");
+    expect(committed).toContain("css: assets/deck.css");
+    expect(committed).toContain("## Slide one");
   });
 });
