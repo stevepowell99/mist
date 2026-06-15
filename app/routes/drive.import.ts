@@ -12,7 +12,7 @@ import {
 } from "~/lib/google.server";
 import type { DriveMeta } from "~/shared/types";
 import { stripMistBanner } from "~/shared/mist-banner";
-import { driveKeyOk, driveUnauthorized } from "~/lib/drive-auth.server";
+import { driveAccess, canAccessFile, driveUnauthenticated, driveForbidden } from "~/lib/drive-access.server";
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -31,7 +31,8 @@ export async function action({ request, context }: Route.ActionArgs) {
   if (request.method !== "POST") return json({ error: "method not allowed" }, 405);
 
   const { env } = getCloudflare(context);
-  if (!driveKeyOk(request, env)) return driveUnauthorized();
+  const access = await driveAccess(request, env);
+  if (!access.ok) return driveUnauthenticated();
   if (!driveConfigured(env)) {
     return json({ error: "Drive is not configured on this server" }, 501);
   }
@@ -47,6 +48,7 @@ export async function action({ request, context }: Route.ActionArgs) {
   if (!fileId) {
     return json({ error: "not a Drive file URL or id" }, 400);
   }
+  if (!(await canAccessFile(env, fileId, access.email))) return driveForbidden();
 
   let drive: DriveMeta;
   let content: string;

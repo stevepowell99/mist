@@ -107,7 +107,7 @@ function ToolbarToggle({
       disabled={disabled}
       title={title}
       aria-pressed={active}
-      className={`flex items-center border-l border-border px-3 transition-colors ${
+      className={`flex items-center px-3 py-1.5 transition-colors ${
         active ? activeClass : "text-muted hover:bg-border hover:text-ink"
       } ${disabled ? "opacity-40" : "cursor-pointer"}`}
     >
@@ -449,54 +449,58 @@ function DocumentLayout({ id }: { id: string }) {
         <div className="flex min-w-0 grow items-center px-4">
           <span className="truncate font-medium" title={title}>{title}</span>
         </div>
-        {/* Two icon groups: Mode (Editing vs Suggesting, shared doc state, only
-            an edit-link user can switch) and View (Editor / Split / Preview,
-            per-viewer). */}
-        <div className="hidden shrink-0 items-stretch lg:flex">
-          <ToolbarToggle
-            active={mode === "edit"}
-            onClick={() => role === "edit" && mode !== "edit" && toggleMode()}
-            disabled={role !== "edit"}
-            title="Editing (Ctrl/Cmd+Alt+E)"
-            activeClass="bg-coral text-paper"
-          >
-            <IconEditing />
-          </ToolbarToggle>
-          <ToolbarToggle
-            active={mode === "suggest"}
-            onClick={() => mode !== "suggest" && role === "edit" && toggleMode()}
-            disabled={role !== "edit"}
-            title="Suggesting (Ctrl/Cmd+Alt+S)"
-            activeClass="bg-amber-500 text-paper"
-          >
-            <IconSuggesting />
-          </ToolbarToggle>
-          <ToolbarToggle
-            active={view === "editor"}
-            onClick={() => setView("editor")}
-            title="Editor only (Ctrl/Cmd+Alt+1)"
-            activeClass="bg-ink text-paper"
-          >
-            <IconEditorOnly />
-          </ToolbarToggle>
-          {isDesktop && (
+        {/* Two separate radio pills so the grouping reads at a glance: Mode
+            (Editing vs Suggesting, shared doc state, only an edit-link user can
+            switch) and View (Editor / Split / Preview, per-viewer). */}
+        <div className="hidden shrink-0 items-center gap-2 border-l border-border pl-3 pr-1 lg:flex">
+          <div className="flex divide-x divide-border overflow-hidden rounded-md border border-border">
             <ToolbarToggle
-              active={view === "split"}
-              onClick={() => setView("split")}
-              title="Split (Ctrl/Cmd+Alt+2)"
+              active={mode === "edit"}
+              onClick={() => role === "edit" && mode !== "edit" && toggleMode()}
+              disabled={role !== "edit"}
+              title="Editing (Ctrl/Cmd+Alt+E)"
+              activeClass="bg-coral text-paper"
+            >
+              <IconEditing />
+            </ToolbarToggle>
+            <ToolbarToggle
+              active={mode === "suggest"}
+              onClick={() => mode !== "suggest" && role === "edit" && toggleMode()}
+              disabled={role !== "edit"}
+              title="Suggesting (Ctrl/Cmd+Alt+S)"
+              activeClass="bg-amber-500 text-paper"
+            >
+              <IconSuggesting />
+            </ToolbarToggle>
+          </div>
+          <div className="flex divide-x divide-border overflow-hidden rounded-md border border-border">
+            <ToolbarToggle
+              active={view === "editor"}
+              onClick={() => setView("editor")}
+              title="Editor only (Ctrl/Cmd+Alt+1)"
               activeClass="bg-ink text-paper"
             >
-              <IconSplit />
+              <IconEditorOnly />
             </ToolbarToggle>
-          )}
-          <ToolbarToggle
-            active={view === "preview"}
-            onClick={() => setView("preview")}
-            title="Preview only (Ctrl/Cmd+Alt+3)"
-            activeClass="bg-emerald-600 text-paper"
-          >
-            <IconPreviewOnly />
-          </ToolbarToggle>
+            {isDesktop && (
+              <ToolbarToggle
+                active={view === "split"}
+                onClick={() => setView("split")}
+                title="Split (Ctrl/Cmd+Alt+2)"
+                activeClass="bg-ink text-paper"
+              >
+                <IconSplit />
+              </ToolbarToggle>
+            )}
+            <ToolbarToggle
+              active={view === "preview"}
+              onClick={() => setView("preview")}
+              title="Preview only (Ctrl/Cmd+Alt+3)"
+              activeClass="bg-emerald-600 text-paper"
+            >
+              <IconPreviewOnly />
+            </ToolbarToggle>
+          </div>
         </div>
         {/* On desktop the right group is the aside width so its left edge lines up with
             the body/sidebar divide. On mobile there is no sidebar, so it sizes naturally. */}

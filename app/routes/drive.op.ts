@@ -8,7 +8,7 @@ import {
   driveCopy,
   driveTrash,
 } from "~/lib/google.server";
-import { driveKeyOk, driveUnauthorized } from "~/lib/drive-auth.server";
+import { driveAccess, canAccessFile, driveUnauthenticated, driveForbidden } from "~/lib/drive-access.server";
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -29,7 +29,8 @@ function withExt(name: string): string {
 export async function action({ request, context }: Route.ActionArgs) {
   if (request.method !== "POST") return json({ error: "method not allowed" }, 405);
   const { env } = getCloudflare(context);
-  if (!driveKeyOk(request, env)) return driveUnauthorized();
+  const access = await driveAccess(request, env);
+  if (!access.ok) return driveUnauthenticated();
   if (!driveConfigured(env)) return json({ error: "Drive not configured" }, 501);
 
   let body: { action?: string; folderId?: string; fileId?: string; name?: string };
@@ -38,6 +39,11 @@ export async function action({ request, context }: Route.ActionArgs) {
   } catch {
     return json({ error: "invalid request body" }, 400);
   }
+
+  // Per-file sharing check on the operation's target (the folder for create, the
+  // file otherwise). Absent ids fall through to the per-case validation below.
+  const target = body.action === "create" ? body.folderId : body.fileId;
+  if (target && !(await canAccessFile(env, target, access.email))) return driveForbidden();
 
   try {
     const token = await getDriveAccessToken(env);

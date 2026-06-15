@@ -6,7 +6,7 @@ import {
   driveListFolder,
   driveDownload,
 } from "~/lib/google.server";
-import { driveKeyOk, driveUnauthorized } from "~/lib/drive-auth.server";
+import { driveAccess, canAccessFile, driveUnauthenticated, driveForbidden } from "~/lib/drive-access.server";
 
 /**
  * Find and return the BibTeX library for a Drive-backed doc: looks in the doc's
@@ -15,11 +15,13 @@ import { driveKeyOk, driveUnauthorized } from "~/lib/drive-auth.server";
  */
 export async function loader({ request, context }: Route.LoaderArgs) {
   const { env } = getCloudflare(context);
-  if (!driveKeyOk(request, env)) return driveUnauthorized();
+  const access = await driveAccess(request, env);
+  if (!access.ok) return driveUnauthenticated();
   if (!driveConfigured(env)) return new Response("Drive not configured", { status: 501 });
 
   const folder = new URL(request.url).searchParams.get("folder");
   if (!folder) return new Response("missing folder", { status: 400 });
+  if (!(await canAccessFile(env, folder, access.email))) return driveForbidden();
 
   try {
     const token = await getDriveAccessToken(env);

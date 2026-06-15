@@ -12,4 +12,6 @@ export default [
   route("drive/search", "routes/drive.search.ts"),
   route("drive/bib", "routes/drive.bib.ts"),
   route("drive/op", "routes/drive.op.ts"),
+  route("auth/google", "routes/auth.google.ts"),
+  route("auth/logout", "routes/auth.logout.ts"),
 ] satisfies RouteConfig;

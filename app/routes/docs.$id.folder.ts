@@ -3,7 +3,7 @@ import { getAgentByName } from "agents";
 import { isValidDocumentId } from "~/shared/constants";
 import { getCloudflare } from "~/lib/cloudflare.server";
 import { GitHubBackend, DriveBackend } from "~/lib/backend.server";
-import { driveKeyOk, driveUnauthorized } from "~/lib/drive-auth.server";
+import { driveAccess, driveUnauthenticated } from "~/lib/drive-access.server";
 import type { DocRole, DriveMeta, GitHubMeta } from "~/shared/types";
 
 /**
@@ -40,7 +40,7 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
 
   try {
     if (drive) {
-      if (!driveKeyOk(request, env)) return driveUnauthorized();
+      if (!(await driveAccess(request, env)).ok) return driveUnauthenticated();
       const backend = new DriveBackend(drive, env);
       const folderRef = ref ?? backend.folderRef();
       const [entries, parentRef, folderName] = await Promise.all([

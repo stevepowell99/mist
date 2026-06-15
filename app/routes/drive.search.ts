@@ -8,7 +8,7 @@ import {
   type DriveKind,
   type DriveSearchEntry,
 } from "~/lib/google.server";
-import { driveKeyOk, driveUnauthorized } from "~/lib/drive-auth.server";
+import { driveAccess, driveUnauthenticated } from "~/lib/drive-access.server";
 
 export interface SearchResult {
   id: string;
@@ -43,7 +43,11 @@ function toResult(e: DriveSearchEntry): SearchResult {
  */
 export async function loader({ request, context }: Route.LoaderArgs) {
   const { env } = getCloudflare(context);
-  if (!driveKeyOk(request, env)) return driveUnauthorized();
+  // Search runs as the relay over its own tree, so it cannot be scoped per file
+  // without a permission call per result. v1 gates it behind a valid session (or
+  // passphrase); opening a specific file IS enforced per-file in drive.import.
+  const access = await driveAccess(request, env);
+  if (!access.ok) return driveUnauthenticated();
   if (!driveConfigured(env)) {
     return Response.json({ error: "Drive not configured" }, { status: 501 });
   }

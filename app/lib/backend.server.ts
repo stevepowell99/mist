@@ -21,6 +21,7 @@ import {
   driveGetMeta,
   driveListFolder,
   driveListPermissions,
+  emailHasAccess,
 } from "./google.server";
 
 /** One entry in a folder listing. */
@@ -183,7 +184,7 @@ export class DriveBackend implements DocBackend {
   }
 
   async canAccess(userEmail: string): Promise<boolean> {
-    const emails = await driveListPermissions(await this.token(), this.meta.fileId);
-    return emails.some((e) => e.toLowerCase() === userEmail.toLowerCase());
+    const grants = await driveListPermissions(await this.token(), this.meta.fileId);
+    return emailHasAccess(grants, userEmail);
   }
 }

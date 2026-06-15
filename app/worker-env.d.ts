@@ -9,6 +9,10 @@ interface Env {
   GOOGLE_CLIENT_SECRET?: string;
   /** Google OAuth refresh token for the Drive relay identity, server-side only */
   GOOGLE_REFRESH_TOKEN?: string;
-  /** Shared passphrase gating the /drive/* endpoints until Google sign-in lands */
+  /** Shared passphrase gating the /drive/* endpoints, kept during the sign-in transition */
   DRIVE_ACCESS_KEY?: string;
+  /** OAuth 2.0 Web client id for Google Identity Services sign-in (public, sent to the browser) */
+  GOOGLE_SIGNIN_CLIENT_ID?: string;
+  /** HMAC secret used to sign the session cookie, server-side only */
+  SESSION_SECRET?: string;
 }

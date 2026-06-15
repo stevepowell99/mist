@@ -1,0 +1,107 @@
+/**
+ * Access gate for the /drive/* endpoints. Replaces the single shared passphrase
+ * with Google sign-in plus per-file Drive sharing, while still accepting the
+ * passphrase during the transition so nothing breaks before sign-in is set up.
+ *
+ * Authorisation model (decided 15 June 2026): a user may open a file iff the
+ * file's own Drive sharing grants their email (or their domain, or anyone-with-
+ * link). Drive sharing stays the single source of truth; mist keeps no separate
+ * allowlist.
+ */
+import { verifySession, readSessionCookie } from "./session.server";
+import {
+  driveListPermissions,
+  emailHasAccess,
+  getDriveAccessToken,
+  type DriveEnv,
+} from "./google.server";
+import { driveKeyOk } from "./drive-auth.server";
+
+export interface DriveSessionEnv extends DriveEnv {
+  SESSION_SECRET?: string;
+  GOOGLE_SIGNIN_CLIENT_ID?: string;
+  DRIVE_ACCESS_KEY?: string;
+}
+
+export interface DriveAccess {
+  ok: boolean;
+  /** The signed-in email, or null for a passphrase-only (transition) session. */
+  email: string | null;
+}
+
+/** The verified signed-in email from the session cookie, or null. */
+export async function getRequestEmail(request: Request, env: DriveSessionEnv): Promise<string | null> {
+  return verifySession(readSessionCookie(request), env.SESSION_SECRET ?? "");
+}
+
+/**
+ * Gate for /drive/* endpoints: a valid Google session, or the shared passphrase
+ * during the transition. Returns the email when a session is present.
+ */
+export async function driveAccess(request: Request, env: DriveSessionEnv): Promise<DriveAccess> {
+  const email = await getRequestEmail(request, env);
+  if (email) return { ok: true, email };
+  if (driveKeyOk(request, env)) return { ok: true, email: null };
+  return { ok: false, email: null };
+}
+
+/**
+ * Whether a user may open a specific Drive file, by that file's sharing. A
+ * passphrase-only session (email null) passes, since the passphrase is the
+ * coarse transition gate; once sign-in is the only gate, every request carries
+ * an email and per-file sharing is enforced.
+ */
+export async function canAccessFile(
+  env: DriveSessionEnv,
+  fileId: string,
+  email: string | null,
+): Promise<boolean> {
+  if (!email) return true;
+  try {
+    const token = await getDriveAccessToken(env);
+    const grants = await driveListPermissions(token, fileId);
+    return emailHasAccess(grants, email);
+  } catch {
+    return false; // fail closed if we cannot read the sharing
+  }
+}
+
+/** 401 for no/expired session and no passphrase. */
+export function driveUnauthenticated(): Response {
+  return new Response(JSON.stringify({ error: "sign in required" }), {
+    status: 401,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+/** 403 for a signed-in user who is not shared on the requested file. */
+export function driveForbidden(): Response {
+  return new Response(JSON.stringify({ error: "you do not have access to this file" }), {
+    status: 403,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+/**
+ * Verify a Google ID token (the credential from the Identity Services button)
+ * and return the verified email, or null. Uses Google's tokeninfo endpoint so
+ * we do not have to carry JWKS/crypto here; this runs once per sign-in, not per
+ * request (the session cookie covers the rest).
+ */
+export async function verifyGoogleIdToken(idToken: string, clientId: string): Promise<string | null> {
+  if (!idToken || !clientId) return null;
+  const res = await fetch(
+    `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`,
+  );
+  if (!res.ok) return null;
+  const c = (await res.json()) as {
+    aud?: string;
+    iss?: string;
+    email?: string;
+    email_verified?: string | boolean;
+  };
+  if (c.aud !== clientId) return null;
+  if (c.iss !== "accounts.google.com" && c.iss !== "https://accounts.google.com") return null;
+  if (c.email_verified !== "true" && c.email_verified !== true) return null;
+  return c.email ?? null;
+}

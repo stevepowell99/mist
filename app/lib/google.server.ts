@@ -360,14 +360,40 @@ export async function driveFiles(
 }
 
 /** Emails on a file's sharing list (for the later ACL check). */
-export async function driveListPermissions(token: string, fileId: string): Promise<string[]> {
+export interface DriveGrant {
+  /** "user", "group", "domain" or "anyone". */
+  type: string;
+  emailAddress?: string;
+  domain?: string;
+}
+
+/** A file's sharing grants (who it is shared with, and how). */
+export async function driveListPermissions(token: string, fileId: string): Promise<DriveGrant[]> {
   const res = await fetch(
-    `${DRIVE}/files/${fileId}/permissions?fields=permissions(emailAddress,type)&${COMMON}`,
+    `${DRIVE}/files/${fileId}/permissions?fields=permissions(emailAddress,type,domain)&${COMMON}`,
     { headers: authHeaders(token) },
   );
   if (!res.ok) throw new Error(`Drive permissions failed (${res.status})`);
-  const body = (await res.json()) as { permissions: { emailAddress?: string; type: string }[] };
-  return body.permissions.map((p) => p.emailAddress).filter((e): e is string => Boolean(e));
+  const body = (await res.json()) as { permissions: DriveGrant[] };
+  return body.permissions ?? [];
+}
+
+/**
+ * True when an email is authorised by a file's sharing grants: a direct user
+ * grant, a domain grant matching the email's domain, or anyone-with-link. Group
+ * membership is not resolved (it would need extra calls), so a user shared only
+ * via a group is not matched here.
+ */
+export function emailHasAccess(grants: DriveGrant[], email: string): boolean {
+  const e = email.trim().toLowerCase();
+  if (!e) return false;
+  const domain = e.split("@")[1] ?? "";
+  return grants.some(
+    (g) =>
+      g.type === "anyone" ||
+      (g.type === "user" && g.emailAddress?.toLowerCase() === e) ||
+      (g.type === "domain" && !!domain && g.domain?.toLowerCase() === domain),
+  );
 }
 
 /**
