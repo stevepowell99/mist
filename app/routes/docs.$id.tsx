@@ -300,8 +300,10 @@ function DocumentLayout({ id }: { id: string }) {
   const runChord = useCallback(
     (c: string): boolean => {
       switch (c) {
-        case "e": if (role === "edit" && mode !== "edit") toggleMode(); return true;
-        case "s": if (role === "edit" && mode !== "suggest") toggleMode(); return true;
+        // E and S both toggle the binary edit/suggest mode (toggleMode is a
+        // no-op for suggest-only links).
+        case "e":
+        case "s": toggleMode(); return true;
         case "1": setView("editor"); return true;
         case "2": if (isDesktop) setView("split"); return true;
         case "3": setView("preview"); return true;
@@ -314,7 +316,7 @@ function DocumentLayout({ id }: { id: string }) {
         default: return false;
       }
     },
-    [role, mode, toggleMode, setView, isDesktop, setAsideCollapsedPersist, asideCollapsed, nudgeSplit],
+    [toggleMode, setView, isDesktop, setAsideCollapsedPersist, asideCollapsed, nudgeSplit],
   );
 
   useEffect(() => {

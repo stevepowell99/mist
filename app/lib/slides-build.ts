@@ -408,7 +408,13 @@ window.addEventListener("keydown", function(e){
   else if (c === "BracketLeft") chord = "[";
   else if (c === "BracketRight") chord = "]";
   else if (c === "Slash") chord = "/";
-  if (chord) { e.preventDefault(); parent.postMessage({ type: "mist-key", chord: chord }, "*"); }
+  if (chord) {
+    // Stop reveal's own keydown (S notes, F fullscreen, O overview) from also
+    // firing on the same chord; we are in capture, so this pre-empts it.
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    parent.postMessage({ type: "mist-key", chord: chord }, "*");
+  }
 }, true);
 // center:false matches Quarto (reveal's own default is true). With centring on,
 // every slide's content block is vertically centred, which drags a

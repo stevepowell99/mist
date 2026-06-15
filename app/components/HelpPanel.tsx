@@ -17,8 +17,7 @@ interface Shortcut {
 }
 
 const LAYOUT: Shortcut[] = [
-  { keys: [MOD, "Alt", "E"], label: "Editing mode" },
-  { keys: [MOD, "Alt", "S"], label: "Suggesting mode" },
+  { keys: [MOD, "Alt", "E / S"], label: "Toggle edit / suggest" },
   { keys: [MOD, "Alt", "1"], label: "Editor only" },
   { keys: [MOD, "Alt", "2"], label: "Split editor + preview" },
   { keys: [MOD, "Alt", "3"], label: "Preview only" },
