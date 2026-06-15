@@ -18,6 +18,11 @@ export function useYjsEditor(docId: string, docKey: string | null = null) {
   const docState = useMemo(() => doc.getMap<string>("docState"), [doc]);
   const providerRef = useRef<YjsProvider | null>(null);
   const [synced, setSynced] = useState(false);
+  // Idle pause: an open WebSocket keeps the document's Durable Object active
+  // (and billing). After a spell of no local activity, or when the tab is
+  // hidden, drop the connection so the DO goes cold; reconnect on return.
+  const [paused, setPaused] = useState(false);
+  const pausedRef = useRef(false);
   // Edit is the default for an edit-link user; suggest-link users are forced to
   // suggest in DocumentContext regardless. Either can switch deliberately.
   const [mode, setModeState] = useState<DocMode>("edit");
@@ -73,5 +78,67 @@ export function useYjsEditor(docId: string, docKey: string | null = null) {
     };
   }, [socket, doc, awareness]);
 
-  return { doc, awareness, socket, synced, user, setUserName, needsName, dismissNamePrompt, mode, setMode, docState, isOnboarding };
+  // Idle pause / resume. Real local interaction (keys, pointer, wheel, focus)
+  // keeps the session alive; otherwise it drops the WebSocket after IDLE_MS, or
+  // sooner once the tab is hidden, and reconnects on the next interaction or
+  // when the tab is shown again.
+  const resume = useCallback(() => {
+    const ps = socket as unknown as { reconnect?: () => void } | null;
+    if (pausedRef.current) {
+      pausedRef.current = false;
+      setPaused(false);
+      ps?.reconnect?.();
+    }
+  }, [socket]);
+
+  useEffect(() => {
+    if (!socket) return;
+    const ps = socket as unknown as { close?: () => void; reconnect?: () => void };
+    const IDLE_MS = 5 * 60 * 1000;
+    const HIDDEN_MS = 45 * 1000;
+    let idle: ReturnType<typeof setTimeout> | undefined;
+    let hidden: ReturnType<typeof setTimeout> | undefined;
+
+    const pause = () => {
+      if (pausedRef.current) return;
+      pausedRef.current = true;
+      setPaused(true);
+      ps.close?.();
+    };
+    const armIdle = () => {
+      clearTimeout(idle);
+      idle = setTimeout(pause, IDLE_MS);
+    };
+    const onActivity = () => {
+      if (pausedRef.current) {
+        pausedRef.current = false;
+        setPaused(false);
+        ps.reconnect?.();
+      }
+      armIdle();
+    };
+    const onVisibility = () => {
+      if (document.hidden) {
+        clearTimeout(hidden);
+        hidden = setTimeout(pause, HIDDEN_MS);
+      } else {
+        clearTimeout(hidden);
+        onActivity();
+      }
+    };
+
+    const events: (keyof WindowEventMap)[] = ["keydown", "pointerdown", "wheel", "focus"];
+    for (const e of events) window.addEventListener(e, onActivity, { passive: true });
+    document.addEventListener("visibilitychange", onVisibility);
+    armIdle();
+
+    return () => {
+      clearTimeout(idle);
+      clearTimeout(hidden);
+      for (const e of events) window.removeEventListener(e, onActivity);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [socket]);
+
+  return { doc, awareness, socket, synced, paused, resume, user, setUserName, needsName, dismissNamePrompt, mode, setMode, docState, isOnboarding };
 }

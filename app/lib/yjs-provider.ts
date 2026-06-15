@@ -19,6 +19,7 @@ export class YjsProvider {
     origin: string | null,
   ) => void;
   private boundOnClose: () => void;
+  private boundOnOpen: () => void;
 
   constructor(ws: WebSocket, doc: Y.Doc, awareness: awarenessProtocol.Awareness, onSyncedChange?: (synced: boolean) => void) {
     this.ws = ws;
@@ -30,18 +31,18 @@ export class YjsProvider {
     this.boundOnDocUpdate = this.onDocUpdate.bind(this);
     this.boundOnAwarenessChange = this.onAwarenessChange.bind(this);
     this.boundOnClose = this.onClose.bind(this);
+    this.boundOnOpen = () => this.sendSyncStep1();
 
     this.ws.binaryType = "arraybuffer";
     this.ws.addEventListener("message", this.boundOnMessage);
     this.ws.addEventListener("close", this.boundOnClose);
+    // Persistent (not once): PartySocket reuses this object across reconnects,
+    // so re-sync on every open, which is what makes idle pause/resume work.
+    this.ws.addEventListener("open", this.boundOnOpen);
     this.doc.on("update", this.boundOnDocUpdate);
     this.awareness.on("update", this.boundOnAwarenessChange);
 
-    if (this.ws.readyState === WebSocket.OPEN) {
-      this.sendSyncStep1();
-    } else {
-      this.ws.addEventListener("open", () => this.sendSyncStep1(), { once: true });
-    }
+    if (this.ws.readyState === WebSocket.OPEN) this.sendSyncStep1();
   }
 
   get isSynced(): boolean {
@@ -136,6 +137,7 @@ export class YjsProvider {
   destroy(): void {
     this.ws.removeEventListener("message", this.boundOnMessage);
     this.ws.removeEventListener("close", this.boundOnClose);
+    this.ws.removeEventListener("open", this.boundOnOpen);
     this.doc.off("update", this.boundOnDocUpdate);
     this.awareness.off("update", this.boundOnAwarenessChange);
     awarenessProtocol.removeAwarenessStates(this.awareness, [this.doc.clientID], null);

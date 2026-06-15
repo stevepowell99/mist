@@ -590,11 +590,22 @@ function DocumentLayout({ id }: { id: string }) {
         </div>
       </header>
       <div className="relative flex flex-1 overflow-hidden">
-        {!yjs.synced && (
+        {!yjs.synced && !yjs.paused && (
           <div className="absolute inset-0 z-40 flex flex-col items-center justify-center gap-3 bg-paper">
             <span className="h-7 w-7 animate-spin rounded-full border-2 border-border border-t-ink" />
             <span className="text-sm uppercase tracking-wider text-muted">Loading document…</span>
           </div>
+        )}
+        {yjs.paused && (
+          <button
+            type="button"
+            onClick={yjs.resume}
+            title="The live connection was paused while idle to save resources. Click, type or scroll to reconnect."
+            className="absolute left-1/2 top-2 z-40 flex -translate-x-1/2 items-center gap-2 rounded-full border border-border bg-paper px-3 py-1 text-xs uppercase tracking-wider text-muted shadow hover:text-ink"
+          >
+            <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-amber-500" />
+            Paused while idle, click to reconnect
+          </button>
         )}
         <div ref={contentRef} className="flex flex-1 overflow-hidden">
           {outlineOpen && (
