@@ -58,7 +58,10 @@ function splitSlides(body: string): string[] {
 }
 
 function classesFrom(attr: string): string[] {
-  return [...attr.matchAll(/\.([\w-]+)/g)].map((m) => m[1]);
+  // Drop quoted values first so a path like "../img/a.png" inside
+  // background-image="..." does not yield a bogus ".png" class.
+  const noQuotes = attr.replace(/=\s*"[^"]*"/g, "");
+  return [...noQuotes.matchAll(/\.([\w-]+)/g)].map((m) => m[1]);
 }
 
 /** A leading `# Heading {.cls background-color="..."}` becomes section attributes. */
@@ -151,23 +154,31 @@ function convertSpans(md: string): string {
 
 function buildSection(slideMd: string, ctx: AssetCtx): string {
   const lines = slideMd.split("\n");
+  // Skip any leading blank lines so the first slide's heading (which follows
+  // the blank line left after the frontmatter) is still recognised.
+  let h = 0;
+  while (h < lines.length && lines[h].trim() === "") h++;
+  const headingLine = lines[h] ?? "";
   let classAttr = "";
-  let bgAttr = "";
+  let bgComment = "";
   let body = slideMd;
-  if (/^#{1,6}\s/.test(lines[0] ?? "")) {
+  if (/^#{1,6}\s/.test(headingLine)) {
     // A slide marked hidden (Quarto `{visibility="hidden"}` or a `.hidden`
     // class) is omitted from the deck entirely, so hide/unhide works in the
     // preview without depending on the deck's own CSS.
-    if (/\bvisibility\s*=\s*"hidden"/.test(lines[0]) || /\{[^}]*\.hidden(?:-slide)?\b[^}]*\}/.test(lines[0])) {
+    if (/\bvisibility\s*=\s*"hidden"/.test(headingLine) || /\{[^}]*\.hidden(?:-slide)?\b[^}]*\}/.test(headingLine)) {
       return "";
     }
-    const parsed = parseHeading(lines[0], ctx);
+    const parsed = parseHeading(headingLine, ctx);
     classAttr = parsed.classAttr;
-    bgAttr = parsed.bgAttr;
-    body = [parsed.heading, ...lines.slice(1)].join("\n");
+    // reveal.js markdown slides take their background via a leading
+    // `<!-- .slide: ... -->` comment, not a section-element attribute (the
+    // markdown plugin regenerates the slide and ignores section attrs).
+    if (parsed.bgAttr) bgComment = `<!-- .slide: ${parsed.bgAttr} -->\n`;
+    body = [parsed.heading, ...lines.slice(h + 1)].join("\n");
   }
   const inner = convertDivs(convertImages(convertSpans(body))).replace(/<\/textarea>/gi, "&lt;/textarea&gt;");
-  return `<section${classAttr}${bgAttr ? " " + bgAttr : ""} data-markdown><textarea data-template>\n${inner}\n</textarea></section>`;
+  return `<section${classAttr} data-markdown><textarea data-template>\n${bgComment}${inner}\n</textarea></section>`;
 }
 
 const PREVIEW_CSS = `
