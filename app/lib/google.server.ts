@@ -268,6 +268,8 @@ export interface DriveSearchEntry {
   webViewLink: string | null;
   /** Parent folder path, e.g. "Causal Map / 19c-slides", "" at the root. */
   path: string;
+  /** Parent folder id, so a search result's path is clickable to browse there. */
+  parentId: string | null;
 }
 
 function escapeQ(s: string): string {
@@ -354,7 +356,7 @@ export async function driveFiles(
     if (wanted && !wanted.has(kind)) continue;
     const path = await resolveFolderPath(token, f.parents, cache);
     if (isSludge(f.name, path)) continue; // drop generated/build directories
-    entries.push({ id: f.id, name: f.name, kind, webViewLink: f.webViewLink ?? null, path });
+    entries.push({ id: f.id, name: f.name, kind, webViewLink: f.webViewLink ?? null, path, parentId: f.parents?.[0] ?? null });
   }
   return entries;
 }

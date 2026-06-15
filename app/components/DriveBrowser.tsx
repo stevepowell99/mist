@@ -21,6 +21,7 @@ interface Item {
   webViewLink: string | null;
   kind: DriveKind;
   path?: string;
+  parentId?: string | null;
 }
 
 interface Crumb {
@@ -427,7 +428,24 @@ export default function DriveBrowser({
                     </span>
                     <span className="min-w-0 flex-1">
                       {data.isSearch && e.path && (
-                        <span className="block truncate text-xs opacity-50">{e.path}</span>
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          onClick={(ev) => {
+                            ev.stopPropagation();
+                            if (e.parentId) browseFolder(e.parentId);
+                          }}
+                          onKeyDown={(ev) => {
+                            if (ev.key === "Enter" && e.parentId) {
+                              ev.stopPropagation();
+                              browseFolder(e.parentId);
+                            }
+                          }}
+                          title="Go to this folder"
+                          className="block cursor-pointer truncate text-xs opacity-50 hover:underline hover:opacity-100"
+                        >
+                          {e.path}
+                        </span>
                       )}
                       <span className="block truncate">{e.name}</span>
                     </span>

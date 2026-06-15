@@ -14,8 +14,10 @@ export interface SearchResult {
   id: string;
   name: string;
   kind: DriveKind;
-  /** Parent folder path, shown as a breadcrumb above the name. */
+  /** Parent folder path, shown as a clickable breadcrumb above the name. */
   path: string;
+  /** Parent folder id, so the path navigates into that folder. */
+  parentId: string | null;
   /** A markdown file mist can open in the editor. */
   openInMist: boolean;
   /** Drive web link for opening anything else in a new tab. */
@@ -30,6 +32,7 @@ function toResult(e: DriveSearchEntry): SearchResult {
     name: e.name,
     kind: e.kind,
     path: e.path,
+    parentId: e.parentId,
     openInMist: e.kind === "markdown",
     webViewLink: e.webViewLink,
   };
