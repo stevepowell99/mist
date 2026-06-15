@@ -1,3 +1,24 @@
-# Fathom analytics (optional — omit to disable)
+# Copy to `.dev.vars` (gitignored) for `npm run dev`. Local dev runs the Worker
+# and Durable Objects in workerd on your machine, so it does NOT use the
+# Cloudflare account's DO duration: use it for solo work to stay off the free
+# tier cap. Fill the GOOGLE_* values with the same values set in production via
+# `wrangler secret put` (Cloudflare secrets are write-only; reuse the originals).
+
+# Drive relay identity: server-side OAuth client (Google Cloud > Credentials).
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+GOOGLE_REFRESH_TOKEN=
+
+# Public web client id for Google sign-in. Add http://localhost:5173 to this
+# client's Authorized JavaScript origins, or local sign-in is rejected.
+GOOGLE_SIGNIN_CLIENT_ID=
+
+# HMAC secret for the session cookie. Any random string; local-only.
+SESSION_SECRET=
+
+# Optional: only for GitHub import/commit.
+GITHUB_TOKEN=
+
+# Fathom analytics (optional, omit to disable).
 VITE_FATHOM_SITE_ID=
 VITE_FATHOM_DOMAINS=
