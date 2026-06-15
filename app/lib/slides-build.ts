@@ -333,6 +333,10 @@ window.addEventListener("message", function(e){
   }
 });
 Reveal.initialize({plugins:revealPlugins,hash:false,controls:true,progress:true,keyboard:true,overview:true,scrollActivationWidth:null,width:1280,height:720,menu:{openButton:true,openSlideNumber:false,markers:true}}).then(async function(){
+  // Rebuild slide backgrounds: the markdown plugin sets data-background-image
+  // (from the <!-- .slide: --> comment) during init, after reveal first built
+  // its background layer, so without a sync the backgrounds come up blank.
+  if (Reveal.sync) Reveal.sync();
   revealReady = true; applyGoto();
   // Fallback: reveal even if no goto arrives (e.g. preview-only, no editor).
   setTimeout(show, 500);
