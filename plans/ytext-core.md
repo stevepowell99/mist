@@ -89,6 +89,18 @@ The live app keeps the TipTap core until the new one is proven. Build the new co
 
 Each step is web-testable in the same Playwright loop (`C:\tmp\mist-verify`) that built the current app.
 
+## Progress
+
+**Step 1 (CM6 + Y.Text round-trip spike): GO, 15 June 2026.** Proven on the dev server with Playwright. The relay now also seeds the raw body into `getText("body")` (additive, alongside the XmlFragment seed, so both cores coexist during the migration, `agents/document.ts`). A throwaway `/spike/:id` route binds CodeMirror 6 to that `Y.Text` via `y-codemirror.next` (`app/components/CodeMirrorEditor.tsx`, `app/routes/spike.$id.tsx`; not linked from the app). Results on a doc with multi-line `css:` frontmatter and mixed paragraph/soft breaks:
+- Seeded round-trip `serializeThreads(ytext.toString(), [], frontmatter)` equals the source **byte-for-byte**.
+- An edit lands verbatim; consecutive newlines (a blank-line paragraph break) survive, the exact case the XmlFragment paragraph-join collapsed.
+- Two clients sync over the existing provider, and `y-codemirror.next` remote cursors render.
+- The multi-line `css:` YAML list round-trips untouched (it stays in the Yjs `meta` map, never through the editor).
+
+Known dev-only artifact: the first open of a brand-new room sometimes fails to sync/hydrate (workerd DO cold start plus vite on-demand chunk compile); it resolves on retry and does not occur on the deployed worker. The same provider backs TipTap, so this is not CM-specific.
+
+Next: step 2, CriticMarkup decorations plus suggest mode in CM6.
+
 ## What is reused vs deleted
 
 Reused: the relay and SQLite persistence, the CriticMarkup parser and delimiter constants, the `threads` map and `mist:`-frontmatter thread serialization, the verbatim-frontmatter handling (`thread-serialization.ts`, now even simpler because the body never touches frontmatter), the Drive backend read/write, the citation library and `@`-picker logic (rehosted), the outline scanner, the deploy.

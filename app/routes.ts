@@ -4,6 +4,7 @@ export default [
   index("routes/home.tsx"),
   route("new", "routes/new.ts"),
   route("docs/:id", "routes/docs.$id.tsx"),
+  route("spike/:id", "routes/spike.$id.tsx"),
   route("docs/:id/folder", "routes/docs.$id.folder.ts"),
   route("slides/:id", "routes/slides.$id.tsx"),
   route("gh/import", "routes/gh.import.ts"),
