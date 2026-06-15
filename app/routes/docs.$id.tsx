@@ -6,6 +6,7 @@ import { isValidDocumentId } from "~/shared/constants";
 import type { DocRole, DriveMeta, GitHubMeta } from "~/shared/types";
 import { getCloudflare } from "~/lib/cloudflare.server";
 import { mintAssetToken, type DriveSessionEnv } from "~/lib/drive-access.server";
+import { modAltChord } from "~/lib/chord";
 import { useYjsEditor } from "~/lib/useYjsEditor";
 import { DocumentProvider, useDocument } from "~/lib/DocumentContext";
 import CodeMirrorEditor from "~/components/CodeMirrorEditor";
@@ -294,22 +295,20 @@ function DocumentLayout({ id }: { id: string }) {
   // shortcut, since it owns its open state.)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!(e.ctrlKey || e.metaKey) || !e.altKey) return;
-      // Match the physical key (e.code), not e.key: on a Windows layout Ctrl+Alt
-      // is AltGr, and AltGr+E/S etc. emit accented characters, so e.key would
-      // miss the letter shortcuts.
+      const k = modAltChord(e);
+      if (!k) return;
       const actions: Record<string, () => void> = {
-        KeyE: () => role === "edit" && mode !== "edit" && toggleMode(),
-        KeyS: () => mode !== "suggest" && role === "edit" && toggleMode(),
-        Digit1: () => setView("editor"),
-        Digit2: () => isDesktop && setView("split"),
-        Digit3: () => setView("preview"),
-        KeyO: () => setOutlineOpen((v) => !v),
-        KeyC: () => setAsideCollapsedPersist(!asideCollapsed),
-        BracketLeft: () => nudgeSplit(-5),
-        BracketRight: () => nudgeSplit(5),
+        e: () => role === "edit" && mode !== "edit" && toggleMode(),
+        s: () => mode !== "suggest" && role === "edit" && toggleMode(),
+        "1": () => setView("editor"),
+        "2": () => isDesktop && setView("split"),
+        "3": () => setView("preview"),
+        o: () => setOutlineOpen((v) => !v),
+        c: () => setAsideCollapsedPersist(!asideCollapsed),
+        "[": () => nudgeSplit(-5),
+        "]": () => nudgeSplit(5),
       };
-      const action = actions[e.code];
+      const action = actions[k];
       if (action) {
         e.preventDefault();
         action();

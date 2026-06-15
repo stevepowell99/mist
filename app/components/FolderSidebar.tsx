@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { useDocument } from "~/lib/DocumentContext";
+import { modAltChord } from "~/lib/chord";
 import DriveBrowser, { KindIcon, Spinner } from "~/components/DriveBrowser";
 import type { GitHubMeta } from "~/shared/types";
 
@@ -159,9 +160,7 @@ export default function FolderSidebar() {
   // open state lives here.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!(e.ctrlKey || e.metaKey) || !e.altKey) return;
-      // e.code (physical key), so AltGr on Windows layouts does not mask it.
-      if (e.code !== "KeyF") return;
+      if (modAltChord(e) !== "f") return;
       e.preventDefault();
       setPeek(false);
       setPinned((v) => !v);

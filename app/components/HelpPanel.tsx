@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { modAltChord } from "~/lib/chord";
 
 /**
  * Keyboard shortcuts and tips, opened by the ? button (bottom-right) or
@@ -103,8 +104,7 @@ export default function HelpPanel() {
         setOpen(false);
         return;
       }
-      // Ctrl/Cmd+Alt+/ ; e.code is "Slash" regardless of layout/AltGr.
-      if ((e.ctrlKey || e.metaKey) && e.altKey && e.code === "Slash") {
+      if (modAltChord(e) === "/") {
         e.preventDefault();
         setOpen((v) => !v);
       }
