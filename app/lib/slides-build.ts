@@ -328,7 +328,11 @@ window.addEventListener("message", function(e){
     pendingGoto = e.data.h; applyGoto();
   }
 });
-Reveal.initialize({plugins:revealPlugins,hash:false,controls:true,progress:true,keyboard:true,overview:true,scrollActivationWidth:null,width:1280,height:720,menu:{openButton:true,openSlideNumber:false,markers:true}}).then(async function(){
+// center:false matches Quarto (reveal's own default is true). With centring on,
+// every slide's content block is vertically centred, which drags a
+// bottom-pinned .shot-cap caption up to the middle; off, slides top-align and
+// absolute positioning lands where the deck's CSS intends.
+Reveal.initialize({plugins:revealPlugins,hash:false,controls:true,progress:true,keyboard:true,overview:true,center:false,scrollActivationWidth:null,width:1280,height:720,menu:{openButton:true,openSlideNumber:false,markers:true}}).then(async function(){
   // Rebuild slide backgrounds: the markdown plugin sets data-background-image
   // (from the <!-- .slide: --> comment) during init, after reveal first built
   // its background layer, so without a sync the backgrounds come up blank.
@@ -336,9 +340,17 @@ Reveal.initialize({plugins:revealPlugins,hash:false,controls:true,progress:true,
   revealReady = true; applyGoto();
   // Report the current slide to the parent so it can put it in the URL.
   Reveal.on('slidechanged', function(){ try { parent.postMessage({ type: 'mist-slide', h: Reveal.getIndices().h }, '*'); } catch (e) {} });
-  Reveal.layout();
-  if (window.ResizeObserver) new ResizeObserver(function(){ Reveal.layout(); }).observe(document.body);
-  window.addEventListener("resize", function(){ Reveal.layout(); });
+  // Re-run layout across a few frames. In a sandboxed iframe reveal can init
+  // before the pane has its real size (the split is still settling), leaving
+  // the deck unscaled, a single tall column. These retries catch that without
+  // depending on a resize event firing.
+  function relayout(){ try { Reveal.layout(); } catch (e) {} }
+  relayout();
+  requestAnimationFrame(relayout);
+  setTimeout(relayout, 120);
+  setTimeout(relayout, 400);
+  if (window.ResizeObserver) new ResizeObserver(relayout).observe(document.body);
+  window.addEventListener("resize", relayout);
   // Mermaid is best-effort and must never block reveal: load it after init and
   // ignore failures.
   try {
