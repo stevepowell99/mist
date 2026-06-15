@@ -24,24 +24,45 @@ export function driveConfigured(env: DriveEnv): boolean {
 }
 
 /** Mint a short-lived access token from the stored refresh token. */
+// Cache the relay's Google access token across requests in this isolate. Google
+// access tokens last ~1 hour; without caching every /drive/asset (one per slide
+// background, css file, image) triggered its own refresh-token grant, and a deck
+// opening fires a dozen at once, so Google rate-limited the grants and assets
+// failed intermittently. Cache and reuse until shortly before expiry.
+let cachedDriveToken: { token: string; exp: number } | null = null;
+let inflightDriveToken: Promise<string> | null = null;
+
 export async function getDriveAccessToken(env: DriveEnv): Promise<string> {
   if (!driveConfigured(env)) {
     throw new Error("Drive not configured (missing Google secrets)");
   }
-  const res = await fetch(TOKEN_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: env.GOOGLE_CLIENT_ID!,
-      client_secret: env.GOOGLE_CLIENT_SECRET!,
-      refresh_token: env.GOOGLE_REFRESH_TOKEN!,
-      grant_type: "refresh_token",
-    }),
-  });
-  if (!res.ok) throw new Error(`Drive auth failed (${res.status})`);
-  const body = (await res.json()) as { access_token?: string };
-  if (!body.access_token) throw new Error("Drive auth returned no access token");
-  return body.access_token;
+  const now = Date.now();
+  if (cachedDriveToken && cachedDriveToken.exp > now + 60_000) return cachedDriveToken.token;
+  // Coalesce concurrent refreshes (a deck opens many asset requests at once) so
+  // only one grant is in flight at a time.
+  if (inflightDriveToken) return inflightDriveToken;
+  inflightDriveToken = (async () => {
+    try {
+      const res = await fetch(TOKEN_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          client_id: env.GOOGLE_CLIENT_ID!,
+          client_secret: env.GOOGLE_CLIENT_SECRET!,
+          refresh_token: env.GOOGLE_REFRESH_TOKEN!,
+          grant_type: "refresh_token",
+        }),
+      });
+      if (!res.ok) throw new Error(`Drive auth failed (${res.status})`);
+      const body = (await res.json()) as { access_token?: string; expires_in?: number };
+      if (!body.access_token) throw new Error("Drive auth returned no access token");
+      cachedDriveToken = { token: body.access_token, exp: Date.now() + (body.expires_in ?? 3600) * 1000 };
+      return body.access_token;
+    } finally {
+      inflightDriveToken = null;
+    }
+  })();
+  return inflightDriveToken;
 }
 
 function authHeaders(token: string): HeadersInit {
