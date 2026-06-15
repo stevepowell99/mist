@@ -194,6 +194,11 @@ html,body{margin:0;height:100%}
 .callout-tip{border-left:4px solid #3aa76d}
 .callout-warning,.callout-important{border-left:4px solid #e0a800}
 .no-title h1,.no-title h2,.no-title h3{display:none}
+/* Fallback so a dark-background slide is readable even if the deck's own CSS
+   has not loaded: the white theme defaults text to dark, which would be
+   invisible on a dark background. Deck CSS, when present, overrides this. */
+.reveal section.has-dark-background{color:#fff}
+.reveal section.has-dark-background :is(h1,h2,h3,h4,h5,h6){color:#fff}
 `;
 
 const REVEAL_THEMES = new Set([
