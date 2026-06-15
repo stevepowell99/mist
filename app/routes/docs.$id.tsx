@@ -22,6 +22,7 @@ import MobilePanel from "~/components/MobilePanel";
 import OnboardingBanner from "~/components/OnboardingBanner";
 import NamePrompt from "~/components/NamePrompt";
 import FolderSidebar from "~/components/FolderSidebar";
+import OutlinePanel from "~/components/OutlinePanel";
 import SlidesView, { isSlideDeck } from "~/components/SlidesView";
 import { getDriveKey } from "~/lib/drive-key";
 
@@ -188,6 +189,7 @@ function DocumentLayout({ id }: { id: string }) {
   // left and a live preview on the right. editorPct is the editor's width; at
   // 100 there is no split. Mobile keeps the full-swap Preview toggle.
   const [isDesktop, setIsDesktop] = useState(false);
+  const [outlineOpen, setOutlineOpen] = useState(false);
   const [editorPct, setEditorPct] = useState(() => {
     // Open in split if the URL asks for it (?view=split), so a reload or shared
     // link reopens the same layout. Preview-only is restored via initialPreview.
@@ -446,6 +448,19 @@ function DocumentLayout({ id }: { id: string }) {
           mist
         </Link>
         <FolderSidebar />
+        <button
+          type="button"
+          onClick={() => setOutlineOpen((v) => !v)}
+          title={deck ? "Slide list" : "Outline"}
+          aria-label="Toggle outline"
+          aria-pressed={outlineOpen}
+          className={`flex shrink-0 cursor-pointer items-center border-r border-border px-3 transition-colors ${outlineOpen ? "bg-ink text-paper" : "hover:bg-border hover:text-ink"}`}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" />
+            <line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" />
+          </svg>
+        </button>
         <div className="flex min-w-0 grow items-center px-4">
           <span className="truncate font-medium" title={title}>{title}</span>
         </div>
@@ -535,6 +550,14 @@ function DocumentLayout({ id }: { id: string }) {
       </header>
       <div className="relative flex flex-1 overflow-hidden">
         <div ref={contentRef} className="flex flex-1 overflow-hidden">
+          {outlineOpen && (
+            <OutlinePanel
+              editor={editorInstance}
+              deck={deck}
+              canEdit={role === "edit"}
+              onClose={() => setOutlineOpen(false)}
+            />
+          )}
           <main
             ref={mainRef}
             onScroll={handleScroll}

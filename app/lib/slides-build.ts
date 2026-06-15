@@ -155,6 +155,12 @@ function buildSection(slideMd: string, ctx: AssetCtx): string {
   let bgAttr = "";
   let body = slideMd;
   if (/^#{1,6}\s/.test(lines[0] ?? "")) {
+    // A slide marked hidden (Quarto `{visibility="hidden"}` or a `.hidden`
+    // class) is omitted from the deck entirely, so hide/unhide works in the
+    // preview without depending on the deck's own CSS.
+    if (/\bvisibility\s*=\s*"hidden"/.test(lines[0]) || /\{[^}]*\.hidden(?:-slide)?\b[^}]*\}/.test(lines[0])) {
+      return "";
+    }
     const parsed = parseHeading(lines[0], ctx);
     classAttr = parsed.classAttr;
     bgAttr = parsed.bgAttr;
