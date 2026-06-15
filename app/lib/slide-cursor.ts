@@ -35,3 +35,39 @@ export function slideIndexForOffset(md: string, offset: number): number {
   }
   return Math.max(0, slideIdx);
 }
+
+/**
+ * The inverse: the editor offset (in the full markdown, frontmatter included) of
+ * the first line of slide `index`. Mirrors the same split, so jumping the editor
+ * to the slide shown in the preview lands on that slide's source.
+ */
+export function offsetForSlideIndex(md: string, index: number): number {
+  const { body } = stripFrontmatter(md);
+  const fmLen = md.length - body.length;
+  const lines = body.split("\n");
+  let slideIdx = -1;
+  let pendingNewSlide = true;
+  let curHasContent = false;
+  let charPos = 0; // offset of line i's start within the body
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const t = line.trim();
+    if (t === "---") {
+      pendingNewSlide = true;
+      curHasContent = false;
+      charPos += line.length + 1;
+      continue;
+    }
+    if (/^#{1,2}\s/.test(line) && curHasContent) pendingNewSlide = true;
+    if (t !== "") {
+      if (pendingNewSlide) {
+        slideIdx++;
+        pendingNewSlide = false;
+        if (slideIdx === Math.max(0, index)) return fmLen + charPos;
+      }
+      curHasContent = true;
+    }
+    charPos += line.length + 1;
+  }
+  return md.length; // index past the last slide: end of document
+}

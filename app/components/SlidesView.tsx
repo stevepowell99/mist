@@ -42,6 +42,25 @@ export default function SlidesView() {
     [debounced, github, drive, origin, driveToken, bust, frontmatter],
   );
 
+  // Measure the full reload cost (srcDoc swap to deck ready) so the slow part is
+  // visible. The iframe reports its own internal time; the difference is the
+  // script download/parse and iframe setup.
+  const reloadStartRef = useRef(0);
+  useEffect(() => {
+    reloadStartRef.current = typeof performance !== "undefined" ? performance.now() : 0;
+  }, [html]);
+  useEffect(() => {
+    const onMsg = (e: MessageEvent) => {
+      const d = e.data as { type?: string; ms?: number; slides?: number; mermaidMs?: number };
+      if (d?.type !== "mist-ready") return;
+      const total = Math.round((typeof performance !== "undefined" ? performance.now() : 0) - reloadStartRef.current);
+      // eslint-disable-next-line no-console
+      console.log(`[mist-deck] reload ${total}ms total | iframe ${d.ms}ms (mermaid ${d.mermaidMs}ms) | ${d.slides} slides`);
+    };
+    window.addEventListener("message", onMsg);
+    return () => window.removeEventListener("message", onMsg);
+  }, []);
+
   // Cursor-driven sync: as the cursor moves in the editor, jump the deck to the
   // slide it is in. The deck's slide split matches `slideIndexForOffset`. Sent
   // by postMessage because the deck runs in a sandboxed (cross-origin) iframe.

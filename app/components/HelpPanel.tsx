@@ -29,6 +29,7 @@ const PANELS: Shortcut[] = [
   { keys: [MOD, "Alt", "F"], label: "Drive / files sidebar" },
   { keys: [MOD, "Alt", "O"], label: "Outline / slide list" },
   { keys: [MOD, "Alt", "C"], label: "Comments panel" },
+  { keys: [MOD, "Alt", "G"], label: "Editor to current slide (decks)" },
   { keys: [MOD, "Alt", "/"], label: "This help" },
 ];
 

@@ -323,24 +323,35 @@ export interface BuildSlidesOptions {
   docFrontmatter: string;
 }
 
-export function buildSlidesHtml(md: string, opts: BuildSlidesOptions): string {
-  const { github, drive, origin, driveToken, bust, docFrontmatter } = opts;
-  const { frontmatter: editorFm, body: rawBody } = stripFrontmatter(md);
-  const frontmatter = docFrontmatter || editorFm;
+/**
+ * The `<section>` markup for the whole deck (the `.slides` innerHTML), split out
+ * so the live preview can re-render in place (postMessage) without reloading the
+ * iframe. Nest deeper slides under each `#` section so reveal draws a 2D grid; a
+ * single-slide group stays a flat horizontal section, a multi-slide group is
+ * wrapped in an outer <section> (reveal's vertical stack).
+ */
+export function buildSlideSections(md: string, opts: BuildSlidesOptions): string {
+  const { github, drive, origin, driveToken } = opts;
+  const { body: rawBody } = stripFrontmatter(md);
   const ctx: AssetCtx = { github, drive, origin, driveToken };
-  const { body: bodyNoStyles, styles: inlineStyles } = extractStyleBlocks(rawBody);
+  const { body: bodyNoStyles } = extractStyleBlocks(rawBody);
   let body = stripCritic(bodyNoStyles);
   body = rewriteImages(body, ctx); // relative images -> backend URLs (GitHub raw / Drive proxy)
-  // Nest deeper slides under each `#` section so reveal draws a 2D grid; a
-  // single-slide group stays a flat horizontal section, a multi-slide group is
-  // wrapped in an outer <section> (reveal's vertical stack).
-  const sections = groupSlides(splitSlides(body))
+  return groupSlides(splitSlides(body))
     .map((group) =>
       group.length === 1
         ? buildSection(group[0], ctx)
         : `<section>\n${group.map((s) => buildSection(s, ctx)).join("\n")}\n</section>`,
     )
     .join("\n");
+}
+
+export function buildSlidesHtml(md: string, opts: BuildSlidesOptions): string {
+  const { github, drive, origin, driveToken, bust, docFrontmatter } = opts;
+  const { frontmatter: editorFm, body: rawBody } = stripFrontmatter(md);
+  const frontmatter = docFrontmatter || editorFm;
+  const { styles: inlineStyles } = extractStyleBlocks(rawBody);
+  const sections = buildSlideSections(md, opts);
 
   const theme = extractTheme(frontmatter);
   const navigationMode = extractNavMode(frontmatter);
@@ -372,6 +383,7 @@ ${inlineStyles}
 // Keep reveal's own controls, progress bar, overview (Esc/O) and keyboard
 // shortcuts (F fullscreen, S notes, arrows) on, and add the hamburger menu
 // plugin if it loaded (best-effort, like Quarto's decks).
+var __t0=(window.performance&&performance.now)?performance.now():0;
 var revealPlugins=[RevealMarkdown,RevealNotes];
 if (window.RevealMenu) revealPlugins.push(RevealMenu);
 // Cursor-driven sync: the editor posts {type:"mist-goto", h} as the cursor
@@ -440,20 +452,32 @@ Reveal.initialize({plugins:revealPlugins,hash:false,controls:true,progress:true,
   setTimeout(relayout, 400);
   if (window.ResizeObserver) new ResizeObserver(relayout).observe(document.body);
   window.addEventListener("resize", relayout);
-  // Mermaid is best-effort and must never block reveal: load it after init and
-  // ignore failures.
+  // Mermaid is best-effort and must never block reveal. Skip the import entirely
+  // unless the deck actually has a mermaid block, which saves loading and running
+  // a large module on every rebuild of a deck that has none.
+  var mermaidMs = 0;
+  if (document.querySelector("code.language-mermaid")) {
+    var mt = performance.now ? performance.now() : 0;
+    try {
+      const m = await import("https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs");
+      m.default.initialize({ startOnLoad: false, theme: "neutral" });
+      document.querySelectorAll("code.language-mermaid").forEach(function (c) {
+        const d = document.createElement("div");
+        d.className = "mermaid";
+        d.textContent = c.textContent || "";
+        (c.closest("pre") || c).replaceWith(d);
+      });
+      await m.default.run({ querySelector: ".mermaid" });
+      Reveal.layout();
+    } catch (e) { /* slides render fine without mermaid */ }
+    mermaidMs = Math.round((performance.now ? performance.now() : 0) - mt);
+  }
+  // Report timings so the slow part is visible in the console: ms is from the
+  // inline script start (init + markdown render + layout + mermaid), separate
+  // from the script download/parse the parent measures.
   try {
-    const m = await import("https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs");
-    m.default.initialize({ startOnLoad: false, theme: "neutral" });
-    document.querySelectorAll("code.language-mermaid").forEach(function (c) {
-      const d = document.createElement("div");
-      d.className = "mermaid";
-      d.textContent = c.textContent || "";
-      (c.closest("pre") || c).replaceWith(d);
-    });
-    await m.default.run({ querySelector: ".mermaid" });
-    Reveal.layout();
-  } catch (e) { /* slides render fine without mermaid */ }
+    parent.postMessage({ type: "mist-ready", ms: Math.round((performance.now ? performance.now() : 0) - __t0), slides: (Reveal.getSlides() || []).length, mermaidMs: mermaidMs }, "*");
+  } catch (e) {}
 });
 </script>
 </body></html>`;

@@ -7,6 +7,7 @@ import type { DocRole, DriveMeta, GitHubMeta } from "~/shared/types";
 import { getCloudflare } from "~/lib/cloudflare.server";
 import { mintAssetToken, type DriveSessionEnv } from "~/lib/drive-access.server";
 import { modAltChord } from "~/lib/chord";
+import { offsetForSlideIndex } from "~/lib/slide-cursor";
 import { useYjsEditor } from "~/lib/useYjsEditor";
 import { DocumentProvider, useDocument } from "~/lib/DocumentContext";
 import CodeMirrorEditor from "~/components/CodeMirrorEditor";
@@ -297,6 +298,19 @@ function DocumentLayout({ id }: { id: string }) {
   // 1/2/3. Panels: O outline, C comments, F Drive sidebar, / help. Resize: [ ].
   // The folder and help panels own their open state, so they are toggled by a
   // custom event rather than reaching into them here.
+  // Reverse sync: move the editor cursor to the source of the slide currently
+  // shown in the preview (the deck reports it into ?slide). Held in a ref so the
+  // shortcut handler does not rebuild on every keystroke as markdown changes.
+  const syncEditorToSlideRef = useRef<() => void>(() => {});
+  syncEditorToSlideRef.current = () => {
+    if (!editorView) return;
+    const s = typeof window !== "undefined" ? new URL(window.location.href).searchParams.get("slide") : null;
+    const idx = s && /^\d+$/.test(s) ? Number(s) : 0;
+    const pos = Math.min(offsetForSlideIndex(markdown, idx), editorView.state.doc.length);
+    editorView.dispatch({ selection: { anchor: pos }, scrollIntoView: true });
+    editorView.focus();
+  };
+
   const runChord = useCallback(
     (c: string): boolean => {
       switch (c) {
@@ -312,6 +326,7 @@ function DocumentLayout({ id }: { id: string }) {
         case "[": nudgeSplit(-5); return true;
         case "]": nudgeSplit(5); return true;
         case "f": window.dispatchEvent(new CustomEvent("mist-toggle-folder")); return true;
+        case "g": syncEditorToSlideRef.current(); return true;
         case "/": window.dispatchEvent(new CustomEvent("mist-toggle-help")); return true;
         default: return false;
       }
@@ -507,6 +522,19 @@ function DocumentLayout({ id }: { id: string }) {
             <line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" />
           </svg>
         </button>
+        {deck && (
+          <button
+            type="button"
+            onClick={() => syncEditorToSlideRef.current()}
+            title="Jump editor to the current slide (Ctrl/Cmd+Alt+G)"
+            aria-label="Jump editor to current slide"
+            className="flex shrink-0 cursor-pointer items-center border-r border-border px-3 transition-colors hover:bg-border hover:text-ink"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="7" /><line x1="12" y1="1" x2="12" y2="4" /><line x1="12" y1="20" x2="12" y2="23" /><line x1="1" y1="12" x2="4" y2="12" /><line x1="20" y1="12" x2="23" y2="12" />
+            </svg>
+          </button>
+        )}
         <div className="flex min-w-0 grow items-center gap-2 px-4">
           <span
             className="shrink-0 rounded border border-border px-1.5 py-0.5 text-xs uppercase tracking-wider text-muted"
