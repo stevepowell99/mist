@@ -6,22 +6,23 @@ import {
   driveListFolder,
   driveDownload,
 } from "~/lib/google.server";
-import { driveAccess, canAccessFile, driveUnauthenticated, driveForbidden } from "~/lib/drive-access.server";
+import { driveAccess, driveUnauthenticated } from "~/lib/drive-access.server";
 
 /**
  * Find and return the BibTeX library for a Drive-backed doc: looks in the doc's
  * folder, then an `assets` subfolder, for a `.bib` file. One request, so no
- * noisy candidate-path 404s. Gated by the shared Drive passphrase.
+ * noisy candidate-path 404s. Gated by sign-in (or the passphrase) but NOT by
+ * per-file folder sharing: the bib is incidental to a doc the user already
+ * opened, and in Drive a file can be shared without its parent folder, so a
+ * folder check would wrongly deny the library.
  */
 export async function loader({ request, context }: Route.LoaderArgs) {
   const { env } = getCloudflare(context);
-  const access = await driveAccess(request, env);
-  if (!access.ok) return driveUnauthenticated();
+  if (!(await driveAccess(request, env)).ok) return driveUnauthenticated();
   if (!driveConfigured(env)) return new Response("Drive not configured", { status: 501 });
 
   const folder = new URL(request.url).searchParams.get("folder");
   if (!folder) return new Response("missing folder", { status: 400 });
-  if (!(await canAccessFile(env, folder, access.email))) return driveForbidden();
 
   try {
     const token = await getDriveAccessToken(env);

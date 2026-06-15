@@ -7,6 +7,7 @@ import { getDriveKey } from "~/lib/drive-key";
 import { runMermaid } from "~/lib/mermaid";
 import { renderWikiLinks } from "~/lib/wikilinks";
 import { convertCitations, formatReferenceList } from "~/lib/citations";
+import { stripFrontmatter } from "~/lib/thread-serialization";
 import { stripMistBanner } from "~/shared/mist-banner";
 
 /** Strip pandoc attribute blocks from heading lines, e.g. "## Title {#anchor}".
@@ -54,7 +55,9 @@ export default function Preview() {
       origin: typeof window !== "undefined" ? window.location.origin : "",
       driveToken: drive ? getDriveKey() ?? "" : "",
     };
-    const resolved = rewriteImages(stripMistBanner(markdown), ctx);
+    // The editor body now carries the document's YAML frontmatter (so it is
+    // visible and editable), but it is metadata, so strip it from the preview.
+    const resolved = rewriteImages(stripFrontmatter(stripMistBanner(markdown)), ctx);
     const siteBase = github ? PUBLISHED_SITES[github.repo] ?? null : null;
     const withLinks = stripFencedDivs(stripPandocAttrs(renderWikiLinks(resolved, siteBase)));
     let body = withLinks;

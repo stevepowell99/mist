@@ -119,11 +119,23 @@ export function DocumentProvider({
   // Either backend means edits are relayed for write-back to the source file.
   const backed = !!github || !!drive;
   const [markdown, setMarkdown] = useState("");
-  // The document's frontmatter now lives in the editor text (shown and editable),
-  // so derive it from the markdown rather than a separate store. Edits to the
-  // YAML flow straight into the preview/slides.
-  const frontmatter = useMemo(() => rawFrontmatter(markdown), [markdown]);
   const [editorInstance, setEditorInstance] = useState<TiptapEditor | null>(null);
+  // The document's frontmatter now lives in the editor text (shown and editable),
+  // so derive it from the markdown; edits to the YAML flow straight into the
+  // preview/slides. Fall back to the Yjs meta map for documents opened before
+  // this change (their body has no frontmatter), so deck detection still works.
+  const [metaFrontmatter, setMetaFrontmatter] = useState("");
+  useEffect(() => {
+    const meta = yjs.doc.getMap<string>("meta");
+    const read = () => setMetaFrontmatter((meta.get("frontmatter") as string) ?? "");
+    read();
+    meta.observe(read);
+    return () => meta.unobserve(read);
+  }, [yjs.doc]);
+  const frontmatter = useMemo(
+    () => rawFrontmatter(markdown) || metaFrontmatter,
+    [markdown, metaFrontmatter],
+  );
   const [previewToggled, setPreviewToggled] = useState(initialPreview);
   const [previewHeld, setPreviewHeld] = useState(false);
   const [commentActive, setCommentActive] = useState(false);
