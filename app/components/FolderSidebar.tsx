@@ -148,22 +148,31 @@ export default function FolderSidebar() {
     cancelClose();
     closeTimer.current = setTimeout(() => setPeek(false), 200);
   }, [cancelClose]);
+  const openPeek = useCallback(() => {
+    cancelClose();
+    setPeek(true);
+    setEverOpened(true);
+  }, [cancelClose]);
 
   if (!github && !drive) return null;
 
   return (
     <>
+      {/* Far-left hover zone: nudging the mouse to the left margin peeks the
+          sidebar open, the same as hovering the trigger. */}
+      <div
+        onMouseEnter={openPeek}
+        onMouseLeave={scheduleClose}
+        aria-hidden="true"
+        className="fixed bottom-0 left-0 top-[var(--header-h,0px)] z-30 w-1.5"
+      />
       <button
         type="button"
         onClick={() => {
           setPinned((v) => !v);
           setEverOpened(true);
         }}
-        onMouseEnter={() => {
-          cancelClose();
-          setPeek(true);
-          setEverOpened(true);
-        }}
+        onMouseEnter={openPeek}
         onMouseLeave={scheduleClose}
         title="Open from Drive"
         aria-label="Open from Drive"

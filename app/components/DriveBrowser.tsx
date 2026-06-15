@@ -209,9 +209,15 @@ export default function DriveBrowser({
         const body = (await res.json()) as { url?: string; error?: string };
         if (body.url) {
           addRecentOpened({ id: item.id, name: item.name, path: item.path });
+          // Carry the current View (editor/split/preview) onto the new doc so
+          // the layout is preserved when opening from the sidebar.
+          const view = typeof window !== "undefined"
+            ? new URL(window.location.href).searchParams.get("view")
+            : null;
+          const target = view ? `${body.url}&view=${encodeURIComponent(view)}` : body.url;
           // Client-side navigation keeps the top bar mounted through the load;
           // the doc page remounts per id (keyed) so Yjs state resets.
-          navigate(body.url);
+          navigate(target);
           return; // keep the waiter up until the route swaps
         }
         throw new Error(body.error ?? "could not open file");
