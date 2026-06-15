@@ -11,18 +11,16 @@ import { driveAccess, driveUnauthenticated } from "~/lib/drive-access.server";
 
 const isBib = (n: string) => /\.bib$/i.test(n);
 
-/** A `.bib` in this folder, or in an `assets/` subfolder of it. */
-async function bibInFolder(token: string, folderId: string): Promise<string | null> {
+/** All `.bib` files in this folder and in an `assets/` subfolder of it. */
+async function bibsInFolder(token: string, folderId: string): Promise<string[]> {
   const entries = await driveListFolder(token, folderId);
-  const direct = entries.find((e) => !e.isFolder && isBib(e.name));
-  if (direct) return direct.id;
+  const ids = entries.filter((e) => !e.isFolder && isBib(e.name)).map((e) => e.id);
   const assets = entries.find((e) => e.isFolder && e.name.toLowerCase() === "assets");
   if (assets) {
     const sub = await driveListFolder(token, assets.id);
-    const found = sub.find((e) => !e.isFolder && isBib(e.name));
-    if (found) return found.id;
+    ids.push(...sub.filter((e) => !e.isFolder && isBib(e.name)).map((e) => e.id));
   }
-  return null;
+  return ids;
 }
 
 /**
@@ -45,16 +43,19 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   try {
     const token = await getDriveAccessToken(env);
     let current: string | undefined = folder;
-    let bibId: string | null = null;
+    let bibIds: string[] = [];
     for (let depth = 0; current && depth < 6; depth++) {
-      bibId = await bibInFolder(token, current);
-      if (bibId) break;
+      bibIds = await bibsInFolder(token, current);
+      if (bibIds.length) break;
       current = (await driveGetMeta(token, current)).parents?.[0];
     }
-    if (!bibId) return new Response("no .bib found", { status: 404 });
+    if (!bibIds.length) return new Response("no .bib found", { status: 404 });
 
-    const body = await driveDownload(token, bibId);
-    return new Response(body, {
+    // Merge every .bib at that level (a vault can keep several); parseBib reads
+    // concatenated BibTeX fine.
+    const parts = await Promise.all(bibIds.map((id) => driveDownload(token, id)));
+    const merged = parts.map((b) => new TextDecoder().decode(b)).join("\n");
+    return new Response(merged, {
       headers: { "Content-Type": "text/plain", "Cache-Control": "public, max-age=60" },
     });
   } catch (err) {
