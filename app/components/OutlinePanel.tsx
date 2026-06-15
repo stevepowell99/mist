@@ -49,7 +49,7 @@ export default function OutlinePanel({
   const shown = deck ? items.filter((i) => i.level <= 2) : items.filter((i) => i.level <= maxLevel);
 
   return (
-    <aside className="hidden w-64 shrink-0 flex-col overflow-hidden border-r border-border bg-paper lg:flex">
+    <aside className="panel-slide-left hidden w-64 shrink-0 flex-col overflow-hidden border-r border-border bg-paper lg:flex">
       <div className="flex shrink-0 items-center justify-between border-b border-border px-3 py-2">
         <span className="text-sm uppercase tracking-wider text-muted">{deck ? "Slides" : "Outline"}</span>
         <button

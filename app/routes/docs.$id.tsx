@@ -731,7 +731,7 @@ function DocumentLayout({ id }: { id: string }) {
           <aside
             onMouseLeave={() => asidePeek && setAsidePeek(false)}
             className={`hidden w-96 flex-col overflow-hidden border-l border-border bg-paper lg:flex ${
-              asidePeek ? "absolute right-0 top-0 z-30 h-full shadow-lg" : ""
+              asidePeek ? "panel-slide-right absolute right-0 top-0 z-30 h-full shadow-lg" : ""
             }`}
           >
             <div className="flex shrink-0 items-stretch border-b border-border">

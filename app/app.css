@@ -528,6 +528,20 @@ body {
   }
 }
 
+/* Side panels slide in gently rather than popping. The Drive panel is
+   class-toggled (it also slides out, via a transform transition in the markup);
+   the outline and comments panels mount/unmount, so they animate on entry. */
+@keyframes panel-in-left {
+  from { transform: translateX(-100%); opacity: 0.4; }
+  to { transform: translateX(0); opacity: 1; }
+}
+@keyframes panel-in-right {
+  from { transform: translateX(100%); opacity: 0.4; }
+  to { transform: translateX(0); opacity: 1; }
+}
+.panel-slide-left { animation: panel-in-left 0.32s ease-out; }
+.panel-slide-right { animation: panel-in-right 0.32s ease-out; }
+
 /* Wide gamut accents */
 @supports (color: color(display-p3 1 0 0)) {
   :root {

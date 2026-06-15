@@ -211,7 +211,7 @@ export default function FolderSidebar() {
         <div
           onMouseEnter={cancelClose}
           onMouseLeave={scheduleClose}
-          className={`fixed left-0 top-[var(--header-h,0px)] z-50 flex h-[calc(100dvh-var(--header-h,0px))] w-[48rem] max-w-[95vw] flex-col border-r border-border bg-paper shadow-lg ${open ? "" : "hidden"}`}
+          className={`fixed left-0 top-[var(--header-h,0px)] z-50 flex h-[calc(100dvh-var(--header-h,0px))] w-[48rem] max-w-[95vw] flex-col border-r border-border bg-paper shadow-lg transition-transform duration-300 ease-out ${open ? "translate-x-0" : "-translate-x-full pointer-events-none"}`}
         >
           <div className="flex items-center justify-between border-b border-border px-4 py-2">
             <span className="font-medium">Drive</span>
