@@ -5,6 +5,7 @@ import { APP_NAME, generateDocumentId } from "~/shared/constants";
 import { deserializeThreads } from "~/lib/thread-serialization";
 import ThemeSelector from "~/components/ThemeSelector";
 import DriveBrowser from "~/components/DriveBrowser";
+import GoogleSignIn from "~/components/GoogleSignIn";
 import demoDocument from "./demo.md?raw";
 
 export function loader({ request }: Route.LoaderArgs) {
@@ -86,7 +87,12 @@ export default function Home(_props: Route.ComponentProps) {
           <ThemeSelector />
         </div>
         <h1 className="mb-1 font-bold">{APP_NAME}</h1>
-        <p className="mb-6 text-muted">Open a Google Drive markdown file</p>
+        <p className="mb-3 text-muted">Open a Google Drive markdown file</p>
+        {/* Renders nothing until Google sign-in is configured, so the passphrase
+            flow is unaffected. */}
+        <div className="mb-3 flex min-h-[1.5rem] items-center justify-center">
+          <GoogleSignIn />
+        </div>
         <div className="h-[58vh] w-full max-w-2xl border border-border text-left">
           <DriveBrowser className="h-full" />
         </div>
