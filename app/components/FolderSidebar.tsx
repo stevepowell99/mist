@@ -160,7 +160,8 @@ export default function FolderSidebar() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!(e.ctrlKey || e.metaKey) || !e.altKey) return;
-      if (e.key.toLowerCase() !== "f") return;
+      // e.code (physical key), so AltGr on Windows layouts does not mask it.
+      if (e.code !== "KeyF") return;
       e.preventDefault();
       setPeek(false);
       setPinned((v) => !v);

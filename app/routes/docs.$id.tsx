@@ -24,6 +24,7 @@ import OnboardingBanner from "~/components/OnboardingBanner";
 import NamePrompt from "~/components/NamePrompt";
 import FolderSidebar from "~/components/FolderSidebar";
 import OutlinePanel from "~/components/OutlinePanel";
+import HelpPanel from "~/components/HelpPanel";
 import SlidesView, { isSlideDeck } from "~/components/SlidesView";
 
 // useLayoutEffect on the client (so scroll is restored before paint, no flash),
@@ -294,18 +295,21 @@ function DocumentLayout({ id }: { id: string }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!(e.ctrlKey || e.metaKey) || !e.altKey) return;
+      // Match the physical key (e.code), not e.key: on a Windows layout Ctrl+Alt
+      // is AltGr, and AltGr+E/S etc. emit accented characters, so e.key would
+      // miss the letter shortcuts.
       const actions: Record<string, () => void> = {
-        e: () => role === "edit" && mode !== "edit" && toggleMode(),
-        s: () => mode !== "suggest" && role === "edit" && toggleMode(),
-        "1": () => setView("editor"),
-        "2": () => isDesktop && setView("split"),
-        "3": () => setView("preview"),
-        o: () => setOutlineOpen((v) => !v),
-        c: () => setAsideCollapsedPersist(!asideCollapsed),
-        "[": () => nudgeSplit(-5),
-        "]": () => nudgeSplit(5),
+        KeyE: () => role === "edit" && mode !== "edit" && toggleMode(),
+        KeyS: () => mode !== "suggest" && role === "edit" && toggleMode(),
+        Digit1: () => setView("editor"),
+        Digit2: () => isDesktop && setView("split"),
+        Digit3: () => setView("preview"),
+        KeyO: () => setOutlineOpen((v) => !v),
+        KeyC: () => setAsideCollapsedPersist(!asideCollapsed),
+        BracketLeft: () => nudgeSplit(-5),
+        BracketRight: () => nudgeSplit(5),
       };
-      const action = actions[e.key.toLowerCase()];
+      const action = actions[e.code];
       if (action) {
         e.preventDefault();
         action();
@@ -695,6 +699,7 @@ function DocumentLayout({ id }: { id: string }) {
       </div>
       <MobilePanel className="lg:hidden" />
       <NamePrompt />
+      <HelpPanel />
     </div>
   );
 }
