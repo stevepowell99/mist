@@ -14,7 +14,13 @@ This is Steve Powell's fork of [inanimate-tech/mist](https://github.com/inanimat
 
 ### Current state (14 June 2026). READ THIS FIRST.
 
-mist is now **Google Drive only, explicit-save only, with all GitHub/git writing disabled**, after a corruption incident where auto-commit-on-open wrote one document's content into another file and double-synced (it commits via the GitHub API to files that also live in Drive). Full incident report, the recovery (garden `content/` is a separate nested git repo recovered to baseline `4d9a2d4`), the safety model, the long Drive-era feature list, and the remaining work are in **`plans/live-collab.md`** ("CORRUPTION INCIDENT and current safety model", at the top). Do NOT re-enable GitHub commit-back or auto-save without solving double-sync and proving the document model round-trips faithfully. Active interim auth is a shared passphrase (`DRIVE_ACCESS_KEY`); the real auth (Google sign-in + ACL) is still TODO. The roadmap below is the older upstream/GitHub-era history; treat `plans/live-collab.md` as the current truth.
+mist is now **Google Drive only, explicit-save only, with all GitHub/git writing disabled**, after a corruption incident where auto-commit-on-open wrote one document's content into another file and double-synced (it commits via the GitHub API to files that also live in Drive). Full incident report, the recovery (garden `content/` is a separate nested git repo recovered to baseline `4d9a2d4`), the safety model, the long Drive-era feature list, and the remaining work are in **`plans/live-collab.md`** ("CORRUPTION INCIDENT and current safety model", at the top). Do NOT re-enable GitHub commit-back or auto-save without solving double-sync and proving the document model round-trips faithfully.
+
+**Auth (15 June 2026):** the shared passphrase is retired. Access to `/drive/*` is Google sign-in (session cookie) plus the file's own Drive sharing (per-file ACL); the sandboxed slides iframe uses a short-lived signed asset token. The `DRIVE_ACCESS_KEY` secret is unused and can be deleted (`wrangler secret delete DRIVE_ACCESS_KEY`).
+
+**Cloudflare cost (15 June 2026):** on the Workers free tier, Durable Objects bill "duration" for the wall-clock time the DO is active, and an open WebSocket keeps it active. A day with mist tabs left open can hit the daily DO duration cap (resets 00:00 UTC). Mitigation shipped: idle auto-close (`useYjsEditor`) drops the socket after 5 min idle or 45s hidden, so the DO goes cold. The real escape hatch is the $5/month Workers Paid plan (far higher DO limits); Steve has not upgraded yet.
+
+The roadmap below is the older upstream/GitHub-era history; treat `plans/live-collab.md` as the current truth.
 
 ### Roadmap
 
