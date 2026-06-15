@@ -2,6 +2,8 @@ import { useState, useCallback } from "react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { serializeThreads } from "~/lib/thread-serialization";
 import { useDocument } from "~/lib/DocumentContext";
+import { isSlideDeck } from "~/components/SlidesView";
+import { getDriveKey } from "~/lib/drive-key";
 
 /** Build a share URL on the current document, optionally opening in Preview. */
 export function shareLink(href: string, key: string | null, asPreview: boolean): string {
@@ -18,6 +20,8 @@ export default function ShareButton() {
   const { docId, markdown, threads, frontmatter, role, docKey, suggestKey } = useDocument();
   const [copied, setCopied] = useState<"edit" | "suggest" | null>(null);
   const [asPreview, setAsPreview] = useState(false);
+  const deck = isSlideDeck(markdown, frontmatter);
+  const pdfHref = `/slides/${docId}?k=${encodeURIComponent(docKey ?? "")}&token=${encodeURIComponent(getDriveKey() ?? "")}&print-pdf`;
 
   const handleCopy = useCallback(
     async (kind: "edit" | "suggest", key: string | null) => {
@@ -67,7 +71,7 @@ export default function ShareButton() {
             <span className="inline-flex h-3.5 w-3.5 items-center justify-center border border-ink">
               {asPreview ? "✓" : ""}
             </span>
-            Open as Preview
+            Open link as preview
           </DropdownMenu.CheckboxItem>
           <div className="my-1 border-t border-border" />
           {role === "edit" ? (
@@ -99,6 +103,22 @@ export default function ShareButton() {
           >
             Download
           </DropdownMenu.Item>
+          {deck && (
+            <>
+              <div className="my-1 border-t border-border" />
+              <DropdownMenu.Item asChild>
+                <a
+                  href={pdfHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="Open a print view of the deck, then Ctrl/Cmd+P to Save as PDF"
+                  className="block w-full cursor-pointer px-3 py-1.5 text-left text-sm outline-none data-[highlighted]:bg-border"
+                >
+                  Print to PDF
+                </a>
+              </DropdownMenu.Item>
+            </>
+          )}
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
     </DropdownMenu.Root>

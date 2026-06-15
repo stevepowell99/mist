@@ -24,7 +24,6 @@ import NamePrompt from "~/components/NamePrompt";
 import FolderSidebar from "~/components/FolderSidebar";
 import OutlinePanel from "~/components/OutlinePanel";
 import SlidesView, { isSlideDeck } from "~/components/SlidesView";
-import { getDriveKey } from "~/lib/drive-key";
 
 // useLayoutEffect on the client (so scroll is restored before paint, no flash),
 // useEffect on the server (avoids the SSR warning).
@@ -522,17 +521,6 @@ function DocumentLayout({ id }: { id: string }) {
           <div className="hidden shrink-0 items-center border-l border-border lg:flex">
             <UserName />
           </div>
-          {deck && (
-            <a
-              href={`/slides/${id}?k=${encodeURIComponent(docKey ?? "")}&token=${encodeURIComponent(getDriveKey() ?? "")}&print-pdf`}
-              target="_blank"
-              rel="noopener noreferrer"
-              title="Open a print view of the deck, then Ctrl/Cmd+P → Save as PDF"
-              className="flex shrink-0 items-center border-l border-border px-3 text-sm uppercase tracking-wider text-muted transition-colors hover:bg-border hover:text-ink"
-            >
-              PDF
-            </a>
-          )}
           <div className="flex shrink-0 items-stretch border-l border-border">
             <SaveStatus />
           </div>
