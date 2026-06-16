@@ -19,8 +19,11 @@ export default function ShareButton() {
   const { docId, markdown, threads, frontmatter, role, docKey, suggestKey, assetToken } = useDocument();
   const [copied, setCopied] = useState<"edit" | "suggest" | null>(null);
   const [asPreview, setAsPreview] = useState(false);
+  const [combineFragments, setCombineFragments] = useState(false);
   const deck = isSlideDeck(markdown, frontmatter);
-  const pdfHref = `/slides/${docId}?k=${encodeURIComponent(docKey ?? "")}&token=${encodeURIComponent(assetToken ?? "")}&print-pdf`;
+  const pdfHref =
+    `/slides/${docId}?k=${encodeURIComponent(docKey ?? "")}&token=${encodeURIComponent(assetToken ?? "")}&print-pdf` +
+    (combineFragments ? "&combine-fragments" : "");
 
   const handleCopy = useCallback(
     async (kind: "edit" | "suggest", key: string | null) => {
@@ -105,6 +108,18 @@ export default function ShareButton() {
           {deck && (
             <>
               <div className="my-1 border-t border-border" />
+              <DropdownMenu.CheckboxItem
+                checked={combineFragments}
+                onCheckedChange={setCombineFragments}
+                onSelect={(e) => e.preventDefault()}
+                title="Print one page per slide, with all animation steps revealed, instead of one page per step"
+                className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-sm outline-none data-[highlighted]:bg-border"
+              >
+                <span className="inline-flex h-3.5 w-3.5 items-center justify-center border border-ink">
+                  {combineFragments ? "✓" : ""}
+                </span>
+                One page per slide
+              </DropdownMenu.CheckboxItem>
               <DropdownMenu.Item asChild>
                 <a
                   href={pdfHref}

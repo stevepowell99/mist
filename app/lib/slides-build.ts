@@ -379,6 +379,10 @@ export interface BuildSlidesOptions {
   /** BibTeX library: when present, `[@key]` citations render as inline APA and a
    *  References slide is appended, matching the document preview. */
   bibLib?: BibLibrary | null;
+  /** Print-to-PDF: when false, a slide's fragments collapse onto ONE page (the
+   *  fully-revealed state) instead of reveal's default one page per fragment
+   *  step. Lets an animated deck print one page per slide. Default true. */
+  pdfSeparateFragments?: boolean;
 }
 
 /**
@@ -423,6 +427,7 @@ export function buildSlideSections(md: string, opts: BuildSlidesOptions): string
 
 export function buildSlidesHtml(md: string, opts: BuildSlidesOptions): string {
   const { drive, origin, driveToken, bust, docFrontmatter } = opts;
+  const separateFragments = opts.pdfSeparateFragments !== false;
   const { frontmatter: editorFm, body: rawBody } = stripFrontmatter(md);
   const frontmatter = docFrontmatter || editorFm;
   const { styles: inlineStyles } = extractStyleBlocks(rawBody);
@@ -554,7 +559,7 @@ async function runMermaid(){
 // center:false matches Quarto (reveal's own default is true). With centring on,
 // every slide's content block is vertically centred, which drags a
 // bottom-pinned .shot-cap caption up to the middle; off, slides top-align.
-var REVEAL_CONFIG = {plugins:revealPlugins,hash:false,controls:true,progress:true,keyboard:true,overview:true,center:false,navigationMode:'${navigationMode}',scrollActivationWidth:null,width:1280,height:720};
+var REVEAL_CONFIG = {plugins:revealPlugins,hash:false,controls:true,progress:true,keyboard:true,overview:true,center:false,navigationMode:'${navigationMode}',pdfSeparateFragments:${separateFragments},scrollActivationWidth:null,width:1280,height:720};
 function relayout(){ try { Reveal.layout(); } catch (e) {} }
 // Re-run layout across a few frames. In a sandboxed iframe reveal can init
 // before the pane has its real size, leaving the deck unscaled; these catch it.

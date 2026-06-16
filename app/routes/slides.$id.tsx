@@ -10,8 +10,10 @@ import type { DocRole, DriveMeta } from "~/shared/types";
 /**
  * Standalone deck page, built server-side from the backend source, for printing
  * to PDF: open with `?print-pdf` and reveal lays the deck out one slide per page
- * for the browser's Save as PDF. Authorised by the doc's secret key; Drive asset
- * links carry a signed asset token so the printed deck keeps its css/images.
+ * for the browser's Save as PDF. Add `&combine-fragments` to print one page per
+ * slide (fragments collapsed) instead of one page per animation step. Authorised
+ * by the doc's secret key; Drive asset links carry a signed asset token so the
+ * printed deck keeps its css/images.
  */
 export async function loader({ params, request, context }: Route.LoaderArgs) {
   const id = params.id;
@@ -20,6 +22,9 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
   const url = new URL(request.url);
   const docKey = url.searchParams.get("k") ?? "";
   const token = url.searchParams.get("token") ?? "";
+  // `combine-fragments` collapses each slide's animation steps onto one PDF page
+  // (one page per slide) instead of reveal's default page-per-fragment.
+  const separateFragments = !url.searchParams.has("combine-fragments");
 
   const { env } = getCloudflare(context);
   const stub = await getAgentByName(env.DocumentAgent, id);
@@ -46,6 +51,7 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
       driveToken: token,
       bust: "print",
       docFrontmatter: "",
+      pdfSeparateFragments: separateFragments,
     });
     return new Response(html, {
       headers: { "Content-Type": "text/html; charset=utf-8" },
