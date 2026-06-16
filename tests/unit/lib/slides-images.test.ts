@@ -3,7 +3,6 @@ import { buildSlidesHtml } from "~/lib/slides-build";
 
 const build = (md: string) =>
   buildSlidesHtml(md, {
-    github: null,
     drive: { fileId: "DECKID", name: "slides.qmd", folderId: "FOLDERID" },
     origin: "https://mist.example",
     driveToken: "TOK",

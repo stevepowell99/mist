@@ -1,13 +1,13 @@
 /**
  * Per-file UI settings (the layout you left a file in), persisted in
- * localStorage. Keyed by a STABLE file identity (the Drive file id, GitHub path,
- * or doc id) so the settings stick to the file across re-imports, which mint a
- * new mist doc id each time. A `_default` entry holds the most-recently-used
+ * localStorage. Keyed by a STABLE file identity (the Drive file id, or the doc
+ * id) so the settings stick to the file across re-imports, which mint a new mist
+ * doc id each time. A `_default` entry holds the most-recently-used
  * values, so a file with no saved settings (a new one) inherits your last
  * layout. Theme and the autosave safety toggle are deliberately NOT here; they
  * stay global.
  */
-import type { DriveMeta, GitHubMeta } from "~/shared/types";
+import type { DriveMeta } from "~/shared/types";
 
 export interface DocSettings {
   /** Editor width as a percentage of the split (100 = no split). */
@@ -25,11 +25,10 @@ export interface DocSettings {
 const KEY = "mistDocSettings";
 const DEFAULT_ENTRY = "_default";
 
-/** A stable key for a file across re-imports: Drive file id, GitHub path, or the
- *  doc id for an unbacked doc. */
-export function docFileKey(github: GitHubMeta | null, drive: DriveMeta | null, docId: string): string {
+/** A stable key for a file across re-imports: Drive file id, or the doc id for
+ *  an unbacked doc. */
+export function docFileKey(drive: DriveMeta | null, docId: string): string {
   if (drive) return `drive:${drive.fileId}`;
-  if (github) return `gh:${github.owner}/${github.repo}/${github.path}`;
   return `doc:${docId}`;
 }
 

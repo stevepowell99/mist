@@ -19,7 +19,7 @@ const SLIDES_REFRESH_DEBOUNCE_MS = 700;
  * sandboxed iframe. The deck's theme/css come from the document frontmatter.
  */
 export default function SlidesView() {
-  const { markdown, github, drive, frontmatter, cursorOffset, assetToken, followCursor, bibLib } = useDocument();
+  const { markdown, drive, frontmatter, cursorOffset, assetToken, followCursor, bibLib } = useDocument();
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   // The session-minted asset token lets the sandboxed iframe fetch private-Drive
   // assets (it cannot send the session cookie).
@@ -60,16 +60,16 @@ export default function SlidesView() {
   // The deck's body, as reveal `<section>` markup. Depends only on the body and
   // the asset context, so an edit changes this without rebuilding the shell.
   const sections = useMemo(
-    () => buildSlideSections(debounced, { github, drive, origin, driveToken, bust, docFrontmatter: frontmatter, bibLib }),
-    [debounced, github, drive, origin, driveToken, bibLib],
+    () => buildSlideSections(debounced, { drive, origin, driveToken, bust, docFrontmatter: frontmatter, bibLib }),
+    [debounced, drive, origin, driveToken, bibLib],
   );
 
   // The iframe only reloads when the shell changes: theme, css links, nav mode
   // (all from the frontmatter), the asset identity, or the cache-bust. A body
   // edit does not, so reveal and its CDN scripts stay loaded across edits.
   const shellSig = useMemo(
-    () => JSON.stringify([frontmatter, bust, origin, driveToken, github, drive]),
-    [frontmatter, bust, origin, driveToken, github, drive],
+    () => JSON.stringify([frontmatter, bust, origin, driveToken, drive]),
+    [frontmatter, bust, origin, driveToken, drive],
   );
   const sectionsRef = useRef(sections);
   sectionsRef.current = sections;
@@ -78,7 +78,7 @@ export default function SlidesView() {
   const embeddedSectionsRef = useRef("");
   const html = useMemo(() => {
     embeddedSectionsRef.current = sectionsRef.current;
-    return buildSlidesHtml(debounced, { github, drive, origin, driveToken, bust, docFrontmatter: frontmatter, bibLib });
+    return buildSlidesHtml(debounced, { drive, origin, driveToken, bust, docFrontmatter: frontmatter, bibLib });
     // Rebuild on shell change only; body edits go in place via postMessage.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shellSig]);

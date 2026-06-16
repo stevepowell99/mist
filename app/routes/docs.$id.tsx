@@ -3,7 +3,7 @@ import { useRef, useCallback, useEffect, useLayoutEffect, useMemo, useState, typ
 import type { Route } from "./+types/docs.$id";
 import { getAgentByName } from "agents";
 import { isValidDocumentId } from "~/shared/constants";
-import type { DocRole, DriveMeta, GitHubMeta } from "~/shared/types";
+import type { DocRole, DriveMeta } from "~/shared/types";
 import { getCloudflare } from "~/lib/cloudflare.server";
 import { mintAssetToken, mintAssetTokenForDoc, type DriveSessionEnv } from "~/lib/drive-access.server";
 import { EditorView } from "@codemirror/view";
@@ -38,15 +38,15 @@ import SlidesView, { isSlideDeck } from "~/components/SlidesView";
 const useIsomorphicLayoutEffect =
   typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
-function fileTitle(github: GitHubMeta | null, drive: DriveMeta | null, fallback: string): string {
-  const raw = github ? github.path.split("/").pop() : drive?.name;
+function fileTitle(drive: DriveMeta | null, fallback: string): string {
+  const raw = drive?.name;
   if (!raw) return fallback;
   const name = raw.replace(/\.(md|qmd)$/i, "");
   return name || fallback;
 }
 
 export function meta({ data }: Route.MetaArgs) {
-  const title = data?.github || data?.drive ? fileTitle(data.github, data.drive, "mist") : "mist";
+  const title = data?.drive ? fileTitle(data.drive, "mist") : "mist";
   return [{ title: title || "mist" }];
 }
 
@@ -64,12 +64,11 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
   const res = await stub.fetch(
     new Request(`https://do/?k=${encodeURIComponent(docKey ?? "")}`),
   );
-  const { exists, createdAt, role, suggestKey, github, drive } = (await res.json()) as {
+  const { exists, createdAt, role, suggestKey, drive } = (await res.json()) as {
     exists: boolean;
     createdAt: number | null;
     role: DocRole | null;
     suggestKey?: string;
-    github: GitHubMeta | null;
     drive: DriveMeta | null;
   };
 
@@ -85,7 +84,7 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
     (await mintAssetTokenForDoc(env as unknown as DriveSessionEnv, !!role)) ??
     (await mintAssetToken(request, env as unknown as DriveSessionEnv));
 
-  return { id, createdAt, role, suggestKey: suggestKey ?? null, docKey, github, drive, initialPreview, assetToken };
+  return { id, createdAt, role, suggestKey: suggestKey ?? null, docKey, drive, initialPreview, assetToken };
 }
 
 // Navbar toggle icons. Stroke-only 18px glyphs so they sit quietly in the bar.
@@ -147,7 +146,6 @@ function DocumentRoot({
   role,
   suggestKey,
   docKey,
-  github,
   drive,
   initialPreview,
   assetToken,
@@ -162,7 +160,6 @@ function DocumentRoot({
       role={role}
       docKey={docKey}
       suggestKey={suggestKey}
-      github={github}
       drive={drive}
       initialPreview={initialPreview}
       assetToken={assetToken}
@@ -187,7 +184,6 @@ function DocumentLayout({ id }: { id: string }) {
     mode,
     toggleMode,
     role,
-    github,
     drive,
     bibLib,
     markdown,
@@ -206,7 +202,7 @@ function DocumentLayout({ id }: { id: string }) {
     setCleanView,
   } = useDocument();
 
-  const title = fileTitle(github, drive, id);
+  const title = fileTitle(drive, id);
   const deck = isSlideDeck(markdown, frontmatter);
   const slidesMode = showPreview && deck;
 
@@ -288,7 +284,7 @@ function DocumentLayout({ id }: { id: string }) {
   // collapsed): remember the layout each file was left in, and default a new
   // file to the most-recently-used layout. Keyed by the stable file id so it
   // survives re-imports. Theme and the autosave safety toggle stay global.
-  const fileKey = docFileKey(github, drive, id);
+  const fileKey = docFileKey(drive, id);
   const settingsLoaded = useRef(false);
   useEffect(() => {
     settingsLoaded.current = false;

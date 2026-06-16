@@ -16,9 +16,6 @@ GOOGLE_SIGNIN_CLIENT_ID=
 # HMAC secret for the session cookie. Any random string; local-only.
 SESSION_SECRET=
 
-# Optional: only for GitHub import/commit.
-GITHUB_TOKEN=
-
 # Fathom analytics (optional, omit to disable).
 VITE_FATHOM_SITE_ID=
 VITE_FATHOM_DOMAINS=

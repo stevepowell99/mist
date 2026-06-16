@@ -114,17 +114,7 @@ export default function Home(_props: Route.ComponentProps) {
       </div>
       <footer className="fixed bottom-0 left-0 right-0 z-10 flex items-baseline justify-between border-t border-border bg-paper px-4 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] text-base text-muted">
         <span>
-          <span className="whitespace-nowrap">Work in progress.</span> Bugs and
-          feedback on{" "}
-          <a
-            href="https://github.com/inanimate-tech/mist"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-ink transition-colors hover:text-coral"
-          >
-            GitHub
-          </a>
-          .
+          <span className="whitespace-nowrap">Work in progress.</span>
         </span>
         <span className="font-mono font-light uppercase tracking-wider text-ink">
           MIT licensed

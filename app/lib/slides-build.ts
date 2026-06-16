@@ -4,10 +4,9 @@
  * the server-rendered print route, so both produce identical decks. No React or
  * browser globals, so it runs on the worker too.
  */
-import { resolveAssetPath } from "~/lib/github";
 import { driveAssetUrl, resolveAssetSrc, rewriteImages, type AssetCtx } from "~/lib/asset-urls";
 import { convertCitations, formatReferenceList, type BibLibrary } from "~/lib/citations";
-import type { DriveMeta, GitHubMeta } from "~/shared/types";
+import type { DriveMeta } from "~/shared/types";
 
 export function stripFrontmatter(md: string): { frontmatter: string; body: string } {
   const m = md.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
@@ -315,21 +314,14 @@ export function extractBibPaths(frontmatter: string): string[] {
   return extractFmPaths(frontmatter, "bibliography");
 }
 
-function ghJsdelivr(github: GitHubMeta, repoPath: string): string {
-  const enc = repoPath.split("/").map(encodeURIComponent).join("/");
-  return `https://cdn.jsdelivr.net/gh/${github.owner}/${github.repo}@${github.branch}/${enc}`;
-}
-
 function cssUrl(
   path: string,
-  github: GitHubMeta | null,
   drive: DriveMeta | null,
   origin: string,
   driveToken: string,
 ): string | null {
   if (/^https?:\/\//.test(path)) return path;
   if (path.startsWith("/") || path.toLowerCase().endsWith(".scss")) return null;
-  if (github) return ghJsdelivr(github, resolveAssetPath(github.path, path));
   if (drive && driveToken) return driveAssetUrl(drive, origin, path, driveToken);
   return null;
 }
@@ -346,7 +338,6 @@ function extractStyleBlocks(md: string): { body: string; styles: string } {
 }
 
 export interface BuildSlidesOptions {
-  github: GitHubMeta | null;
   drive: DriveMeta | null;
   origin: string;
   driveToken: string;
@@ -367,9 +358,9 @@ export interface BuildSlidesOptions {
  * wrapped in an outer <section> (reveal's vertical stack).
  */
 export function buildSlideSections(md: string, opts: BuildSlidesOptions): string {
-  const { github, drive, origin, driveToken } = opts;
+  const { drive, origin, driveToken } = opts;
   const { body: rawBody } = stripFrontmatter(md);
-  const ctx: AssetCtx = { github, drive, origin, driveToken };
+  const ctx: AssetCtx = { drive, origin, driveToken };
   const { body: bodyNoStyles } = extractStyleBlocks(rawBody);
   let body = stripCritic(bodyNoStyles);
   // Convert [@key] citations to inline APA, collecting the keys used for the
@@ -380,7 +371,7 @@ export function buildSlideSections(md: string, opts: BuildSlidesOptions): string
     body = cited.text;
     usedKeys = cited.usedKeys;
   }
-  body = rewriteImages(body, ctx); // relative images -> backend URLs (GitHub raw / Drive proxy)
+  body = rewriteImages(body, ctx); // relative images -> Drive proxy URLs
   const sections = groupSlides(splitSlides(body))
     .map((group) =>
       group.length === 1
@@ -400,7 +391,7 @@ export function buildSlideSections(md: string, opts: BuildSlidesOptions): string
 }
 
 export function buildSlidesHtml(md: string, opts: BuildSlidesOptions): string {
-  const { github, drive, origin, driveToken, bust, docFrontmatter } = opts;
+  const { drive, origin, driveToken, bust, docFrontmatter } = opts;
   const { frontmatter: editorFm, body: rawBody } = stripFrontmatter(md);
   const frontmatter = docFrontmatter || editorFm;
   const { styles: inlineStyles } = extractStyleBlocks(rawBody);
@@ -409,7 +400,7 @@ export function buildSlidesHtml(md: string, opts: BuildSlidesOptions): string {
   const theme = extractTheme(frontmatter);
   const navigationMode = extractNavMode(frontmatter);
   const deckCss = extractCssPaths(frontmatter)
-    .map((p) => cssUrl(p, github, drive, origin, driveToken))
+    .map((p) => cssUrl(p, drive, origin, driveToken))
     .filter((u): u is string => u !== null)
     .map((u) => `<link rel="stylesheet" href="${u}${u.includes("?") ? "&" : "?"}cb=${bust}">`)
     .join("\n");

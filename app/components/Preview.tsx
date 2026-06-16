@@ -30,14 +30,8 @@ function renderCriticMarkup(text: string): string {
     .replace(/\{==(.+?)==\}/g, '<span class="cm-highlight">$1</span>');
 }
 
-// Repos whose ((id)) wikilinks resolve to a published site. The Garden content
-// repo publishes at garden.causalmap.app; extend this map for other sites.
-const PUBLISHED_SITES: Record<string, string> = {
-  "causal-mapping-garden-content": "https://garden.causalmap.app",
-};
-
 export default function Preview() {
-  const { markdown, github, drive, bibLib, assetToken } = useDocument();
+  const { markdown, drive, bibLib, assetToken } = useDocument();
   const containerRef = useRef<HTMLDivElement>(null);
 
   // DOMPurify needs a DOM, which the Cloudflare Worker has none of, so the
@@ -49,7 +43,6 @@ export default function Preview() {
   const html = useMemo(() => {
     if (!mounted) return "";
     const ctx = {
-      github,
       drive,
       origin: typeof window !== "undefined" ? window.location.origin : "",
       driveToken: drive ? assetToken ?? "" : "",
@@ -57,8 +50,7 @@ export default function Preview() {
     // The editor body now carries the document's YAML frontmatter (so it is
     // visible and editable), but it is metadata, so strip it from the preview.
     const resolved = rewriteImages(stripFrontmatter(stripMistBanner(markdown)), ctx);
-    const siteBase = github ? PUBLISHED_SITES[github.repo] ?? null : null;
-    const withLinks = stripFencedDivs(stripPandocAttrs(renderWikiLinks(resolved, siteBase)));
+    const withLinks = stripFencedDivs(stripPandocAttrs(renderWikiLinks(resolved)));
     let body = withLinks;
     let references = "";
     if (bibLib) {
@@ -69,7 +61,7 @@ export default function Preview() {
     const withCritic = renderCriticMarkup(body);
     const raw = (marked.parse(withCritic, { async: false }) as string) + references;
     return DOMPurify.sanitize(raw);
-  }, [mounted, markdown, github, drive, bibLib, assetToken]);
+  }, [mounted, markdown, drive, bibLib, assetToken]);
 
   // Render any mermaid code blocks into diagrams once the HTML is in the DOM.
   useEffect(() => {

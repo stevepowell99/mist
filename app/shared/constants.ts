@@ -36,13 +36,6 @@ export const USER_COLOURS = [
  */
 export const DOC_FORMAT_VERSION = 2;
 
-/** Throttle for auto-committing a GitHub-backed document back to the repo */
-export const COMMIT_THROTTLE_MS = 90_000;
-/** Client debounce before relaying the serialized document to the agent */
-export const RELAY_DEBOUNCE_MS = 5_000;
-/** Total time from an edit to the throttled commit, for the save progress bar */
-export const SAVE_WINDOW_MS = COMMIT_THROTTLE_MS + RELAY_DEBOUNCE_MS;
-
 /** Protocol message type: Yjs sync */
 export const MSG_SYNC = 0;
 /** Protocol message type: Yjs awareness */

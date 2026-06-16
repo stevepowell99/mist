@@ -1,12 +1,11 @@
 import { createContext, useContext, useState, useCallback, useMemo, useEffect, useRef } from "react";
 import type { EditorView } from "@codemirror/view";
-import type { CapturedSelection, DocMode, DocRole, DriveMeta, GitHubMeta } from "~/shared/types";
+import type { CapturedSelection, DocMode, DocRole, DriveMeta } from "~/shared/types";
 import type { MatchedThread } from "~/lib/comment-threads";
 import type { useYjsEditor } from "~/lib/useYjsEditor";
 import { useTextThreads } from "~/lib/useTextThreads";
 import { serializeThreads, rawFrontmatter } from "~/lib/thread-serialization";
 import { quickHash } from "~/shared/hash";
-import { rawAssetUrl } from "~/lib/github";
 import { driveAssetUrl } from "~/lib/asset-urls";
 import { extractCssPaths, extractBibPaths } from "~/lib/slides-build";
 import { parseCssClasses } from "~/lib/cm-classes";
@@ -31,13 +30,11 @@ export interface DocumentContextValue {
   docKey: string | null;
   suggestKey: string | null;
 
-  // GitHub source, if this doc was imported from a repo
-  github: GitHubMeta | null;
   // Google Drive source, if this doc was opened from Drive
   drive: DriveMeta | null;
-  /** True when the doc is bound to a backend (GitHub or Drive) and writes back */
+  /** True when the doc is bound to a Drive backend and writes back */
   backed: boolean;
-  /** Force an immediate write of the doc back to its backend (GitHub or Drive) */
+  /** Force an immediate write of the doc back to Drive */
   saveNow: () => void;
   /** Whether edits auto-save to the backend. A user toggle (persisted) for
    *  diagnosing sync issues; manual save (Ctrl+S / the badge) always works. */
@@ -140,7 +137,6 @@ export function DocumentProvider({
   role = "edit",
   docKey = null,
   suggestKey = null,
-  github = null,
   drive = null,
   initialPreview = false,
   assetToken = null,
@@ -152,14 +148,13 @@ export function DocumentProvider({
   role?: DocRole;
   docKey?: string | null;
   suggestKey?: string | null;
-  github?: GitHubMeta | null;
   drive?: DriveMeta | null;
   initialPreview?: boolean;
   assetToken?: string | null;
   children: React.ReactNode;
 }) {
-  // Either backend means edits are relayed for write-back to the source file.
-  const backed = !!github || !!drive;
+  // A Drive backend means edits are relayed for write-back to the source file.
+  const backed = !!drive;
   const [markdown, setMarkdown] = useState("");
   const [view, setView] = useState<EditorView | null>(null);
   const [cursorOffset, setCursorOffset] = useState(0);
@@ -222,9 +217,8 @@ export function DocumentProvider({
     yjs.setMode(yjs.mode === "edit" ? "suggest" : "edit");
   }, [yjs, role]);
 
-  // Relay the serialized document to the agent for GitHub-backed docs. The
-  // agent auto-commits on a throttle (and after the last editor disconnects),
-  // so web edits reach the repo without anyone pressing save.
+  // Relay the serialized document to the agent for Drive-backed docs. The agent
+  // writes back to Drive on an explicit save (commitNow).
   const sendDoc = useCallback(
     (commitNow: boolean) => {
       if (!backed) return;
@@ -275,7 +269,7 @@ export function DocumentProvider({
     }
   }, [yjs.socket]);
 
-  // Track whether the shown document matches what was last committed to GitHub.
+  // Track whether the shown document matches what was last saved to Drive.
   const [lastCommittedHash, setLastCommittedHash] = useState<string | null>(null);
   // True when the backend rejected a write because the file changed upstream
   // (edited in Obsidian/Drive). Auto-save never clobbers; the user reloads.
@@ -380,9 +374,8 @@ export function DocumentProvider({
     return () => clearTimeout(t);
   }, [autoSave, unsaved, conflict, upstreamChanged, saveNow]);
 
-  // Fetch and parse the backend's BibTeX library once, so the `@`-citation
-  // picker and rendering work for both GitHub repos and Drive folders. The same
-  // candidate names are tried; Drive resolves them through the asset proxy.
+  // Fetch and parse the Drive folder's BibTeX library once, so the `@`-citation
+  // picker and rendering work. Resolved through the Drive asset proxy.
   const [bibLib, setBibLib] = useState<BibLibrary | null>(null);
   // The doc's own `bibliography:` paths (if any), so the bib is resolved directly
   // rather than folder-guessed. Re-fetch when it appears (frontmatter loads).
@@ -412,50 +405,26 @@ export function DocumentProvider({
     };
   }, [drive, assetToken, cssKey]);
   useEffect(() => {
-    if (!github && !drive) return;
+    if (!drive) return;
     let cancelled = false;
     (async () => {
-      // Drive: resolve the doc's `bibliography:` paths if it has them, else find a
-      // .bib in the doc's folder (or assets/), walking up.
-      if (drive) {
-        if (!drive.folderId) return;
-        const q = bibKey
-          ? bibKey.split("|").filter(Boolean).map((p) => `&path=${encodeURIComponent(p)}`).join("")
-          : "";
-        try {
-          const res = await fetch(`/drive/bib?folder=${encodeURIComponent(drive.folderId)}${q}`);
-          if (res.ok && !cancelled) setBibLib(parseBib(await res.text()));
-        } catch {
-          // no library available
-        }
-        return;
-      }
-      // GitHub: probe the usual library names in the repo.
-      const candidates = [
-        "assets/MyLibrary.bib",
-        "assets/My Library.bib",
-        "My Library.bib",
-        "MyLibrary.bib",
-        "references.bib",
-        "bibliography.bib",
-      ];
-      for (const path of candidates) {
-        try {
-          const res = await fetch(rawAssetUrl(github!, path));
-          if (res.ok) {
-            const text = await res.text();
-            if (!cancelled) setBibLib(parseBib(text));
-            return;
-          }
-        } catch {
-          // try the next candidate path
-        }
+      // Resolve the doc's `bibliography:` paths if it has them, else find a .bib
+      // in the doc's folder (or assets/), walking up.
+      if (!drive.folderId) return;
+      const q = bibKey
+        ? bibKey.split("|").filter(Boolean).map((p) => `&path=${encodeURIComponent(p)}`).join("")
+        : "";
+      try {
+        const res = await fetch(`/drive/bib?folder=${encodeURIComponent(drive.folderId)}${q}`);
+        if (res.ok && !cancelled) setBibLib(parseBib(await res.text()));
+      } catch {
+        // no library available
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [github, drive, bibKey]);
+  }, [drive, bibKey]);
 
   const togglePreview = useCallback(() => {
     setPreviewToggled((v) => !v);
@@ -557,7 +526,6 @@ export function DocumentProvider({
     role,
     docKey,
     suggestKey,
-    github,
     drive,
     backed,
     saveNow,

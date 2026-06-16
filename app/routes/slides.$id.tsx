@@ -2,11 +2,10 @@ import type { Route } from "./+types/slides.$id";
 import { getAgentByName } from "agents";
 import { isValidDocumentId } from "~/shared/constants";
 import { getCloudflare } from "~/lib/cloudflare.server";
-import { fetchPublicText } from "~/lib/github.server";
 import { getDriveAccessToken, driveRead, driveConfigured } from "~/lib/google.server";
 import { buildSlidesHtml } from "~/lib/slides-build";
 import { stripMistBanner } from "~/shared/mist-banner";
-import type { DocRole, DriveMeta, GitHubMeta } from "~/shared/types";
+import type { DocRole, DriveMeta } from "~/shared/types";
 
 /**
  * Standalone deck page, built server-side from the backend source, for printing
@@ -25,9 +24,8 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
   const { env } = getCloudflare(context);
   const stub = await getAgentByName(env.DocumentAgent, id);
   const res = await stub.fetch(new Request(`https://do/?k=${encodeURIComponent(docKey)}`));
-  const { role, github, drive } = (await res.json()) as {
+  const { role, drive } = (await res.json()) as {
     role: DocRole | null;
-    github: GitHubMeta | null;
     drive: DriveMeta | null;
   };
   if (!role) return new Response("forbidden", { status: 403 });
@@ -38,14 +36,11 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
       if (!driveConfigured(env)) return new Response("Drive not configured", { status: 501 });
       const t = await getDriveAccessToken(env);
       source = (await driveRead(t, drive.fileId)).text;
-    } else if (github) {
-      source = await fetchPublicText(github);
     } else {
       return new Response("document is not a deck", { status: 400 });
     }
 
     const html = buildSlidesHtml(stripMistBanner(source), {
-      github,
       drive,
       origin: url.origin,
       driveToken: token,

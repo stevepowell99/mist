@@ -1,6 +1,6 @@
 /**
  * FNV-1a 32-bit hash, used to tell whether the document currently shown matches
- * what was last committed to GitHub. Shared by the client and the agent so both
+ * what was last saved to its backend. Shared by the client and the agent so both
  * compute the same value over the same serialized markdown.
  */
 export function quickHash(s: string): string {

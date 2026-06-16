@@ -6,7 +6,7 @@ import * as awarenessProtocol from "y-protocols/awareness";
 import * as encoding from "lib0/encoding";
 import * as decoding from "lib0/decoding";
 import { MSG_SYNC, MSG_AWARENESS, DOC_FORMAT_VERSION } from "../app/shared/constants";
-import type { DocRole, DriveMeta, GitHubMeta } from "../app/shared/types";
+import type { DocRole, DriveMeta } from "../app/shared/types";
 import { type DocBackend, DriveBackend } from "../app/lib/backend.server";
 import { type DriveEnv, driveConfigured } from "../app/lib/google.server";
 import { quickHash } from "../app/shared/hash";
@@ -265,8 +265,8 @@ class DocumentAgent extends Agent {
 
   /**
    * Handle JSON control messages. Currently a `doc` message carrying the
-   * serialized markdown of a GitHub-backed document, which is auto-committed
-   * back to the repo on a throttle (or immediately when `commitNow` is set).
+   * serialized markdown of a Drive-backed document, which is written back to
+   * Drive on an explicit save (when `commitNow` is set).
    */
   private async handleControl(raw: string) {
     let msg: { type?: string; content?: string; commitNow?: boolean };
@@ -285,8 +285,8 @@ class DocumentAgent extends Agent {
       return;
     }
     if (msg.type !== "doc" || typeof msg.content !== "string") return;
-    // only backend-bound docs (GitHub or Drive) commit back
-    if (!this.readStoredText("github") && !this.readStoredText("drive")) return;
+    // only Drive-bound docs write back
+    if (!this.readStoredText("drive")) return;
     // EXPLICIT SAVE ONLY (14 June 2026): never auto-commit. Only a user pressing
     // save (commitNow) writes back. The auto-commit-on-open/typing was what
     // corrupted vault files, so relayed content without commitNow is ignored.
@@ -303,8 +303,8 @@ class DocumentAgent extends Agent {
     await this.commitPending();
   };
 
-  /** The storage backend this doc is bound to (Drive preferred), with a label
-   *  for the commit message. Null if none is bound or it is unconfigured. */
+  /** The storage backend this doc is bound to (Drive), with a label for the
+   *  commit message. Null if none is bound or Drive is unconfigured. */
   private backendFor(): { backend: DocBackend; label: string } | null {
     const driveRaw = this.readStoredText("drive");
     if (driveRaw) {
@@ -313,8 +313,6 @@ class DocumentAgent extends Agent {
       const drive = JSON.parse(driveRaw) as DriveMeta;
       return { backend: new DriveBackend(drive, env), label: drive.name ?? drive.fileId };
     }
-    // GitHub commit-back disabled (14 June 2026): when a file lives in both git
-    // and Drive, mist must not also sync via git. Drive is the only write path.
     return null;
   }
 
@@ -542,14 +540,7 @@ class DocumentAgent extends Agent {
       const contentType = request.headers.get("Content-Type") || "";
       if (contentType.includes("application/json")) {
         try {
-          const body = await request.json() as { content?: string; threads?: unknown[]; onboarding?: boolean; github?: GitHubMeta; drive?: DriveMeta; frontmatter?: string; driveVersion?: string | null };
-          if (body.github) {
-            const g = body.github;
-            this.sql`
-              INSERT INTO doc_state (key, value) VALUES ('github', ${textBlob(JSON.stringify({ owner: g.owner, repo: g.repo, branch: g.branch, path: g.path }))})
-              ON CONFLICT(key) DO UPDATE SET value = excluded.value
-            `;
-          }
+          const body = await request.json() as { content?: string; threads?: unknown[]; onboarding?: boolean; drive?: DriveMeta; frontmatter?: string; driveVersion?: string | null };
           if (body.drive) {
             const d = body.drive;
             this.sql`
@@ -629,8 +620,6 @@ class DocumentAgent extends Agent {
       const k = new URL(request.url).searchParams.get("k");
       const role = exists ? this.roleForKey(k) : null;
 
-      const githubRaw = role ? this.readStoredText("github") : null;
-      const github = githubRaw ? (JSON.parse(githubRaw) as GitHubMeta) : null;
       const driveRaw = role ? this.readStoredText("drive") : null;
       const drive = driveRaw ? (JSON.parse(driveRaw) as DriveMeta) : null;
 
@@ -641,7 +630,6 @@ class DocumentAgent extends Agent {
           role,
           // Edit-role callers get the suggest key so they can share suggest links
           suggestKey: role === "edit" ? this.readStoredText("suggestKey") : undefined,
-          github,
           drive,
         }),
         { headers: { "Content-Type": "application/json" } },

@@ -1,11 +1,9 @@
 /**
- * Resolve relative asset paths (images) to loadable URLs for whichever backend
- * a document came from: GitHub (raw URL) or Drive (the /drive/asset proxy).
- * Shared by the slides view and the document preview so both resolve images the
- * same way.
+ * Resolve relative asset paths (images) to loadable URLs for a Drive document
+ * (the /drive/asset proxy). Shared by the slides view and the document preview
+ * so both resolve images the same way.
  */
-import type { DriveMeta, GitHubMeta } from "~/shared/types";
-import { resolveImageSrc } from "~/lib/github";
+import type { DriveMeta } from "~/shared/types";
 
 /** /drive/asset proxy URL for a deck/doc-relative path; token rides as a query
  *  param since iframe/img tags cannot set a header. */
@@ -19,7 +17,6 @@ export function driveAssetUrl(drive: DriveMeta, origin: string, relPath: string,
 }
 
 export interface AssetCtx {
-  github: GitHubMeta | null;
   drive: DriveMeta | null;
   origin: string;
   driveToken: string;
@@ -28,7 +25,6 @@ export interface AssetCtx {
 /** Resolve one src; absolute, root-relative and data URLs pass through. */
 export function resolveAssetSrc(path: string, ctx: AssetCtx): string {
   if (/^https?:\/\//.test(path) || path.startsWith("/") || path.startsWith("data:")) return path;
-  if (ctx.github) return resolveImageSrc(path, ctx.github) ?? path;
   if (ctx.drive && ctx.driveToken) return driveAssetUrl(ctx.drive, ctx.origin, path, ctx.driveToken);
   return path;
 }
