@@ -141,17 +141,35 @@ function attrString(classes: string[], id: string | null, style: string): string
   );
 }
 
+/** The wider Obsidian/Quartz callout vocabulary mapped onto gmist's five styled
+ *  colour buckets (note=blue, tip=green, warning=yellow, danger=pink, plus the
+ *  grey quote/example), so a file authored for the Garden, which accepts all
+ *  these types, renders with a sensible colour here too instead of a bare grey
+ *  fallback. Parity of colour, not identity: types gmist already styles
+ *  (note/info/tip/success/warning/caution/important/danger/error/quote/example)
+ *  are left to deck-base.css and keep their existing look. See
+ *  docs/author-grammar.md for the shared grammar contract. */
+const CALLOUT_ALIAS: Record<string, string> = {
+  abstract: "info", summary: "info", tldr: "info", todo: "info", question: "info", help: "info", faq: "info",
+  done: "tip", check: "tip", hint: "tip",
+  attention: "warning",
+  alert: "danger", failure: "danger", fail: "danger", missing: "danger", bug: "danger",
+  cite: "note",
+};
+
 /** Obsidian/Quartz callouts: a `> [!type] Title` line plus the following `> `
  *  lines become a `::: {.callout .callout-type}` fenced div (title as a
  *  `.callout-title` span), so the shared callout component styles them in both
- *  docs and decks. Run before convertSpans/convertDivs. */
+ *  docs and decks. Run before convertSpans/convertDivs. The `[-+]?` foldable
+ *  marker is tolerated (the content stays visible; gmist has no `<details>`). */
 export function convertCallouts(md: string): string {
   const lines = md.split("\n");
   const out: string[] = [];
   for (let i = 0; i < lines.length; i++) {
     const m = lines[i].match(/^\s*>\s*\[!([\w-]+)\][-+]?\s*(.*)$/);
     if (!m) { out.push(lines[i]); continue; }
-    const type = m[1].toLowerCase();
+    const raw = m[1].toLowerCase();
+    const type = CALLOUT_ALIAS[raw] ?? raw;
     const title = m[2].trim();
     const body: string[] = [];
     let j = i + 1;
