@@ -7,6 +7,8 @@ import {
   driveRename,
   driveCopy,
   driveTrash,
+  driveGetMeta,
+  driveListFolder,
 } from "~/lib/google.server";
 import { driveAccess, canAccessFile, driveUnauthenticated, driveForbidden } from "~/lib/drive-access.server";
 
@@ -19,6 +21,21 @@ function withExt(name: string): string {
   const n = name.trim();
   if (!n) return n;
   return /\.(md|qmd)$/i.test(n) ? n : `${n}.md`;
+}
+
+/** Next free "base (n).ext" in a folder, given the original name and the names
+ *  already present. Strips an existing " (n)" so duplicating "foo (1).md" gives
+ *  "foo (2).md", not "foo (1) (1).md". Drive's copy API otherwise keeps the
+ *  original name, leaving two identically-named files in the folder. */
+function nextDuplicateName(original: string, existing: string[]): string {
+  const m = original.match(/^(.*?)(\.(?:md|qmd))?$/i);
+  const stem = (m?.[1] ?? original).replace(/ \(\d+\)$/, "");
+  const ext = m?.[2] ?? "";
+  const taken = new Set(existing.map((n) => n.toLowerCase()));
+  for (let n = 1; ; n++) {
+    const candidate = `${stem} (${n})${ext}`;
+    if (!taken.has(candidate.toLowerCase())) return candidate;
+  }
 }
 
 /**
@@ -60,7 +77,16 @@ export async function action({ request, context }: Route.ActionArgs) {
       }
       case "duplicate": {
         if (!body.fileId) return json({ error: "fileId required" }, 400);
-        const file = await driveCopy(token, body.fileId, body.name ? withExt(body.name) : undefined);
+        // Drive's copy keeps the original name, so derive a free "name (n).ext"
+        // in the same folder when the caller did not supply an explicit name.
+        let name = body.name ? withExt(body.name) : undefined;
+        if (!name) {
+          const meta = await driveGetMeta(token, body.fileId);
+          const parent = meta.parents?.[0];
+          const siblings = parent ? await driveListFolder(token, parent) : [];
+          name = nextDuplicateName(meta.name, siblings.map((e) => e.name));
+        }
+        const file = await driveCopy(token, body.fileId, name);
         return json({ file }, 201);
       }
       case "trash": {
