@@ -8,7 +8,7 @@ Everything runs on Cloudflare. No other hosting, no external databases, no separ
 
 - **Cloudflare Workers** — single worker serving the entire application.
 - **Durable Objects** — each markdown document is a Durable Object holding persistent state. Uses SQLite storage (built-in to Durable Objects).
-- **No auth** at this stage. Will be added later.
+- **Auth:** Google sign-in (session cookie) plus the file's own Drive sharing (per-file ACL). Drive is reached through one relay identity; see the project `CLAUDE.md` for the model.
 
 ## Framework Stack
 
@@ -17,7 +17,7 @@ Everything runs on Cloudflare. No other hosting, no external databases, no separ
 - **Vite** — build tooling with `@cloudflare/vite-plugin`, `@tailwindcss/vite`, `@react-router/dev/vite`, and `vite-tsconfig-paths`.
 - **Tailwind CSS 4** — styling.
 - **TypeScript** — strict type checking.
-- **TipTap 3** — multiplayer markdown editor. Core technology for the document editing experience. Backed by Durable Object persistent state via Yjs.
+- **CodeMirror 6 + Y.Text:** the editor core. The CRDT is a single `Y.Text` of raw markdown, bound to CodeMirror through `y-codemirror.next` and persisted in the Durable Object. The old TipTap/ProseMirror stack was removed (see project `CLAUDE.md`).
 
 ## Directory Structure
 
@@ -52,7 +52,7 @@ Agents are exported from the worker entry file and configured as Durable Object 
 
 ## Key Configuration
 
-- `wrangler.jsonc` — Cloudflare Workers config. Must include `"nodejs_compat"` in compatibility flags (required by Agents SDK for `async_hooks`). Set `CLOUDFLARE_ACCOUNT_ID` env var for deployment.
+- `wrangler.jsonc` — Cloudflare Workers config. Must include `"nodejs_compat"` in compatibility flags (required by Agents SDK for `async_hooks`). Deployment needs no `CLOUDFLARE_ACCOUNT_ID`; it comes from `npx wrangler login`.
 - `react-router.config.ts` — SSR enabled with `v8_viteEnvironmentApi` and `v8_middleware` future flags.
 - `vite.config.ts` — plugins: cloudflare, tailwindcss, reactRouter, tsconfigPaths.
 - `vitest.config.ts` — test config with coverage thresholds.
@@ -63,5 +63,5 @@ Agents are exported from the worker entry file and configured as Durable Object 
 - Cloudflare Agents SDK: https://developers.cloudflare.com/agents/
 - Durable Objects: https://developers.cloudflare.com/durable-objects/
 - React Router 7: https://reactrouter.com/
-- TipTap: https://tiptap.dev/
+- CodeMirror 6: https://codemirror.net/
 - Yjs: https://yjs.dev/

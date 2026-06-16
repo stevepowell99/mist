@@ -20,13 +20,19 @@ It began as a fork of [inanimate-tech/mist](https://github.com/inanimate-tech/mi
 
 ### Current state (14 June 2026). READ THIS FIRST.
 
-mist is now **Google Drive only, explicit-save only, with all GitHub/git writing disabled**, after a corruption incident where auto-commit-on-open wrote one document's content into another file and double-synced (it commits via the GitHub API to files that also live in Drive). Full incident report, the recovery (garden `content/` is a separate nested git repo recovered to baseline `4d9a2d4`), the safety model, the long Drive-era feature list, and the remaining work are in **`plans/live-collab.md`** ("CORRUPTION INCIDENT and current safety model", at the top). Do NOT re-enable GitHub commit-back or auto-save without solving double-sync and proving the document model round-trips faithfully.
+mist is now **Google Drive only, with all GitHub code removed** (see the 16 June note below; the older "GitHub writing disabled" state is superseded), after a corruption incident where auto-commit-on-open wrote one document's content into another file and double-synced (it committed via the GitHub API to files that also live in Drive). Full incident report, the recovery (garden `content/` is a separate nested git repo recovered to baseline `4d9a2d4`), the safety model, the long Drive-era feature list, and the remaining work are in **`plans/live-collab.md`** ("CORRUPTION INCIDENT and current safety model", at the top). The document model must round-trip faithfully through Drive; the current auto-save and conflict-safety model that replaced the old hazard is in the 16 June note below.
 
 **Auth (15 June 2026):** the shared passphrase is retired. Access to `/drive/*` is Google sign-in (session cookie) plus the file's own Drive sharing (per-file ACL); the sandboxed slides iframe uses a short-lived signed asset token. The `DRIVE_ACCESS_KEY` secret is unused and can be deleted (`wrangler secret delete DRIVE_ACCESS_KEY`). Drive itself is accessed through ONE relay identity (a single Google account's `GOOGLE_REFRESH_TOKEN`), not per-user OAuth: collaborators sign in only to pass the per-file ACL and edit files in the relay's Drive. Per-user "connect your own Drive" would be a multi-tenant rebuild (per-user token storage + Google verification for the restricted `drive` scope; `drive.file`+Picker avoids verification but only sees picked files).
 
 **OAuth consent screen mode (Google Cloud project 402686357169, hello@causalmap.app):** while the consent screen is in **Testing**, refresh tokens expire after 7 days, so the relay breaks weekly. Fix once: set User type to **Internal** (if causalmap.app is a Workspace domain: no verification, tokens never expire, but only causalmap.app accounts) or **Publish app** to Production (tokens stop expiring; an "unverified app" warning until verified). Mint `GOOGLE_REFRESH_TOKEN` AFTER changing this, or the token is still on the 7-day clock. The relay OAuth client is `…ck5m0fhfg…`; the browser sign-in client is `…1d50288j…`; both share the project's one consent screen.
 
 **Cloudflare cost (15 June 2026):** on the Workers free tier, Durable Objects bill "duration" for the wall-clock time the DO is active, and an open WebSocket keeps it active. A day with mist tabs left open can hit the daily DO duration cap (resets 00:00 UTC). Mitigation shipped: idle auto-close (`useYjsEditor`) drops the socket after 5 min idle or 45s hidden, so the DO goes cold. The real escape hatch is the $5/month Workers Paid plan (far higher DO limits); Steve has not upgraded yet.
+
+**Drive conflict-safety and GitHub removal (16 June 2026):**
+
+- GitHub is gone entirely: import, commit-back, `GitHubBackend`, the `github.ts`/`github.server.ts` modules, the `gh/import` route, `GITHUB_TOKEN` and `ADMIN_KEY` are all removed. Drive is the only backend, and the `DocBackend` abstraction now has one real implementation.
+- Auto-save is ON (debounced ~2.5s) and conflict-safe. The relay never silently overwrites the editor. The decision is content-based, not time-based: Drive's `headRevisionId` cannot order revisions, and a re-upload stamps a new id on old content, so timestamps cannot be trusted. In `agents/document.ts` `checkUpstream`: no unsaved edits and Drive differs gives a one-click prompt ("Load Drive version"), never an auto-adopt; unsaved edits and Drive diverged keeps the editor, forks the incoming Drive copy to a `… (drive copy …)` sibling, and saves yours to the main file; any reload first snapshots the editor to a `… (gmist unsaved …)` sibling, so a reload can never lose work.
+- Root cause it guards against: a file in a folder that Google Drive for Desktop syncs has TWO writers, the relay through the Drive API and Drive for Desktop pushing the laptop's local copy. When the local copy is stale and Desktop pushes it, it overwrites the relay's newer content under a fresh revision id. Keep one live writer per file: do not edit a gmist file in the app while Drive for Desktop is live-syncing that same file on a machine.
 
 The roadmap below is the older upstream/GitHub-era history; treat `plans/live-collab.md` as the current truth.
 
@@ -39,17 +45,6 @@ The roadmap below is the older upstream/GitHub-era history; treat `plans/live-co
 5. DONE 10 June 2026: automatic commit-back. Connected editors relay the serialized doc to the `DocumentAgent` over the socket; the agent commits to GitHub on a ~90s throttle AND via a durable alarm, so the final state commits even after the last editor disconnects (verified live: a disconnected doc committed ~90s later). A "Save to GitHub now" header indicator shows amber "Unsaved" until the commit lands then "Saved", clicking it commits immediately, and a `beforeunload` guard warns before closing with uncommitted edits. Any edit-role connection drives commits (the doc is already key-gated). This replaced the admin-key `/gh/commit` route, so `ADMIN_KEY` is now unused (the secret can be deleted). Images via inline preview in the editor too (markdown, HTML and Obsidian `![[...]]` embeds). The matching build-side change (the Garden build does a desktop.ini clean + `git pull` of `content/` before building, so it picks up web edits whenever it runs) is TODO in the Garden project. Roadmap design for the live-sync pivot is in `plans/live-collab.md` (Drive-default live collaboration, GitHub preserved; supersedes `plans/live-sync-obsidian.md`).
 6. Bibliography: support a `My Library.bib` the way the Garden project does. DONE: Preview parses the repo's `.bib` (`app/lib/citations.ts`), converts Pandoc `[@key]`/bare `@key` citations to inline APA, and renders a reference list at the bottom. DONE 11 June 2026: `@`-citation picker in the editor (`app/lib/citation-suggest.ts` plus `app/components/CitationPopup.tsx`, driven by `@tiptap/suggestion`). Typing `@` brings up a searchable list of references (author, year, title) filtered as you type, and inserts bracketed `[@key]` text. Works in both edit and suggest mode; in suggest mode the inserted citation is wrapped in a `criticAddition` mark, like any other suggested edit. The library is fetched once for GitHub-backed docs (the same candidate paths Preview uses) and held on a controller the editor reads live, so the picker only offers references on docs whose repo contains a `.bib`. TODO: a way to supply a bib for non-GitHub docs (upload or paste).
 7. Before sharing links widely, review `npm audit` (31 inherited vulnerabilities, 2 critical, as of 10 June 2026) and consider offering changes upstream as PRs where general.
-
-### GitHub integration setup
-
-Commit-back needs two Worker secrets (reads and images need neither):
-
-```
-npx wrangler secret put GITHUB_TOKEN   # fine-grained PAT, Contents: write, scoped to the repos you commit to
-npx wrangler secret put ADMIN_KEY      # any strong string; entered once in the browser to authorise a commit
-```
-
-Import: paste a `github.com/<owner>/<repo>/blob/<branch>/<path>.md` URL on the home page (public repos only). Commit back: Share menu, "Commit to GitHub" (edit link only, on GitHub-backed docs).
 
 ### Local dev gotchas
 
@@ -69,13 +64,13 @@ Also check `plans/` for any active plan.
 
 ## Project Overview
 
-MIST is a collaborative markdown editor — a cross between GitHub Gist and Google Docs. Users can quickly share and do multiplayer editing on markdown documents in real-time. Everything is public by URL (no auth yet). Documents persist live with no save button. (Upstream auto-expires documents after 99 hours; this fork removed that.)
+gmist is a collaborative markdown and slides editor for Google Drive files, like Google Docs but for `.md`/`.qmd`. A file is shared by a secret link; collaborators sign in only to pass the file's Drive ACL and can edit or suggest (CriticMarkup). Live awareness (multiplayer presence) is supported; simultaneous multi-user editing is not a goal. Drive is the single source of truth; edits auto-save back to the file (conflict-safe, see the 16 June note above).
 
 ## Tech Stack
 
 - **Backend:** Cloudflare Workers + Durable Objects (SQLite storage)
 - **Frontend:** React Router 7 (SSR) + Cloudflare Agents SDK
-- **Editor:** TipTap 3 + Yjs (CRDT multiplayer)
+- **Editor:** CodeMirror 6 + Y.Text (CRDT, via `y-codemirror.next`)
 - **Styling:** Tailwind CSS 4
 - **Language:** TypeScript (strict mode)
 - **Testing:** Vitest with v8 coverage
@@ -135,18 +130,17 @@ The multiplayer system works as follows:
 
 1. **`DocumentAgent`** (`agents/document.ts`) — a Durable Object that holds a Yjs `Y.Doc` in memory, persists state to SQLite on every update, and relays Yjs sync/awareness messages between connected WebSocket clients.
 2. **`yjs-provider.ts`** (`app/lib/`) — client-side WebSocket provider that connects to the agent at `/agents/document-agent/:docId` and handles Yjs sync protocol encoding/decoding.
-3. **TipTap** uses `@tiptap/extension-collaboration` (bound to the Yjs doc's `XmlFragment`) and `@tiptap/extension-collaboration-caret` for cursor awareness.
+3. **CodeMirror 6** binds to the Yjs `Y.Text` body (`doc.getText("body")`) through `y-codemirror.next`, which also renders remote cursors from the awareness protocol.
 4. **Worker entry** (`workers/app.ts`) — `routeAgentRequest()` intercepts `/agents/:agent/:name` requests before React Router handles the rest.
 
 ### CriticMarkup / Suggest Mode
 
-Track-changes functionality spans multiple files:
+Track-changes is plain CriticMarkup delimiter TEXT in the single `Y.Text` body, styled by CodeMirror decorations, not a mark or node model. The canonical description is the CodeMirror 6 / Y.Text core bullet under "Local dev gotchas" above, with design notes in `plans/ytext-core.md`. Key files:
 
-- `app/lib/critic-marks.ts` — ProseMirror mark definitions (criticAddition, criticDeletion, criticComment, criticHighlight) with `inclusive: false`
-- `app/lib/suggest-mode.ts` — ProseMirror plugin that intercepts edits and applies addition/deletion marks instead of direct changes
-- `app/lib/critic-parser.ts` — Parses CriticMarkup syntax (`{++ ++}`, `{-- --}`, etc.) into clean text + mark ranges
-- `app/lib/critic-serializer.ts` — Serializes marks back to CriticMarkup delimiter syntax
-- `app/lib/critic-markup.ts` — TipTap extension that wires up the CriticMarkup marks and delimiter decorations
+- `app/lib/cm-criticmarkup.ts`: decorations that style the `{++ ++}`/`{-- --}`/`{== ==}`/`{>> <<}` delimiters
+- `app/lib/cm-suggest.ts`: suggest mode, rewriting edits into CriticMarkup additions and deletions
+- `app/lib/cm-comments.ts` and `app/lib/useTextThreads.ts`: comments matched to the Yjs `threads` map by content
+- `app/lib/critic-parser.ts`: parses CriticMarkup syntax into clean text and ranges
 
 ### Testing Constraints
 
