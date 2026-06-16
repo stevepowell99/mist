@@ -71,9 +71,12 @@
 :is(.reveal,.preview) .slow    { --dur: 6s; }
 :is(.reveal,.preview) .instant { --dur: 0.01s; }
 
-/* Lead paragraph */
+/* Lead paragraph + small dimmed text. These are self-explanatory aliases: just
+   a size/weight tweak, so the name teaches the use and a deck can still adjust. */
 :is(.reveal,.preview) .lead, :is(.reveal,.preview) .lead p { font-size: 1.05em; line-height: 1.4; color: var(--ink); }
 :is(.reveal,.preview) .accent { color: var(--teal-dark); font-weight: 700; }
+:is(.reveal,.preview) .footer { font-size: 0.6em; opacity: 0.65; }
+:is(.reveal,.preview) .fineprint { font-size: 0.5em; opacity: 0.6; line-height: 1.3; }
 
 /* COMPONENT: highlight. .hl is static; .flare is a static highlight in a doc and
    animates in on a slide (the .reveal override below removes the static fill so

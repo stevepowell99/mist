@@ -61,10 +61,11 @@ const SLIDES: Shortcut[] = [
 // component, a colour and optional modifiers. Type `.` inside `{ }` or after a
 // `:::` to autocomplete from the deck's own CSS.
 const CLASS_GROUPS: { title: string; items: string }[] = [
-  { title: "Components", items: ".flare .hl .panel .bg .chip .card .cards .bignum .columns .column .callout" },
+  { title: "Components", items: ".flare .hl .panel .bg .chip .card .cards .bignum .columns .column .callout .lead .footer" },
   { title: "Colours", items: ".blue .cyan .teal .green .mint .yellow .pink .mag .navy .grey" },
-  { title: "Modifiers", items: ".light .dark .cascade-2…5 .scale-* .left .center .right" },
-  { title: "Slide", items: ".title-page .no-title .center .shot-cap .brand" },
+  { title: "Modifiers", items: ".light .dark .fast .slow .cascade-2…5 .scale-* .left .center .right" },
+  { title: "Callouts", items: "> [!note] / [!tip] / [!warning] / [!important]" },
+  { title: "Slide", items: ".place .top-* .left-* .title-page .no-title .shot-cap .brand" },
 ];
 
 const CLASS_EXAMPLES: { code: string; note: string }[] = [
@@ -84,6 +85,9 @@ const SLASH: { cmd: string; label: string }[] = [
   { cmd: "/panel", label: "panel box, then pick a colour" },
   { cmd: "/card", label: "one card" },
   { cmd: "/cards", label: "grid of cards (one per item)" },
+  { cmd: "/callout", label: "callout box (note/tip/warning)" },
+  { cmd: "/bignum", label: "big headline figure + note" },
+  { cmd: "/footer", label: "small dimmed footer line" },
   { cmd: "/span", label: "inline [text]{.class}" },
   { cmd: "/highlight", label: "static highlight, pick a colour" },
   { cmd: "/flare", label: "animated highlight, pick a colour" },

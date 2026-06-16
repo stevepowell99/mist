@@ -14,6 +14,8 @@
         "bignum": "Headline figure beside a note (.fig + .bn-body inside)",
         "callout": "Alias: a neutral .panel for a noted aside",
         "lead": "Larger intro paragraph",
+        "footer": "Small dimmed footer text",
+        "fineprint": "Smallest dimmed print",
         "brand": "Causal Map logo pinned top-left (the logo's only home)",
         "caption": "Plain small caption under an image (no background)",
         "shot-cap": "Caption pinned over a full-bleed background-image slide"

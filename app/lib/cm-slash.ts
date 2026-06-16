@@ -71,6 +71,22 @@ const SLASH_COMMANDS: Completion[] = [
     type: "keyword",
     boost: 91,
   }),
+  snippetCompletion("::: {.callout .callout-${1:note}}\n\n${2:content}\n\n:::\n\n${}", {
+    label: "/callout",
+    detail: "callout box (note/tip/warning/important)",
+    type: "keyword",
+    boost: 90,
+  }),
+  snippetCompletion(
+    "::: {.bignum}\n\n::: {.fig}\n${1:90}<small>${2:%}</small>\n:::\n\n::: {.bn-body}\n${3:what it means}\n:::\n\n:::\n\n${}",
+    { label: "/bignum", detail: "big headline figure beside a note", type: "keyword", boost: 45 },
+  ),
+  snippetCompletion("[${1:footer text}]{.footer}${}", {
+    label: "/footer",
+    detail: "small dimmed footer line",
+    type: "keyword",
+    boost: 44,
+  }),
   snippetCompletion(
     '::: {.place style="top:${1:50}%; left:${2:50}%"}\n\n${3:content}\n\n:::\n\n${}',
     { label: "/place", detail: "float a block anywhere (top/left %)", type: "keyword", boost: 51 },
