@@ -56,6 +56,11 @@ export interface DocumentContextValue {
   upstreamChanged: boolean;
   /** Pull the current Drive version into the editor, discarding local edits. */
   reloadFromDrive: () => void;
+  /** Set when a divergent Drive version was preserved as a sibling file (the
+   *  relay forked it so nothing was lost); holds the new file name briefly. */
+  forkedNotice: string | null;
+  /** Dismiss the forked-copy notice. */
+  clearForkedNotice: () => void;
   /** Parsed BibTeX library for citation rendering, if found in the repo */
   bibLib: BibLibrary | null;
   /** Class names from the deck's CSS, for the editor's `.`-class picker. */
@@ -278,6 +283,10 @@ export function DocumentProvider({
   // The file changed upstream while the body also held local edits: the user
   // must reload (Drive wins) to reconcile, since we will not discard either side.
   const [upstreamChanged, setUpstreamChanged] = useState(false);
+  // The relay preserved a divergent Drive version as a sibling file; holds its
+  // name for a brief notice. Empty string means "forked but the name is unknown".
+  const [forkedNotice, setForkedNotice] = useState<string | null>(null);
+  const clearForkedNotice = useCallback(() => setForkedNotice(null), []);
   const baselineSetRef = useRef(false);
   const currentHash = useMemo(
     () => (backed ? quickHash(serializeThreads(markdown, threads, frontmatter)) : null),
@@ -291,6 +300,13 @@ export function DocumentProvider({
     setLastCommittedHash(currentHash); // eslint-disable-line react-hooks/set-state-in-effect
   }, [backed, markdown, currentHash]);
 
+  // saveNow read through a ref so the socket listener below does not re-subscribe
+  // on every keystroke (saveNow changes with the content).
+  const saveNowRef = useRef(saveNow);
+  useEffect(() => {
+    saveNowRef.current = saveNow;
+  });
+
   // Clear the unsaved state when the agent confirms a commit.
   useEffect(() => {
     const socket = yjs.socket as unknown as WebSocket | null;
@@ -298,12 +314,20 @@ export function DocumentProvider({
     const onMsg = (e: MessageEvent) => {
       if (typeof e.data !== "string") return;
       try {
-        const m = JSON.parse(e.data) as { type?: string; hash?: string };
+        const m = JSON.parse(e.data) as { type?: string; hash?: string; name?: string | null };
         if (m.type === "committed" && typeof m.hash === "string") {
           setLastCommittedHash(m.hash);
           setConflict(false);
         } else if (m.type === "conflict") {
           setConflict(true);
+        } else if (m.type === "forked") {
+          // The relay preserved a divergent Drive version as a sibling and left
+          // our editor untouched. Clear any stale flags and push our content back
+          // to the main file (the relay re-anchored, so this write now lands).
+          setConflict(false);
+          setUpstreamChanged(false);
+          setForkedNotice(typeof m.name === "string" ? m.name : "");
+          saveNowRef.current();
         } else if (m.type === "reloaded") {
           // The relay refreshed the body from Drive; the new content arrives via
           // the Yjs binding. Re-baseline so it reads as saved, and clear flags.
@@ -545,6 +569,8 @@ export function DocumentProvider({
     conflict,
     upstreamChanged,
     reloadFromDrive,
+    forkedNotice,
+    clearForkedNotice,
     bibLib,
     cssClasses,
     assetToken,

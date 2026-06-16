@@ -376,6 +376,12 @@ class DocumentAgent extends Agent {
     const body = this.doc!.getText("body");
     const local = body.toString();
     const base = this.readStoredText("lastCommitMd");
+    // No edits made in this session that are not already written to Drive: the
+    // body still equals what we last saw/saved. headRevisionId cannot tell a
+    // genuine external edit from a stale re-upload (Google Drive for Desktop can
+    // stamp a new revision on old content), so we never guess "newer"; we decide
+    // on this fact alone.
+    const noLocalEdits = base != null && local === base;
 
     const setBaseline = () => {
       if (version) {
@@ -391,20 +397,50 @@ class DocumentAgent extends Agent {
     };
 
     if (local === text) {
-      // Already matches Drive; just re-anchor the version baseline.
+      // Already matches Drive; just re-anchor the baseline.
       setBaseline();
       return;
     }
 
-    // Safe to pull only when the body has not diverged locally (or the user
-    // forced it). Otherwise both sides changed: keep them and signal the client.
-    if (force || (base != null && local === base)) {
+    // Explicit user reload ("Load Drive version"). If the editor holds unsaved
+    // edits, snapshot them to a sibling FIRST, so the reload can never destroy
+    // work the user chose to overwrite (their "be careful where saves go").
+    if (force) {
+      if (!noLocalEdits) {
+        try {
+          await bound.backend.saveSibling?.(local, "gmist unsaved");
+        } catch {
+          // best-effort snapshot; do not block the reload on it
+        }
+      }
       this.replaceBodyFromText(text);
       setBaseline();
       this.broadcast(JSON.stringify({ type: "reloaded", hash: quickHash(text) }));
-    } else {
-      this.broadcast(JSON.stringify({ type: "upstream-changed" }));
+      return;
     }
+
+    if (noLocalEdits) {
+      // Drive differs but nothing is unsaved here. This is either a genuine
+      // async handoff (edited elsewhere) or a stale re-upload, and we cannot
+      // tell them apart. Never auto-overwrite: prompt the user to load the Drive
+      // version with one click. Our last save is already in Drive's version
+      // history, so nothing is at risk while it waits.
+      this.broadcast(JSON.stringify({ type: "upstream-changed" }));
+      return;
+    }
+
+    // Unsaved edits here AND Drive diverged: keep the live editor, preserve the
+    // incoming Drive version as a sibling so nothing is lost, re-anchor to the
+    // current Drive version so our own save lands (and never re-forks the same
+    // revision), and tell the client to save its content back to the main file.
+    let savedAs: string | null = null;
+    try {
+      savedAs = (await bound.backend.saveSibling?.(text, "drive copy")) ?? null;
+    } catch {
+      // best-effort: even if the sibling write fails we must not overwrite.
+    }
+    setBaseline();
+    this.broadcast(JSON.stringify({ type: "forked", name: savedAs }));
   }
 
   // Commits are serialised through this chain so two saves never race. Without

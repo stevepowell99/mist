@@ -19,6 +19,7 @@ import {
   driveRead,
   driveWrite,
   driveGetMeta,
+  driveCreateFile,
   driveListFolder,
   driveListPermissions,
   emailHasAccess,
@@ -33,7 +34,7 @@ export interface BackendEntry {
 }
 
 export interface DocBackend {
-  /** Current text plus a version token (GitHub sha / Drive etag), null if none. */
+  /** Current text plus a version token (GitHub sha / Drive headRevisionId), null if none. */
   read(): Promise<{ text: string; version: string | null }>;
   /**
    * Write new text. `expectedVersion` is the version the session loaded with,
@@ -45,6 +46,11 @@ export interface DocBackend {
     expectedVersion: string | null,
     message: string,
   ): Promise<{ version: string | null }>;
+
+  /** Write `text` to a sibling file (a named copy in the same location), so a
+   *  divergence or a pre-reload snapshot loses nothing; returns the new name.
+   *  Drive only. */
+  saveSibling?(text: string, tag: string): Promise<string | null>;
 
   // Folder navigation (backends that have folders: GitHub directories, Drive).
   /** The folder ref containing this document, the sidebar's starting point. */
@@ -142,8 +148,8 @@ export class DriveBackend implements DocBackend {
   ): Promise<{ version: string | null }> {
     const token = await this.token();
     // Conditional guard: if the file moved underneath us, reject so the caller
-    // re-reads and merges rather than clobbering. Full diff-merge is the cloud
-    // bridge (plans/live-collab.md, step 2); this is the no-clobber floor.
+    // re-reads and reconciles rather than clobbering (the relay forks the other
+    // version to a sibling, see DocumentAgent.checkUpstream).
     if (expectedVersion) {
       const current = await driveGetMeta(token, this.meta.fileId);
       if (current.version && current.version !== expectedVersion) {
@@ -151,6 +157,22 @@ export class DriveBackend implements DocBackend {
       }
     }
     return driveWrite(token, this.meta.fileId, text);
+  }
+
+  /** Write `text` to a sibling `<base> (<tag> <stamp>).<ext>` in the same folder,
+   *  so a divergent or about-to-be-replaced version is preserved, never lost. */
+  async saveSibling(text: string, tag: string): Promise<string | null> {
+    const folder = this.meta.folderId;
+    if (!folder) return null;
+    const orig = this.meta.name ?? this.meta.fileId;
+    const dot = orig.lastIndexOf(".");
+    const base = dot > 0 ? orig.slice(0, dot) : orig;
+    const ext = dot > 0 ? orig.slice(dot) : ".md";
+    // RFC3339 to minute, filename-safe (no colons): e.g. 2026-06-16 1432.
+    const stamp = new Date().toISOString().slice(0, 16).replace("T", " ").replace(":", "");
+    const name = `${base} (${tag} ${stamp})${ext}`;
+    const created = await driveCreateFile(await this.token(), folder, name, text);
+    return created.name;
   }
 
   folderRef(): string {

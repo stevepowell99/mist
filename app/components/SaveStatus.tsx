@@ -11,7 +11,7 @@ import { useDocument } from "~/lib/DocumentContext";
  * (#9), not yet built. Also warns before closing with unsaved edits.
  */
 export default function SaveStatus() {
-  const { backed, unsaved, conflict, upstreamChanged, reloadFromDrive, saveNow } = useDocument();
+  const { backed, unsaved, conflict, upstreamChanged, reloadFromDrive, saveNow, forkedNotice, clearForkedNotice } = useDocument();
 
   useEffect(() => {
     if (!unsaved && !conflict) return;
@@ -25,17 +25,39 @@ export default function SaveStatus() {
 
   if (!backed) return null;
 
-  // The file changed in Obsidian/Drive and the body also has local edits. Offer
-  // to take the Drive version (it wins); local edits are discarded on reload.
+  // A divergent Drive version (an external change, or a stale re-upload) was
+  // preserved as a sibling file so nothing was lost; the editor kept your text.
+  // Click to dismiss once you have noted the copy.
+  if (forkedNotice !== null) {
+    return (
+      <button
+        onClick={clearForkedNotice}
+        className="flex h-full cursor-pointer items-center gap-2 bg-amber-500/15 px-3 text-sm uppercase tracking-wider text-amber-600 hover:bg-amber-500/25"
+        title={
+          forkedNotice
+            ? `Drive also held a different version of this file. Your text was kept; the other version was saved alongside as "${forkedNotice}". Click to dismiss.`
+            : "Drive also held a different version of this file. Your text was kept; the other version was saved alongside in the same folder. Click to dismiss."
+        }
+      >
+        <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-amber-500" />
+        Kept a copy
+      </button>
+    );
+  }
+
+  // The Drive file changed and nothing is unsaved here. Could be a genuine edit
+  // elsewhere or a stale re-upload, so offer a one-click load rather than
+  // adopting it silently. Any unsaved edits are snapshotted to a recovery copy
+  // before the body is replaced, so the reload can never lose work.
   if (upstreamChanged) {
     return (
       <button
         onClick={reloadFromDrive}
         className="flex h-full cursor-pointer items-center gap-2 bg-amber-500/15 px-3 text-sm uppercase tracking-wider text-amber-600 hover:bg-amber-500/25"
-        title="This file changed in Obsidian/Drive while you had unsaved edits here. Reload to take the Drive version; your unsaved edits in mist are discarded."
+        title="This file changed in Drive (edited elsewhere). Click to load the Drive version. If you have unsaved edits here, they are saved alongside as a recovery copy first, so nothing is lost."
       >
         <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-amber-500" />
-        Reload from Drive
+        Load Drive version
       </button>
     );
   }
