@@ -57,7 +57,7 @@ export async function driveAccess(request: Request, env: DriveSessionEnv): Promi
  * is coarse (it does not carry a per-file ACL), exactly like the session-minted
  * one. Returns null if the doc key was invalid or there is no signing secret.
  */
-export function mintAssetTokenForDoc(env: DriveSessionEnv, hasValidKey: boolean): string | null {
+export async function mintAssetTokenForDoc(env: DriveSessionEnv, hasValidKey: boolean): Promise<string | null> {
   if (!hasValidKey || !env.SESSION_SECRET) return null;
   return signAssetToken(env.SESSION_SECRET);
 }

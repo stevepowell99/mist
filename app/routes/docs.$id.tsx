@@ -82,7 +82,7 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
   // secret link) is enough, so a collaborator sees styles/images with no Google
   // account; a signed-in session also works.
   const assetToken =
-    mintAssetTokenForDoc(env as unknown as DriveSessionEnv, !!role) ??
+    (await mintAssetTokenForDoc(env as unknown as DriveSessionEnv, !!role)) ??
     (await mintAssetToken(request, env as unknown as DriveSessionEnv));
 
   return { id, createdAt, role, suggestKey: suggestKey ?? null, docKey, github, drive, initialPreview, assetToken };
