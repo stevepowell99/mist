@@ -10,6 +10,11 @@ import { driveAssetUrl } from "~/lib/asset-urls";
 import { extractCssPaths, extractBibPaths } from "~/lib/slides-build";
 import { parseCssClasses } from "~/lib/cm-classes";
 import { parseBib, type BibLibrary } from "~/lib/citations";
+import DECK_BASE_CSS from "~/styles/deck-base.css?raw";
+
+// The house framework classes are always available to the `.` picker, even on a
+// document with no deck `css:`, since gmist applies deck-base.css by default.
+const DEFAULT_CLASSES = parseCssClasses(DECK_BASE_CSS);
 
 export interface DocumentContextValue {
   docId: string;
@@ -381,14 +386,14 @@ export function DocumentProvider({
   // rather than folder-guessed. Re-fetch when it appears (frontmatter loads).
   const bibKey = useMemo(() => extractBibPaths(frontmatter).join("|"), [frontmatter]);
   // Class names from the deck's own CSS, for the editor's `.`-class picker.
-  const [cssClasses, setCssClasses] = useState<string[]>([]);
+  const [cssClasses, setCssClasses] = useState<string[]>(DEFAULT_CLASSES);
   const cssKey = useMemo(() => extractCssPaths(frontmatter).join("|"), [frontmatter]);
   useEffect(() => {
     if (!drive || !assetToken || !cssKey) return;
     const origin = window.location.origin;
     let cancelled = false;
     (async () => {
-      const all = new Set<string>();
+      const all = new Set<string>(DEFAULT_CLASSES);
       for (const path of cssKey.split("|")) {
         try {
           const res = await fetch(driveAssetUrl(drive, origin, path, assetToken));

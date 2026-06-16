@@ -414,6 +414,7 @@ export function buildSlidesHtml(md: string, opts: BuildSlidesOptions): string {
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/${theme}.css">
 <style>${PREVIEW_CSS}</style>
+<style id="deck-base">${DECK_BASE_CSS}</style>
 ${deckCss}
 ${inlineStyles}
 </head><body>
