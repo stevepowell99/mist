@@ -11,6 +11,10 @@ import {
 import type { Route } from "./+types/root";
 import Fathom from "~/components/Fathom";
 import "./app.css";
+// The house framework's CORE rules are scoped to :is(.reveal, .preview), so this
+// import styles the document preview with the same composable grammar the slide
+// deck iframe gets; its .reveal-only chrome rules simply never match in the app.
+import "./styles/deck-base.css";
 
 export const links: Route.LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },

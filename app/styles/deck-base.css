@@ -1,190 +1,201 @@
 /* gmist house framework for slides and docs
  * ============================================================================
- * This file IS the single source of truth for the composable styling. gmist
- * serves it as the DEFAULT stylesheet for every document, BEFORE any per-deck
- * `css:`, so a deck or doc anywhere in the filesystem renders correctly with no
- * sibling files, and a local file can override anything just by loading after.
+ * Single source of truth for the composable styling. gmist serves it as the
+ * DEFAULT for every document, BEFORE any per-deck `css:`, so a deck or doc
+ * anywhere renders correctly with no sibling files and a local file overrides
+ * anything by loading after. A plain editable CSS file (not a TS string).
  *
- * It is a plain, editable CSS file (imported as a string and injected as the
- * default <style>). Edit the CSS to change appearance; edit `classes.json` next
- * to it to change the catalogue and the generated step utilities.
+ * TWO TIERS:
+ *   CORE   the composable grammar, scoped to :is(.reveal, .preview) so the SAME
+ *          classes work in a slide deck AND in a document preview.
+ *   CHROME deck-only layout (slide padding, positioning, title slide, etc.),
+ *          scoped to .reveal. These have no meaning in a flowing doc.
  *
- * HOW TO OVERRIDE (easy, local-file friendly):
- *   1. Recolour: a deck retunes the palette by overriding the colour classes'
- *      --hue* variables, never the component rules. See the colour block below.
- *   2. Restyle: add `css: my-theme.css` in the deck frontmatter; it loads after
- *      this file, so later rules win the cascade.
- *   3. One-off: a `style=` attribute on the element beats both.
+ * HOW TO OVERRIDE (local-file friendly):
+ *   1. Recolour: override the colour classes' --hue* variables, never the
+ *      component rules.   2. Restyle: add `css: my-theme.css` (loads after this).
+ *   3. One-off: a `style=` attribute beats both.
  *
- * THE GRAMMAR. Everything composes from orthogonal AXES: pick a component, add a
- * colour, add modifiers. Components only READ the global knobs (CSS variables);
- * the colour / scale / shade / timing classes only SET them. So a semantic name
- * is never a bespoke look, only a preset of the same knobs (see ALIASES).
+ * GRAMMAR (orthogonal axes; components READ the global knobs, the colour / scale
+ * / timing classes only SET them, so a semantic name is an alias, never a look):
+ *   COMPONENT .flare .hl .panel .bg .chip .card/.cards .bignum .callout .lead
+ *   COLOUR    .blue .cyan .teal .green .mint .yellow .pink .mag .navy .grey .white .black
+ *   SCALE .scale-25..500   SHADE .light/.dark   ORDER .cascade-2..5
+ *   TIMING .fast/.slow/.instant (or --dur/--ease)   ALIGN .left/.center/.right
+ *   PLACE (deck only) .place + .top-25 .left-50 ... (5% steps) or top=/left= attrs
  *
- *   COMPONENT (what it is, reads the knobs)
- *     .flare  animated inline highlight    .hl   static inline highlight
- *     .panel  padded box with accent edge  .bg   flat background tint
- *     .chip   small inline pill            .card / .cards  card and card grid
- *     .bignum + .fig + .bn-body  one headline figure beside a note
- *     .callout  noted aside (maps to .panel)   .brand  logo pinned top-left
- *     .shot-cap caption over a full-bleed image   .caption  plain small caption
- *
- *   COLOUR (variable-only, shows nothing alone): sets --hue, --hue-bright,
- *     --hue-pale, --hue-deep, --on
- *     .blue .cyan .teal .green .mint .yellow .pink .mag .navy .grey .white .black
- *
- *   SCALE  .scale-25 ... .scale-500, or .scale with --scale
- *   SHADE  .light (pale fill) / .dark (deep fill)
- *   ORDER  .cascade-2 ... .cascade-5  (later flares on a line fire in turn)
- *   TIMING .fast / .slow / .instant, or set --dur / --ease
- *   ALIGN  .left / .center / .right  (text alignment)
- *   PLACE  .place (float absolutely) + coordinate utilities .top-25 .left-50 ...
- *          (5% steps) or arbitrary `top= left= width=` attributes
- *
- *   Examples:
- *     [x]{.flare .yellow}   [x]{.flare .blue .cascade-2}   [x]{.hl .green}
- *     ::: {.panel .teal}    ::: {.bg .grey}    [x]{.chip .mint}
- *     ::: {.place .top-20 .left-60 style="width:30%"} ... :::
+ * Examples: [x]{.flare .yellow}   ::: {.panel .teal} ... :::   [x]{.chip .mint}
+ * Obsidian callouts (`> [!note] Title`) are converted to ::: {.callout .callout-note}.
  * ============================================================================ */
 
 :root {
-  /* Causal Map corporate palette. Bright tones are highlight fills; the dark
-     blue is the deck/title background. The darker accents keep text legible on
-     white, which the bright corporate tones cannot do. */
-  --cm-dark: #1F1F36;        /* dark blue */
-  --cm-blue: #6DC4C8;        /* light blue, from the logo */
-  --cm-blue-bright: #76F7FF; /* light blue, for highlights */
-  --cm-yellow: #F7ED73;      /* light yellow */
-  --cm-pink: #FF8FB8;        /* pink */
-  --cm-mint: #00FFAF;        /* mint green */
-
+  /* Causal Map corporate palette. */
+  --cm-dark: #1F1F36; --cm-blue: #6DC4C8; --cm-blue-bright: #76F7FF;
+  --cm-yellow: #F7ED73; --cm-pink: #FF8FB8; --cm-mint: #00FFAF;
   /* Semantic aliases used across the decks */
-  --bg: var(--cm-dark);
-  --teal: var(--cm-blue);
-  --teal-dark: #2a8a86;      /* darkened logo blue, for text on light */
-  --muted: #e8edf2;
-  --grey-bg: #f4f6f9;
-  --ink: #1a1a2e;
-
+  --bg: var(--cm-dark); --teal: var(--cm-blue); --teal-dark: #2a8a86;
+  --muted: #e8edf2; --grey-bg: #f4f6f9; --ink: #1a1a2e;
   /* Global timing knobs (the TIMING axis sets these) */
-  --dur: 3.8s;
-  --ease: ease-out;
+  --dur: 3.8s; --ease: ease-out;
 }
-
-/* ---- Base typography and slide frame ---- */
-.reveal {
-  font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
-  font-size: 34px;
-}
-.reveal .slides { text-align: left; }
-
-/* Default leaf-slide padding, so content does not run to the edges. Exclude
-   `.stack` (the wrapper Reveal puts around vertical sub-slides): padding there
-   shoves every sub-slide sideways. */
-.reveal .slides section:not(.stack) {
-  padding: 1.2em 1.8em !important;
-  text-align: left;
-  box-sizing: border-box;
-}
-.reveal section.center, .reveal section.center > * { text-align: center; }
-
-/* Hide slides toggled off by an editor */
-.reveal .slides section.hidden-slide { display: none !important; }
-/* Hide the heading without dropping the title from outlines: `## T {.no-title}` */
-.reveal section.no-title > :is(h1, h2, h3):first-of-type { display: none; }
-
-/* Headings */
-.reveal h1, .reveal h2, .reveal h3 {
-  color: var(--ink); font-weight: 700; letter-spacing: -0.01em;
-  text-transform: none; text-align: left;
-}
-.reveal h1 { font-size: 1.8em; }
-.reveal h2 {
-  font-size: 1.4em; border-bottom: 2px solid var(--teal);
-  padding-bottom: 0.25em; margin-bottom: 0.6em;
-}
-.reveal section.center h2 { border-bottom: none; text-align: center; }
-
-/* Body text */
-.reveal p, .reveal li, .reveal blockquote { font-size: 0.7em; line-height: 1.4; }
-.reveal ul, .reveal ol { margin: 0.3em 0 0.3em 1.2em; }
-.reveal ul li, .reveal ol li { margin: 0.15em 0; }
-
-/* Lead paragraph: a larger intro line. Wrap with `::: {.lead}`. */
-.lead, .reveal .lead p { font-size: 0.95em; line-height: 1.4; }
-.lead { color: var(--ink); margin: 0.2em 0 0.5em; }
 
 /* ============================================================ *
- * AXIS: COLOUR (variable-only). One colour name carries a few shades:
- *   --hue        solid mid colour  (chips, panel borders, card fills)
- *   --hue-bright vivid fill        (highlights / flares)
- *   --hue-pale   soft tint         (panel and bg backgrounds)
- *   --hue-deep   dark variant      (.dark)
- *   --on         text on a solid/mid fill
- * Components pick the shade that suits them; .light / .dark override it.
- * RECOLOUR a deck by overriding these in its own CSS, never the components.   */
-.reveal .blue   { --hue: #2b6cb0; --hue-bright: #76F7FF; --hue-pale: #eaf2fb; --hue-deep: #16314f; --on: #fff; }
-.reveal .green  { --hue: #217a52; --hue-bright: #00FFAF; --hue-pale: #e8f3ec; --hue-deep: #123f2b; --on: #fff; }
-.reveal .teal   { --hue: #2a8a86; --hue-bright: #76F7FF; --hue-pale: #e6f7f6; --hue-deep: #14403e; --on: #fff; }
-.reveal .grey   { --hue: #6b7280; --hue-bright: #cbd5e1; --hue-pale: #f4f6f9; --hue-deep: #3a3f44; --on: #fff; }
-.reveal .yellow { --hue: #e8b84b; --hue-bright: #F7ED73; --hue-pale: #fdf6e3; --hue-deep: #8a7d1a; --on: var(--ink); }
-.reveal .pink   { --hue: #d6336c; --hue-bright: #FF8FB8; --hue-pale: #fdeef3; --hue-deep: #a83a64; --on: #fff; }
-.reveal .cyan   { --hue: #0a9bc4; --hue-bright: #76F7FF; --hue-pale: #e6fdff; --hue-deep: #0a6f7a; --on: #fff; }
-.reveal .mint   { --hue: #0aa06a; --hue-bright: #00FFAF; --hue-pale: #e6fff6; --hue-deep: #0a6e4c; --on: #fff; }
-.reveal .navy   { --hue: #1F1F36; --hue-bright: #6DC4C8; --hue-pale: #e6e6ec; --hue-deep: #0e0e1c; --on: #fff; }
-.reveal .mag    { --hue: #DC378C; --hue-bright: #FF8FB8; --hue-pale: #fbe3ef; --hue-deep: #8a1f56; --on: #fff; }
-.reveal .white  { --hue: #ffffff; --hue-bright: #ffffff; --hue-pale: #ffffff; --hue-deep: #d9d9d9; --on: var(--ink); }
-.reveal .black  { --hue: #1a1a1a; --hue-bright: #3a3a3a; --hue-pale: #ececec; --hue-deep: #000000; --on: #fff; }
+ * CORE: shared by .reveal decks and .preview docs.             *
+ * ============================================================ */
 
-/* A colour class on its own (no component) tints the text with its hue, so
-   [x]{.blue} does something visible. Components below are at equal specificity
-   and later in source, so .card .blue stays a blue box. */
-.reveal .blue, .reveal .green, .reveal .teal, .reveal .grey, .reveal .yellow,
-.reveal .pink, .reveal .cyan, .reveal .mint, .reveal .navy, .reveal .mag,
-.reveal .white, .reveal .black { color: var(--hue); }
+/* AXIS: COLOUR (variable-only). Sets --hue (solid), --hue-bright (vivid fill),
+   --hue-pale (soft tint), --hue-deep (dark), --on (text on a solid fill).
+   RECOLOUR a deck by overriding these in its own CSS, never the components. */
+:is(.reveal,.preview) .blue   { --hue: #2b6cb0; --hue-bright: #76F7FF; --hue-pale: #eaf2fb; --hue-deep: #16314f; --on: #fff; }
+:is(.reveal,.preview) .green  { --hue: #217a52; --hue-bright: #00FFAF; --hue-pale: #e8f3ec; --hue-deep: #123f2b; --on: #fff; }
+:is(.reveal,.preview) .teal   { --hue: #2a8a86; --hue-bright: #76F7FF; --hue-pale: #e6f7f6; --hue-deep: #14403e; --on: #fff; }
+:is(.reveal,.preview) .grey   { --hue: #6b7280; --hue-bright: #cbd5e1; --hue-pale: #f4f6f9; --hue-deep: #3a3f44; --on: #fff; }
+:is(.reveal,.preview) .yellow { --hue: #e8b84b; --hue-bright: #F7ED73; --hue-pale: #fdf6e3; --hue-deep: #8a7d1a; --on: var(--ink); }
+:is(.reveal,.preview) .pink   { --hue: #d6336c; --hue-bright: #FF8FB8; --hue-pale: #fdeef3; --hue-deep: #a83a64; --on: #fff; }
+:is(.reveal,.preview) .cyan   { --hue: #0a9bc4; --hue-bright: #76F7FF; --hue-pale: #e6fdff; --hue-deep: #0a6f7a; --on: #fff; }
+:is(.reveal,.preview) .mint   { --hue: #0aa06a; --hue-bright: #00FFAF; --hue-pale: #e6fff6; --hue-deep: #0a6e4c; --on: #fff; }
+:is(.reveal,.preview) .navy   { --hue: #1F1F36; --hue-bright: #6DC4C8; --hue-pale: #e6e6ec; --hue-deep: #0e0e1c; --on: #fff; }
+:is(.reveal,.preview) .mag    { --hue: #DC378C; --hue-bright: #FF8FB8; --hue-pale: #fbe3ef; --hue-deep: #8a1f56; --on: #fff; }
+:is(.reveal,.preview) .white  { --hue: #ffffff; --hue-bright: #ffffff; --hue-pale: #ffffff; --hue-deep: #d9d9d9; --on: var(--ink); }
+:is(.reveal,.preview) .black  { --hue: #1a1a1a; --hue-bright: #3a3a3a; --hue-pale: #ececec; --hue-deep: #000000; --on: #fff; }
+/* A colour on its own (no component) tints the text. */
+:is(.reveal,.preview) :is(.blue,.green,.teal,.grey,.yellow,.pink,.cyan,.mint,.navy,.mag,.white,.black) { color: var(--hue); }
 
-/* AXIS: SHADE (which version of the hue a component fills with) */
-.reveal .light { --fill: var(--hue-pale); --text: var(--ink); }
-.reveal .dark  { --fill: var(--hue-deep); --text: #fff; }
+/* AXIS: SHADE / ALIGN / TIMING */
+:is(.reveal,.preview) .light { --fill: var(--hue-pale); --text: var(--ink); }
+:is(.reveal,.preview) .dark  { --fill: var(--hue-deep); --text: #fff; }
+:is(.reveal,.preview) .left   { text-align: left; }
+:is(.reveal,.preview) .center { text-align: center; }
+:is(.reveal,.preview) .right  { text-align: right; }
+:is(.reveal,.preview) .fast    { --dur: 1.6s; }
+:is(.reveal,.preview) .slow    { --dur: 6s; }
+:is(.reveal,.preview) .instant { --dur: 0.01s; }
 
-/* AXIS: ALIGN */
-.reveal .left   { text-align: left; }
-.reveal .center { text-align: center; }
-.reveal .right  { text-align: right; }
+/* Lead paragraph */
+:is(.reveal,.preview) .lead, :is(.reveal,.preview) .lead p { font-size: 1.05em; line-height: 1.4; color: var(--ink); }
+:is(.reveal,.preview) .accent { color: var(--teal-dark); font-weight: 700; }
 
-/* AXIS: TIMING (sets the global --dur / --ease knobs the animations read) */
-.reveal .fast    { --dur: 1.6s; }
-.reveal .slow    { --dur: 6s; }
-.reveal .instant { --dur: 0.01s; }
-
-/* ---- Components (read the knobs) ---- */
-
-/* Static highlight. Same look as a settled flare, no animation. */
-.reveal .hl {
+/* COMPONENT: highlight. .hl is static; .flare is a static highlight in a doc and
+   animates in on a slide (the .reveal override below removes the static fill so
+   the keyframes can play). */
+:is(.reveal,.preview) .hl, :is(.reveal,.preview) .flare {
   padding: 0.02em 0.22em; border-radius: 5px; font-weight: 700;
   background: var(--fill, var(--hue-bright, var(--hue))); color: var(--ink);
   -webkit-box-decoration-break: clone; box-decoration-break: clone;
 }
-/* Animated highlight. Flares in and resolves to its colour, so a settled flare
-   looks like a plain .hl. Text is inherit until the fill lands, so a delayed
-   flare stays readable on a dark background. */
-.reveal .flare {
-  padding: 0.02em 0.22em; border-radius: 5px; font-weight: 700; color: inherit;
-  -webkit-box-decoration-break: clone; box-decoration-break: clone;
-  --flare-fill: var(--fill, var(--hue-bright, var(--hue)));
+:is(.reveal,.preview) .cascade-2 { --flare-delay: 2.7s; }
+:is(.reveal,.preview) .cascade-3 { --flare-delay: 4.1s; }
+:is(.reveal,.preview) .cascade-4 { --flare-delay: 5.5s; }
+:is(.reveal,.preview) .cascade-5 { --flare-delay: 6.9s; }
+
+/* COMPONENT: panel (padded box with accent left border) */
+:is(.reveal,.preview) .panel {
+  background: var(--fill, var(--hue-pale, transparent));
+  border-left: 4px solid var(--hue, transparent); color: var(--text, var(--ink));
+  border-radius: 6px; padding: 0.7em 1em 0.7em 1.3em; margin: 0.4em 0; line-height: 1.35;
 }
-.reveal .slides section.present .flare {
-  animation: hlFlare var(--dur, 3.8s) var(--ease, ease-out) var(--flare-delay, 1.3s) both;
+:is(.reveal,.preview) .panel > p:first-child strong:first-child,
+:is(.reveal,.preview) .panel > strong:first-child { color: var(--hue, inherit); }
+
+/* COMPONENT: flat tint / chip */
+:is(.reveal,.preview) .bg { background: var(--fill, var(--hue-pale, transparent)); padding: 0.5em 0.7em; }
+:is(.reveal,.preview) .chip {
+  display: inline-block; padding: 0.12em 0.6em; border-radius: 999px;
+  font-size: 0.8em; font-weight: 700; line-height: 1.3; letter-spacing: 0.02em;
+  vertical-align: 0.1em; background: var(--fill, var(--hue, #888)); color: var(--on, var(--ink));
 }
+
+/* COMPONENT: cards grid + card */
+:is(.reveal,.preview) .cards {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.5em; margin: 0.4em 0; padding: 0.5em; align-items: start;
+}
+:is(.reveal,.preview) .cards > ul, :is(.reveal,.preview) .cards > ol { display: contents; }
+:is(.reveal,.preview) .cards > .panel, :is(.reveal,.preview) .cards > .card,
+:is(.reveal,.preview) .cards li { margin: 0; line-height: 1.3; }
+:is(.reveal,.preview) .card, :is(.reveal,.preview) .cards li {
+  list-style: none; background: var(--fill, var(--hue, var(--grey-bg)));
+  color: var(--text, var(--on, var(--ink))); border-radius: 6px; padding: 0.5em 0.7em; line-height: 1.3;
+}
+:is(.reveal,.preview) .card ul, :is(.reveal,.preview) .cards li ul { list-style: disc; }
+:is(.reveal,.preview) .card ol, :is(.reveal,.preview) .cards li ol { list-style: decimal; }
+:is(.reveal,.preview) .card p { margin: 0; }
+:is(.reveal,.preview) .card p + p { margin-top: 0.4em; }
+:is(.reveal,.preview) .cards .cards { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
+:is(.reveal,.preview) .cards.cols-2 { grid-template-columns: repeat(2, 1fr); }
+:is(.reveal,.preview) .cards.cols-3 { grid-template-columns: repeat(3, 1fr); }
+:is(.reveal,.preview) .cards.cols-4 { grid-template-columns: repeat(4, 1fr); }
+
+/* COMPONENT: columns (side by side) */
+:is(.reveal,.preview) .columns { display: flex; gap: min(4vw, 1.5em); align-items: flex-start; }
+:is(.reveal,.preview) .columns > .column { display: block; flex: 1 1 auto; min-width: 0; }
+
+/* COMPONENT: big-number callout */
+:is(.reveal,.preview) .bignum {
+  display: flex; align-items: center; gap: 0.8em; background: var(--bignum-box, #e6f7f6);
+  border-radius: 10px; padding: 0.6em 0.9em; margin: 0.4em 0;
+}
+:is(.reveal,.preview) .bignum .fig {
+  font-size: 2.6em; font-weight: 800; color: var(--bignum-fig, var(--teal-dark)); line-height: 1; white-space: nowrap;
+}
+:is(.reveal,.preview) .bignum .fig small { font-size: 0.4em; font-weight: 700; }
+:is(.reveal,.preview) .bignum .bn-body p, :is(.reveal,.preview) .bignum p { margin: 0.15em 0; line-height: 1.35; }
+
+/* COMPONENT: callout. The Obsidian/Quartz `> [!type] Title` syntax is converted
+   to ::: {.callout .callout-type}. Each type is an alias setting the colour knobs. */
+:is(.reveal,.preview) .callout {
+  border-left: 4px solid var(--hue, #6b7280); background: var(--hue-pale, #f4f6f9);
+  border-radius: 6px; padding: 0.6em 0.9em; margin: 0.5em 0;
+}
+:is(.reveal,.preview) .callout-title { display: block; font-weight: 700; color: var(--hue, inherit); margin-bottom: 0.2em; }
+:is(.reveal,.preview) .callout-note, :is(.reveal,.preview) .callout-info    { --hue: #2b6cb0; --hue-pale: #eaf2fb; }
+:is(.reveal,.preview) .callout-tip,  :is(.reveal,.preview) .callout-success { --hue: #0aa06a; --hue-pale: #e6fff6; }
+:is(.reveal,.preview) .callout-warning, :is(.reveal,.preview) .callout-caution { --hue: #e8b84b; --hue-pale: #fdf6e3; }
+:is(.reveal,.preview) .callout-important, :is(.reveal,.preview) .callout-danger, :is(.reveal,.preview) .callout-error { --hue: #d6336c; --hue-pale: #fdeef3; }
+:is(.reveal,.preview) .callout-quote, :is(.reveal,.preview) .callout-example { --hue: #6b7280; --hue-pale: #f4f6f9; }
+
+/* AXIS: SCALE (zoom; reflows). .scale-50 = half, .scale-300 = triple. */
+:is(.reveal,.preview) .scale     { zoom: var(--scale, 1); }
+:is(.reveal,.preview) .scale-25  { zoom: 0.25; } :is(.reveal,.preview) .scale-33  { zoom: 0.33; }
+:is(.reveal,.preview) .scale-40  { zoom: 0.4; }  :is(.reveal,.preview) .scale-50  { zoom: 0.5; }
+:is(.reveal,.preview) .scale-60  { zoom: 0.6; }  :is(.reveal,.preview) .scale-75  { zoom: 0.75; }
+:is(.reveal,.preview) .scale-80  { zoom: 0.8; }  :is(.reveal,.preview) .scale-90  { zoom: 0.9; }
+:is(.reveal,.preview) .scale-100 { zoom: 1; }    :is(.reveal,.preview) .scale-110 { zoom: 1.1; }
+:is(.reveal,.preview) .scale-125 { zoom: 1.25; } :is(.reveal,.preview) .scale-150 { zoom: 1.5; }
+:is(.reveal,.preview) .scale-175 { zoom: 1.75; } :is(.reveal,.preview) .scale-200 { zoom: 2; }
+:is(.reveal,.preview) .scale-250 { zoom: 2.5; }  :is(.reveal,.preview) .scale-300 { zoom: 3; }
+:is(.reveal,.preview) .scale-400 { zoom: 4; }    :is(.reveal,.preview) .scale-500 { zoom: 5; }
+
+/* ============================================================ *
+ * CHROME: deck-only (.reveal). No meaning in a flowing doc.    *
+ * ============================================================ */
+
+.reveal { font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif; font-size: 34px; }
+.reveal .slides { text-align: left; }
+.reveal .slides section:not(.stack) { padding: 1.2em 1.8em !important; text-align: left; box-sizing: border-box; }
+.reveal section.center, .reveal section.center > * { text-align: center; }
+.reveal .slides section.hidden-slide { display: none !important; }
+.reveal section.no-title > :is(h1, h2, h3):first-of-type { display: none; }
+
+/* Deck typography */
+.reveal h1, .reveal h2, .reveal h3 { color: var(--ink); font-weight: 700; letter-spacing: -0.01em; text-transform: none; text-align: left; }
+.reveal h1 { font-size: 1.8em; }
+.reveal h2 { font-size: 1.4em; border-bottom: 2px solid var(--teal); padding-bottom: 0.25em; margin-bottom: 0.6em; }
+.reveal section.center h2 { border-bottom: none; text-align: center; }
+.reveal p, .reveal li, .reveal blockquote { font-size: 0.7em; line-height: 1.4; }
+.reveal ul, .reveal ol { margin: 0.3em 0 0.3em 1.2em; }
+.reveal ul li, .reveal ol li { margin: 0.15em 0; }
+/* Component font sizes inside the smaller deck body */
+.reveal .panel p, .reveal .panel li { font-size: 0.8em; }
+.reveal .card, .reveal .cards li, .reveal .chip { font-size: 0.8em; }
+.reveal .chip { font-size: 0.62em; }
+.reveal .bignum .bn-body p, .reveal .bignum p { font-size: 0.72em; }
+
+/* Flare animates in on a slide: drop the static fill so the keyframes play. */
+.reveal .flare { background: transparent; color: inherit; --flare-fill: var(--fill, var(--hue-bright, var(--hue))); }
+.reveal .slides section.present .flare { animation: hlFlare var(--dur, 3.8s) var(--ease, ease-out) var(--flare-delay, 1.3s) both; }
 .reveal .slides section.present .fragment:not(.visible) .flare { animation: none; }
-.reveal .slides section.present .fragment.visible .flare {
-  animation: hlFlare var(--dur, 3.8s) var(--ease, ease-out) var(--flare-delay, 0.5s) both;
-}
-/* AXIS: ORDER (later flares on a line fire in turn) */
-.reveal .cascade-2 { --flare-delay: 2.7s; }
-.reveal .cascade-3 { --flare-delay: 4.1s; }
-.reveal .cascade-4 { --flare-delay: 5.5s; }
-.reveal .cascade-5 { --flare-delay: 6.9s; }
+.reveal .slides section.present .fragment.visible .flare { animation: hlFlare var(--dur, 3.8s) var(--ease, ease-out) var(--flare-delay, 0.5s) both; }
 @keyframes hlFlare {
   0%   { background-color: transparent;                        color: inherit;    box-shadow: 0 0 0 0 rgba(0,0,0,0); filter: none; }
   35%  {                                                       color: inherit; }
@@ -192,162 +203,26 @@
   100% { background-color: var(--flare-fill, var(--cm-yellow)); color: var(--ink); box-shadow: 0 0 0 0 rgba(0,0,0,0); filter: none; }
 }
 
-.accent { color: var(--teal-dark); font-weight: 700; }
-
-/* Panel: a padded, rounded box with an accent left border. `.panel` alone is a
-   plain padded box; `.panel .teal` is tinted; `.panel .navy .dark` is dark. */
-.panel {
-  background: var(--fill, var(--hue-pale, transparent));
-  border-left: 4px solid var(--hue, transparent);
-  color: var(--text, var(--ink));
-  border-radius: 6px; padding: 0.7em 1em 0.7em 1.3em; margin: 0.4em 0;
-  font-size: 1em; line-height: 1.35;
-}
-.panel > p:first-child strong:first-child,
-.panel > strong:first-child { color: var(--hue, inherit); }
-.panel p { margin: 0.3em 0; font-size: 0.8em; }
-.panel ul, .panel ol { margin: 0.2em 0 0.2em 0.8em; font-size: 0.8em; }
-.panel li { font-size: 0.8em; margin: 0.1em 0; }
-
-/* Flat tint: a pale fill, no border or padding. */
-.reveal .bg { background: var(--fill, var(--hue-pale, transparent)); padding: 0.5em 0.7em; }
-
-/* Chip: an inline pill filled with the full hue. */
-.reveal .chip {
-  display: inline-block; padding: 0.12em 0.6em; border-radius: 999px;
-  font-size: 0.62em; font-weight: 700; line-height: 1.3; letter-spacing: 0.02em;
-  vertical-align: 0.18em; background: var(--fill, var(--hue, #888));
-  color: var(--on, var(--ink));
-}
-
-/* Cards: a responsive grid of boxes. Fill with a plain list (one card per item)
-   or explicit `.card`/`.panel` divs. `display:contents` promotes a list's items
-   into the grid. */
-.reveal .cards {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 0.5em; margin: 0.4em 0; padding: 0.5em; align-items: start;
-}
-.reveal .cards > ul, .reveal .cards > ol { display: contents; }
-.reveal .slides .cards > .panel, .reveal .slides .cards > .card,
-.reveal .slides .cards li { margin: 0; line-height: 1.3; }
-.reveal .slides .cards li > *, .reveal .slides .cards .card > * { margin: 0; line-height: 1.3; }
-/* A single card: a plain box you colour with the colour axis; with no colour it
-   falls back to the default grey. A list item cannot carry a colour, so it uses
-   the grey fallback; an explicit `.card .blue` reads the colour axis. */
-.reveal .card, .reveal .cards li {
-  list-style: none; background: var(--fill, var(--hue, var(--grey-bg)));
-  color: var(--text, var(--on, var(--ink))); border-radius: 6px;
-  padding: 0.5em 0.7em; line-height: 1.3; font-size: 0.8em;
-}
-.reveal .card ul, .reveal .cards li ul { list-style: disc; }
-.reveal .card ol, .reveal .cards li ol { list-style: decimal; }
-.reveal .card p { font-size: 1em; margin: 0; }
-.reveal .card p + p { margin-top: 0.4em; }
-.reveal .cards .cards { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
-.reveal .cards.cols-2 { grid-template-columns: repeat(2, 1fr); }
-.reveal .cards.cols-3 { grid-template-columns: repeat(3, 1fr); }
-.reveal .cards.cols-4 { grid-template-columns: repeat(4, 1fr); }
-
-/* Nested columns: force flex at every depth so a .columns inside a .column sits
-   side by side; flex-basis auto keeps any explicit width= on a .column. */
-.reveal .slides .columns { display: flex; gap: min(4vw, 1.5em); align-items: flex-start; }
-.reveal .slides .columns > .column { display: block; flex: 1 1 auto; min-width: 0; }
-.reveal .column { font-size: 1em; }
-
-/* Big-number callout: a large figure beside a short note, in a pale box.
-   ::: {.bignum} ::: {.fig} 90<small>%</small> ::: ::: {.bn-body} note ::: :::
-   Recolour with --bignum-box (card) and --bignum-fig (figure). */
-.reveal .bignum {
-  display: flex; align-items: center; gap: 0.8em;
-  background: var(--bignum-box, #e6f7f6); border-radius: 10px;
-  padding: 0.6em 0.9em; margin: 0.4em 0;
-}
-.reveal .bignum .fig {
-  font-size: 2.6em; font-weight: 800; color: var(--bignum-fig, var(--teal-dark));
-  line-height: 1; white-space: nowrap;
-}
-.reveal .bignum .fig small { font-size: 0.4em; font-weight: 700; }
-.reveal .bignum .bn-body p, .reveal .bignum p { font-size: 0.72em; margin: 0.15em 0; line-height: 1.35; }
-
-/* ALIAS: .callout is a semantic name that just maps to the .panel component on
-   a neutral tint. It introduces no bespoke look, only a knob preset, the pattern
-   every semantic name should follow. */
-.reveal .callout { --hue: #6b7280; --hue-pale: #f4f6f9; }
-
-/* ============================================================ *
- * AXIS: PLACE. `.place` makes a block float absolutely within the slide; the
- * coordinate utilities below (or `top= left= width=` attributes) position it.
- * Offsets are measured from the nearest positioned ancestor, which at the top
- * level of a slide is the slide itself (Reveal makes each section positioned). */
+/* AXIS: PLACE (deck only): float a block absolutely within the slide, then
+   position with the coordinate utilities or top=/left=/width= attributes. */
 .reveal .place { position: absolute; z-index: 20; }
-
-/* Percentage coordinate utilities (5% steps; class name has no % sign, so
-   `.top-25` means top:25%). GENERATED from classes.json position.steps; edit the
-   step there and regenerate rather than hand-tuning here. Apply alongside
-   `.place`; for values off the step use `style="top:37%"` or the top=/left=
-   attributes. */
 .reveal .top-0{top:0%}.reveal .top-5{top:5%}.reveal .top-10{top:10%}.reveal .top-15{top:15%}.reveal .top-20{top:20%}.reveal .top-25{top:25%}.reveal .top-30{top:30%}.reveal .top-35{top:35%}.reveal .top-40{top:40%}.reveal .top-45{top:45%}.reveal .top-50{top:50%}.reveal .top-55{top:55%}.reveal .top-60{top:60%}.reveal .top-65{top:65%}.reveal .top-70{top:70%}.reveal .top-75{top:75%}.reveal .top-80{top:80%}.reveal .top-85{top:85%}.reveal .top-90{top:90%}.reveal .top-95{top:95%}.reveal .top-100{top:100%}
 .reveal .left-0{left:0%}.reveal .left-5{left:5%}.reveal .left-10{left:10%}.reveal .left-15{left:15%}.reveal .left-20{left:20%}.reveal .left-25{left:25%}.reveal .left-30{left:30%}.reveal .left-35{left:35%}.reveal .left-40{left:40%}.reveal .left-45{left:45%}.reveal .left-50{left:50%}.reveal .left-55{left:55%}.reveal .left-60{left:60%}.reveal .left-65{left:65%}.reveal .left-70{left:70%}.reveal .left-75{left:75%}.reveal .left-80{left:80%}.reveal .left-85{left:85%}.reveal .left-90{left:90%}.reveal .left-95{left:95%}.reveal .left-100{left:100%}
 .reveal .right-0{right:0%}.reveal .right-5{right:5%}.reveal .right-10{right:10%}.reveal .right-15{right:15%}.reveal .right-20{right:20%}.reveal .right-25{right:25%}.reveal .right-30{right:30%}.reveal .right-35{right:35%}.reveal .right-40{right:40%}.reveal .right-45{right:45%}.reveal .right-50{right:50%}.reveal .right-55{right:55%}.reveal .right-60{right:60%}.reveal .right-65{right:65%}.reveal .right-70{right:70%}.reveal .right-75{right:75%}.reveal .right-80{right:80%}.reveal .right-85{right:85%}.reveal .right-90{right:90%}.reveal .right-95{right:95%}.reveal .right-100{right:100%}
 .reveal .bottom-0{bottom:0%}.reveal .bottom-5{bottom:5%}.reveal .bottom-10{bottom:10%}.reveal .bottom-15{bottom:15%}.reveal .bottom-20{bottom:20%}.reveal .bottom-25{bottom:25%}.reveal .bottom-30{bottom:30%}.reveal .bottom-35{bottom:35%}.reveal .bottom-40{bottom:40%}.reveal .bottom-45{bottom:45%}.reveal .bottom-50{bottom:50%}.reveal .bottom-55{bottom:55%}.reveal .bottom-60{bottom:60%}.reveal .bottom-65{bottom:65%}.reveal .bottom-70{bottom:70%}.reveal .bottom-75{bottom:75%}.reveal .bottom-80{bottom:80%}.reveal .bottom-85{bottom:85%}.reveal .bottom-90{bottom:90%}.reveal .bottom-95{bottom:95%}.reveal .bottom-100{bottom:100%}
 
-/* ============================================================ *
- * AXIS: SCALE. Uniformly shrinks or grows everything inside (text, boxes,
- * icons, images) and reflows. .scale-50 = half, .scale-300 = triple; for any
- * other amount set the variable, e.g. `::: {.scale style="--scale:8"}`. */
-.reveal .scale     { zoom: var(--scale, 1); }
-.reveal .scale-25  { zoom: 0.25; }
-.reveal .scale-33  { zoom: 0.33; }
-.reveal .scale-40  { zoom: 0.4; }
-.reveal .scale-50  { zoom: 0.5; }
-.reveal .scale-60  { zoom: 0.6; }
-.reveal .scale-75  { zoom: 0.75; }
-.reveal .scale-80  { zoom: 0.8; }
-.reveal .scale-90  { zoom: 0.9; }
-.reveal .scale-100 { zoom: 1; }
-.reveal .scale-110 { zoom: 1.1; }
-.reveal .scale-125 { zoom: 1.25; }
-.reveal .scale-150 { zoom: 1.5; }
-.reveal .scale-175 { zoom: 1.75; }
-.reveal .scale-200 { zoom: 2; }
-.reveal .scale-250 { zoom: 2.5; }
-.reveal .scale-300 { zoom: 3; }
-.reveal .scale-400 { zoom: 4; }
-.reveal .scale-500 { zoom: 5; }
-
-/* ---- Media, code, quotes ---- */
+/* Deck media / code / quotes */
 .reveal section img { max-height: 60vh; margin: 0.3em 0; border-radius: 4px; }
-.reveal code {
-  font-size: 0.85em; background: #f4f6f9; padding: 0.1em 0.3em;
-  border-radius: 3px; color: var(--ink);
-}
-.reveal blockquote {
-  border-left: 3px solid var(--teal); background: none;
-  padding: 0.2em 0 0.2em 0.8em; margin: 0.4em 0; font-style: italic;
-  font-size: 0.85em; box-shadow: none; width: auto;
-}
+.reveal code { font-size: 0.85em; background: #f4f6f9; padding: 0.1em 0.3em; border-radius: 3px; color: var(--ink); }
+.reveal blockquote { border-left: 3px solid var(--teal); background: none; padding: 0.2em 0 0.2em 0.8em; margin: 0.4em 0; font-style: italic; font-size: 0.85em; box-shadow: none; width: auto; }
 
-/* Small caption under an image. Plain grey, no background, only legible on a
-   plain slide. For a full-bleed background-image slide use .shot-cap instead. */
+/* Deck media labels */
 .caption { display: block; font-size: 0.6em; color: #666; margin-top: 0.2em; line-height: 1.3; }
-/* Caption pinned to the bottom of a full-bleed background-image slide, on a
-   mostly opaque dark fill so it reads over any map or screenshot. */
-.reveal .shot-cap {
-  position: absolute; left: 0; right: 0; bottom: 0; margin: 0;
-  background: rgba(31, 31, 54, 0.88); color: #fff;
-  padding: 0.5em 1.2em; font-size: 0.62em; line-height: 1.3; z-index: 5;
-}
+.reveal .shot-cap { position: absolute; left: 0; right: 0; bottom: 0; margin: 0; background: rgba(31,31,54,0.88); color: #fff; padding: 0.5em 1.2em; font-size: 0.62em; line-height: 1.3; z-index: 5; }
 .reveal .shot-cap a { color: var(--cm-blue-bright); }
+.reveal img.brand { position: fixed; top: 4%; left: 4%; width: 11%; margin: 0; border: 0; box-shadow: none; background: none; z-index: 10; }
 
-/* Brand logo, pinned top-left (the logo's only home). Add `.brand` to the image
-   and drop any width: `![](.../logo-inverted.png){.brand}`. Use the inverted
-   logo on a dark slide. `fixed` keeps it in the corner even on a centred slide. */
-.reveal img.brand {
-  position: fixed; top: 4%; left: 4%; width: 11%; margin: 0;
-  border: 0; box-shadow: none; background: none; z-index: 10;
-}
-
-/* ---- Title slide helpers ---- */
+/* Title / resources / closing slide helpers */
 .title-page { color: white; }
 .title-page .eyebrow { color: var(--teal); font-size: 0.85em; letter-spacing: 0.15em; font-weight: 600; margin-bottom: 1em; }
 .title-page .headline { color: white; font-size: 1.7em; font-weight: 700; line-height: 1.15; }
@@ -355,30 +230,15 @@
 .title-page .subhead { color: var(--muted); font-size: 0.95em; font-weight: 300; margin-top: 0.6em; }
 .title-page .byline { color: #cbd5e1; font-size: 0.7em; margin-top: 1.2em; }
 .title-page .urls { color: #94a3b8; font-size: 0.55em; margin-top: 1em; }
-
-/* ---- Resources / closing slide helpers (dark background) ---- */
 .resources-col { color: var(--muted); font-size: 0.85em; }
 .resources-col p { color: var(--muted); font-size: 1em; }
 .resources-col strong { color: white; }
-.resources-col a { color: var(--teal) !important; }
-.resources-col .ref { color: var(--teal); }
+.resources-col a, .resources-col .ref { color: var(--teal) !important; }
 .thank-you { color: white; font-size: 1.2em; font-weight: 700; margin-top: 1.2em; text-align: center; }
 .contact { color: var(--teal); font-size: 0.8em; text-align: center; margin-top: 0.3em; }
 
-/* ---- Chrome: breadcrumb + slide number ---- */
-.reveal .slide-breadcrumb {
-  position: fixed; bottom: 8px; right: 6.8em; left: auto; transform: none;
-  z-index: 31; font-size: 12px; font-weight: 600; letter-spacing: 0.02em;
-  text-align: right; color: #1b1b3a; background: rgba(255,255,255,0.7);
-  padding: 3px 7px; border-radius: 4px; pointer-events: none;
-  max-width: 36vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
+/* Chrome: breadcrumb + slide number + references slide */
+.reveal .slide-breadcrumb { position: fixed; bottom: 8px; right: 6.8em; left: auto; transform: none; z-index: 31; font-size: 12px; font-weight: 600; letter-spacing: 0.02em; text-align: right; color: #1b1b3a; background: rgba(255,255,255,0.7); padding: 3px 7px; border-radius: 4px; pointer-events: none; max-width: 36vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .reveal .slide-breadcrumb:empty { display: none; }
-.reveal .slide-number {
-  bottom: 8px; right: 8px;
-  background: rgba(255,255,255,0.7) !important; color: #1b1b3a !important;
-  padding: 3px 7px; border-radius: 4px; font-weight: 600;
-}
-
-/* References slide appended by gmist when citations are used. */
-.references-slide { text-align: left; }
+.reveal .slide-number { bottom: 8px; right: 8px; background: rgba(255,255,255,0.7) !important; color: #1b1b3a !important; padding: 3px 7px; border-radius: 4px; font-weight: 600; }
+.reveal .references-slide { text-align: left; }

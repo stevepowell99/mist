@@ -6,19 +6,15 @@ import { rewriteImages } from "~/lib/asset-urls";
 import { runMermaid } from "~/lib/mermaid";
 import { renderWikiLinks } from "~/lib/wikilinks";
 import { convertCitations, formatReferenceList } from "~/lib/citations";
+import { convertCallouts, convertSpans, convertImages, convertDivs } from "~/lib/slides-build";
 import { stripFrontmatter } from "~/lib/thread-serialization";
 import { stripMistBanner } from "~/shared/mist-banner";
 
-/** Strip pandoc attribute blocks from heading lines, e.g. "## Title {#anchor}".
+/** Strip pandoc attribute blocks left on heading lines, e.g. "## Title {#anchor}".
+ * Runs AFTER the grammar conversions, so only leftover heading attrs remain.
  * Only blocks starting with # or . are removed, so CriticMarkup ({++ ++} etc.) is left alone. */
 function stripPandocAttrs(text: string): string {
   return text.replace(/[ \t]*\{[#.][^}]*\}[ \t]*$/gm, "");
-}
-
-/** Remove Quarto fenced-div markers (`:::`, `::: {.columns}`) so they do not
- * render as stray colons in the document preview. */
-function stripFencedDivs(text: string): string {
-  return text.replace(/^[ \t]*:::+.*$/gm, "");
 }
 
 /** Replace CriticMarkup delimiters with styled HTML spans before markdown rendering */
@@ -50,7 +46,12 @@ export default function Preview() {
     // The editor body now carries the document's YAML frontmatter (so it is
     // visible and editable), but it is metadata, so strip it from the preview.
     const resolved = rewriteImages(stripFrontmatter(stripMistBanner(markdown)), ctx);
-    const withLinks = stripFencedDivs(stripPandocAttrs(renderWikiLinks(resolved)));
+    // Parse the composable grammar (callouts -> spans -> fenced divs, nesting
+    // supported) so panels, cards and callouts render in a doc, then clean any
+    // attrs left on heading lines.
+    const withLinks = stripPandocAttrs(
+      convertDivs(convertImages(convertSpans(convertCallouts(renderWikiLinks(resolved))))),
+    );
     let body = withLinks;
     let references = "";
     if (bibLib) {

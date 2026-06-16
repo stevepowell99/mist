@@ -141,8 +141,35 @@ function attrString(classes: string[], id: string | null, style: string): string
   );
 }
 
+/** Obsidian/Quartz callouts: a `> [!type] Title` line plus the following `> `
+ *  lines become a `::: {.callout .callout-type}` fenced div (title as a
+ *  `.callout-title` span), so the shared callout component styles them in both
+ *  docs and decks. Run before convertSpans/convertDivs. */
+export function convertCallouts(md: string): string {
+  const lines = md.split("\n");
+  const out: string[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(/^\s*>\s*\[!([\w-]+)\][-+]?\s*(.*)$/);
+    if (!m) { out.push(lines[i]); continue; }
+    const type = m[1].toLowerCase();
+    const title = m[2].trim();
+    const body: string[] = [];
+    let j = i + 1;
+    for (; j < lines.length; j++) {
+      const bm = lines[j].match(/^\s*>\s?(.*)$/);
+      if (bm === null) break;
+      body.push(bm[1]);
+    }
+    out.push("", `::: {.callout .callout-${type}}`, "");
+    if (title) out.push(`[${title}]{.callout-title}`, "");
+    out.push(...body, "", ":::", "");
+    i = j - 1;
+  }
+  return out.join("\n");
+}
+
 /** Turn Quarto `::: {...}` fenced divs into real div/aside elements. */
-function convertDivs(md: string): string {
+export function convertDivs(md: string): string {
   const out: string[] = [];
   const stack: string[] = [];
   for (const line of md.split("\n")) {
@@ -170,7 +197,7 @@ function convertDivs(md: string): string {
 }
 
 /** Markdown images carrying Pandoc attributes, e.g. `![](logo.png){.brand}`. */
-function convertImages(md: string): string {
+export function convertImages(md: string): string {
   return md.replace(
     /!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)\{([^}]*)\}/g,
     (_w, alt: string, url: string, attr: string) => {
@@ -181,7 +208,7 @@ function convertImages(md: string): string {
 }
 
 /** Inline `[text]{.flare .blue}` spans, carrying classes, id and style. */
-function convertSpans(md: string): string {
+export function convertSpans(md: string): string {
   return md.replace(/\[([^\]]+)\]\{([^}]*)\}/g, (_w, text: string, attr: string) => {
     const { classes, id, style } = parseAttrs(attr);
     if (!classes.length && !id && !style) return text;
@@ -214,7 +241,7 @@ function buildSection(slideMd: string, ctx: AssetCtx): string {
     if (parsed.bgAttr) bgComment = `<!-- .slide: ${parsed.bgAttr} -->\n`;
     body = [parsed.heading, ...lines.slice(h + 1)].join("\n");
   }
-  const inner = convertDivs(convertImages(convertSpans(body))).replace(/<\/textarea>/gi, "&lt;/textarea&gt;");
+  const inner = convertDivs(convertImages(convertSpans(convertCallouts(body)))).replace(/<\/textarea>/gi, "&lt;/textarea&gt;");
   return `<section${classAttr} data-markdown><textarea data-template>\n${bgComment}${inner}\n</textarea></section>`;
 }
 
