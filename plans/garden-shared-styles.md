@@ -1,9 +1,10 @@
 # Plan: share gmist's style grammar with the Garden, without disrupting it
 
-Status: Phases 0 and 1 done (16 June 2026); Phase 2 wanted later; Phase 3
-optional. **Do not touch the Garden yet**: it is live and its HTML and PDF output
-both look good. This plan is deliberately conservative. Every step is additive or
-documentation-only, and the Garden's existing look wins on every collision.
+Status: Phases 0, 1 and 2 done (16 June 2026); Phase 3 (converge the two parsers'
+corner cases) optional. The Garden changes are additive and built/verified
+locally; they are NOT committed or deployed to the live Garden yet (Steve's call).
+Every step is additive or documentation-only, and the Garden's existing look wins
+on every collision.
 
 ## Background
 
@@ -150,16 +151,40 @@ cheapest, highest-value shared artifact.
   documented in the grammar doc. Typechecks clean.
 - gmist-only, additive. No Garden change.
 
-### Phase 2 (optional): additive composable layer for the Garden
-- Generate a small `garden-compose.css` from gmist's component, colour and scale
-  axes, **excluding** `.callout*` and anything that collides. Namespace-check it
-  against the Garden's class list first (the inventory in this plan).
-- The Garden's Python appends it after its own CSS, so it can only add new
-  classes, never override. Garden authors gain `.panel`, `.cards`, `.chip`,
-  `.bignum` and the free colour axis; nothing existing changes.
-- Ship behind a config flag, off by default, until Steve has eyeballed a page and
-  a PDF. This is the only step that emits CSS into the Garden, so it carries the
-  real (still low, additive) risk and gets the most checking.
+### Phase 2: additive composable layer for the Garden. DONE 16 June 2026 (built and verified locally, not yet live).
+What shipped into the Garden working tree (`19aCMgarden`):
+- **`garden-compose.css`** (new file): a curated port of gmist's CORE axes
+  (colour, shade, align, scale) and components (`.hl`/`.flare`, `.panel`, `.bg`,
+  `.chip`, `.cards`/`.card`, `.columns`/`.column`, `.bignum`), scoped to
+  `.content`. Deliberate adaptations: `.callout*` dropped (Garden owns them),
+  `.lead` dropped (Bootstrap owns it), `.card` scoped under `.cards` so Bootstrap's
+  `.card` is never clobbered, colour values kept as gmist's hexes. It is loaded
+  once in `build_static_site.py` and injected as a `<style>` AFTER the site CSS,
+  so it can only add classes. Delete the file to switch the layer off.
+- **Two parser additions in `build_static_site.py`** (the gap the plan had folded
+  into Phase 3): the Garden supported neither gmist construct.
+  - `preprocess_fenced_divs`: `::: {.class}` to nestable `<div class=".." markdown="1">`
+    (md_in_html parses inner markdown and nests), for block components.
+  - `preprocess_inline_spans`: `[text]{.class}` to `<span>` (Python-Markdown's
+    attr_list does not build spans from bare brackets). Links/images use
+    `](url){..}` so they are not matched.
+  Both fire only on syntax the Garden never used, so existing pages are untouched.
+- **Three grammar bug-fixes** found by building a test page, applied to BOTH
+  `garden-compose.css` and the gmist source `deck-base.css` (kept aligned):
+  nested-shade `--fill` bleed (a coloured component in a shaded parent now fills
+  with its own hue), dark-panel lead colour (flips to light text), and `.bignum`
+  text (pins dark so a bignum in a dark card stays readable).
+- Verified by rendering one test page (`content/!compose-test.md`, the `!` keeps
+  it out of nav and commits) through the real pipeline to HTML, a print-emulated
+  screenshot and a PDF, iterating until both were correct. Scratch runner and
+  output are `_compose_runner.py` and `_compose_out/` (underscore-prefixed, never
+  built or committed).
+
+Remaining for Steve: decide whether to commit `build_static_site.py` +
+`garden-compose.css` in the Garden and let it deploy (the layer is additive and
+inert on existing pages, so going live changes nothing visible). The original
+plan's idea of a config flag was not needed: deleting the CSS file is the off
+switch, and a full rebuild already regenerated `dist/` with the inert layer.
 
 ### Phase 3 (optional, later): converge the converters toward the spec
 - Bring gmist's `::: {.class}` div handling and the Garden's to the same corner
