@@ -5,7 +5,7 @@ import { getAgentByName } from "agents";
 import { isValidDocumentId } from "~/shared/constants";
 import type { DocRole, DriveMeta, GitHubMeta } from "~/shared/types";
 import { getCloudflare } from "~/lib/cloudflare.server";
-import { mintAssetToken, type DriveSessionEnv } from "~/lib/drive-access.server";
+import { mintAssetToken, mintAssetTokenForDoc, type DriveSessionEnv } from "~/lib/drive-access.server";
 import { EditorView } from "@codemirror/view";
 import { modAltChord } from "~/lib/chord";
 import { offsetForSlideIndex, slideIndexForOffset } from "~/lib/slide-cursor";
@@ -78,8 +78,12 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
   }
 
   // Short-lived token so the sandboxed slides iframe (and document preview) can
-  // fetch private-Drive assets without the session cookie. Null if unauthorised.
-  const assetToken = await mintAssetToken(request, env as unknown as DriveSessionEnv);
+  // fetch private-Drive assets without the session cookie. A valid doc key (the
+  // secret link) is enough, so a collaborator sees styles/images with no Google
+  // account; a signed-in session also works.
+  const assetToken =
+    mintAssetTokenForDoc(env as unknown as DriveSessionEnv, !!role) ??
+    (await mintAssetToken(request, env as unknown as DriveSessionEnv));
 
   return { id, createdAt, role, suggestKey: suggestKey ?? null, docKey, github, drive, initialPreview, assetToken };
 }

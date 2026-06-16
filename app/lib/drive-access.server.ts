@@ -49,6 +49,19 @@ export async function driveAccess(request: Request, env: DriveSessionEnv): Promi
   return { ok: false, email: null };
 }
 
+/**
+ * Mint a short-lived asset token for a holder of a valid doc key (the secret
+ * link). The asset token lets the sandboxed slides iframe fetch the deck's
+ * private-Drive CSS/images, so a collaborator opening a share link sees styles
+ * and images without a Google account, matching the no-account model. The token
+ * is coarse (it does not carry a per-file ACL), exactly like the session-minted
+ * one. Returns null if the doc key was invalid or there is no signing secret.
+ */
+export function mintAssetTokenForDoc(env: DriveSessionEnv, hasValidKey: boolean): string | null {
+  if (!hasValidKey || !env.SESSION_SECRET) return null;
+  return signAssetToken(env.SESSION_SECRET);
+}
+
 /** Mint a short-lived asset token if the request is authorised; else null. */
 export async function mintAssetToken(request: Request, env: DriveSessionEnv): Promise<string | null> {
   if (!env.SESSION_SECRET) return null;
