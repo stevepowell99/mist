@@ -1,9 +1,9 @@
 # Plan: share gmist's style grammar with the Garden, without disrupting it
 
-Status: proposal, 16 June 2026. Nothing here has been built. **Do not touch the
-Garden yet**: it is live and its HTML and PDF output both look good. This plan is
-deliberately conservative. Every step is additive or documentation-only, and the
-Garden's existing look wins on every collision.
+Status: Phases 0 and 1 done (16 June 2026); Phase 2 wanted later; Phase 3
+optional. **Do not touch the Garden yet**: it is live and its HTML and PDF output
+both look good. This plan is deliberately conservative. Every step is additive or
+documentation-only, and the Garden's existing look wins on every collision.
 
 ## Background
 
@@ -130,21 +130,24 @@ cheapest, highest-value shared artifact.
 
 ## Plan (staged, each step independently shippable, none disrupts the Garden)
 
-### Phase 0: spec only, no code
-- Write `docs/author-grammar.md` (canonical, in the gmist repo): the markdown
-  author grammar both renderers honour, covering callouts, divs, spans, image
-  attrs, citations, columns. Mark where the two legitimately differ (column
-  syntax, custom `--{}` fence) and where they must agree.
-- Write a token reference listing both palette sets by name and value, pointing
-  at the corporate palette in the hub `CLAUDE.md` as the brand source. One home
-  for the brand, both sets visible.
-- Outcome: single source for "what the syntax means", zero risk.
+### Phase 0: spec only, no code. DONE 16 June 2026.
+- `docs/author-grammar.md` written: the canonical cross-renderer grammar contract
+  (callouts, divs, spans, image attrs, citations, columns), marking where the two
+  legitimately differ and where they must agree. It points to `deck-base.css` /
+  `classes.json` for the class catalogue rather than restating it.
+- The token reference is folded into that same doc as a "Colour tokens" section
+  (both sets named, pointing to the hub `CLAUDE.md` brand source), not a parallel
+  file. Location decided: gmist `docs/`, co-located with the grammar spec and the
+  styling work; can move to the hub later if a more neutral home is wanted.
 
-### Phase 1: gmist adopts the Garden's callout vocabulary at the grammar level
-- Keep gmist's callout CSS as is (its decks need it), but make gmist's converter
-  accept every Obsidian callout type the Garden accepts (`[!summary]`, `[!faq]`,
-  `[!cta]`, foldable `+/-`, and so on), mapping unknowns to a sensible base. So a
-  file written for the Garden renders in gmist without unknown-callout fallout.
+### Phase 1: gmist adopts the Garden's callout vocabulary at the grammar level. DONE 16 June 2026.
+- `convertCallouts` in `app/lib/slides-build.ts` gained a `CALLOUT_ALIAS` map that
+  normalises the wider Obsidian type set (`summary`, `faq`, `done`, `attention`,
+  `failure`, `cite`, and so on) onto gmist's five styled colour buckets. A
+  Garden-authored file now renders with a sensible colour instead of a bare grey
+  fallback. One change covers both surfaces, since the doc `Preview` reuses the
+  same converter. Two deliberate colour divergences (`important`, `example`) are
+  documented in the grammar doc. Typechecks clean.
 - gmist-only, additive. No Garden change.
 
 ### Phase 2 (optional): additive composable layer for the Garden
