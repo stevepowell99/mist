@@ -312,6 +312,13 @@ body {
   display: none;
 }
 
+/* While dragging the split divider, let the mouse pass through the slides
+   iframe (and any other), so the cursor crossing it does not steal the
+   mousemove events and stall the drag. */
+.mist-dragging iframe {
+  pointer-events: none;
+}
+
 /* Clean view: hide delimiters and comment text only */
 .clean-view .cm-delimiter {
   display: none;

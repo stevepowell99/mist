@@ -6,6 +6,7 @@ import { isValidDocumentId } from "~/shared/constants";
 import type { DocRole, DriveMeta, GitHubMeta } from "~/shared/types";
 import { getCloudflare } from "~/lib/cloudflare.server";
 import { mintAssetToken, type DriveSessionEnv } from "~/lib/drive-access.server";
+import { EditorView } from "@codemirror/view";
 import { modAltChord } from "~/lib/chord";
 import { offsetForSlideIndex } from "~/lib/slide-cursor";
 import { useYjsEditor } from "~/lib/useYjsEditor";
@@ -313,7 +314,13 @@ function DocumentLayout({ id }: { id: string }) {
     const s = typeof window !== "undefined" ? new URL(window.location.href).searchParams.get("slide") : null;
     const idx = s && /^\d+$/.test(s) ? Number(s) : 0;
     const pos = Math.min(offsetForSlideIndex(markdown, idx), editorView.state.doc.length);
-    editorView.dispatch({ selection: { anchor: pos }, scrollIntoView: true });
+    // y:"start" puts the slide's heading near the top of the viewport (a small
+    // margin above), rather than scrollIntoView's default of the nearest edge,
+    // which left the heading at the very bottom when scrolling down.
+    editorView.dispatch({
+      selection: { anchor: pos },
+      effects: EditorView.scrollIntoView(pos, { y: "start", yMargin: 48 }),
+    });
     editorView.focus();
   };
 
@@ -375,16 +382,30 @@ function DocumentLayout({ id }: { id: string }) {
     const el = contentRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
-    const onMove = (ev: MouseEvent) => {
-      const pct = ((ev.clientX - rect.left) / rect.width) * 100;
+    // rAF-throttle: each mousemove reflows the iframe-heavy layout, so coalesce
+    // to one resize per frame to keep the drag smooth.
+    let raf = 0;
+    let pendingX = 0;
+    const apply = () => {
+      raf = 0;
+      const pct = ((pendingX - rect.left) / rect.width) * 100;
       setEditorPct(Math.min(100, Math.max(20, pct)));
+    };
+    const onMove = (ev: MouseEvent) => {
+      pendingX = ev.clientX;
+      if (!raf) raf = requestAnimationFrame(apply);
     };
     const onUp = () => {
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
       document.body.style.userSelect = "";
+      // mist-dragging lets the mouse pass through the iframe so the drag never
+      // stalls when the cursor is over the preview pane.
+      document.body.classList.remove("mist-dragging");
+      if (raf) cancelAnimationFrame(raf);
     };
     document.body.style.userSelect = "none";
+    document.body.classList.add("mist-dragging");
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
   }, []);
