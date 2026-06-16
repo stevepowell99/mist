@@ -6,6 +6,7 @@
  */
 import { resolveAssetPath } from "~/lib/github";
 import { driveAssetUrl, resolveAssetSrc, rewriteImages, type AssetCtx } from "~/lib/asset-urls";
+import { convertCitations, formatReferenceList, type BibLibrary } from "~/lib/citations";
 import type { DriveMeta, GitHubMeta } from "~/shared/types";
 
 export function stripFrontmatter(md: string): { frontmatter: string; body: string } {
@@ -340,6 +341,9 @@ export interface BuildSlidesOptions {
   bust: string;
   /** The doc's own frontmatter; falls back to any the markdown carries. */
   docFrontmatter: string;
+  /** BibTeX library: when present, `[@key]` citations render as inline APA and a
+   *  References slide is appended, matching the document preview. */
+  bibLib?: BibLibrary | null;
 }
 
 /**
@@ -355,14 +359,31 @@ export function buildSlideSections(md: string, opts: BuildSlidesOptions): string
   const ctx: AssetCtx = { github, drive, origin, driveToken };
   const { body: bodyNoStyles } = extractStyleBlocks(rawBody);
   let body = stripCritic(bodyNoStyles);
+  // Convert [@key] citations to inline APA, collecting the keys used for the
+  // References slide, exactly as the document preview does.
+  let usedKeys: Set<string> | null = null;
+  if (opts.bibLib) {
+    const cited = convertCitations(body, opts.bibLib);
+    body = cited.text;
+    usedKeys = cited.usedKeys;
+  }
   body = rewriteImages(body, ctx); // relative images -> backend URLs (GitHub raw / Drive proxy)
-  return groupSlides(splitSlides(body))
+  const sections = groupSlides(splitSlides(body))
     .map((group) =>
       group.length === 1
         ? buildSection(group[0], ctx)
         : `<section>\n${group.map((s) => buildSection(s, ctx)).join("\n")}\n</section>`,
     )
     .join("\n");
+  // Append a References slide (raw HTML, not data-markdown) when citations were
+  // used. .references-slide can be styled by the deck CSS.
+  if (opts.bibLib && usedKeys && usedKeys.size) {
+    const refs = formatReferenceList(usedKeys, opts.bibLib);
+    if (refs) {
+      return `${sections}\n<section class="references-slide" style="text-align:left;font-size:0.5em"><h2 style="text-align:center">References</h2>${refs}</section>`;
+    }
+  }
+  return sections;
 }
 
 export function buildSlidesHtml(md: string, opts: BuildSlidesOptions): string {
