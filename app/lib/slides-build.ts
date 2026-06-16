@@ -513,8 +513,16 @@ var slideChangedHandler = function(){ try { parent.postMessage({ type: 'mist-sli
 // the same slide list the reload path does. The CDN scripts stay loaded, so it
 // is still far cheaper than reloading the iframe.
 var rerendering = false;
+// The latest render that arrived before reveal was ready (or while a rebuild was
+// in flight). Buffer it instead of dropping it, so content posted in the gap
+// after a reload (deploy / stale-tab reconnect) is not lost, which showed as a
+// blank preview that needed several reloads. Drained when ready / on finish.
+var pendingRender = null;
+function drainRender(){
+  if (pendingRender) { var pr = pendingRender; pendingRender = null; rerender(pr.html, pr.target); }
+}
 async function rerender(html, target){
-  if (!revealReady || rerendering) return;
+  if (!revealReady || rerendering) { pendingRender = { html: html, target: target }; return; }
   var slidesEl = document.querySelector(".slides");
   if (!slidesEl) return;
   rerendering = true;
@@ -554,6 +562,7 @@ async function rerender(html, target){
     rerendering = false;
   }
   await runMermaid();
+  drainRender(); // apply a render that arrived during this rebuild
 }
 window.addEventListener("message", function(e){
   if (!e.data) return;
@@ -609,6 +618,7 @@ Reveal.initialize(REVEAL_CONFIG).then(async function(){
   if (window.ResizeObserver) new ResizeObserver(relayout).observe(document.body);
   window.addEventListener("resize", relayout);
   await runMermaid();
+  drainRender(); // apply any render that arrived before reveal finished booting
 });
 </script>
 </body></html>`;

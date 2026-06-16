@@ -153,8 +153,17 @@ export default function SlidesView() {
     const onMsg = (e: MessageEvent) => {
       const d = e.data as { type?: string; h?: number };
       // The deck asks for its opening slide once it is ready (more reliable than
-      // pushing on iframe load, whose timing races the iframe's own setup).
+      // pushing on iframe load, whose timing races the iframe's own setup). Take
+      // the chance to push the current body too: if it changed while the iframe
+      // was booting (content syncing in after a reload), the srcDoc it loaded is
+      // stale, and this is what refreshes it without needing manual reloads.
       if (d?.type === "mist-need-goto") {
+        if (sectionsRef.current !== embeddedSectionsRef.current) {
+          iframeRef.current?.contentWindow?.postMessage(
+            { type: "mist-render", sections: sectionsRef.current, goto: gotoTargetRef.current },
+            "*",
+          );
+        }
         sendInitialGoto();
         return;
       }
