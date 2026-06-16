@@ -58,8 +58,12 @@
 :is(.reveal,.preview) .mag    { --hue: #DC378C; --hue-bright: #FF8FB8; --hue-pale: #fbe3ef; --hue-deep: #8a1f56; --on: #fff; }
 :is(.reveal,.preview) .white  { --hue: #ffffff; --hue-bright: #ffffff; --hue-pale: #ffffff; --hue-deep: #d9d9d9; --on: var(--ink); }
 :is(.reveal,.preview) .black  { --hue: #1a1a1a; --hue-bright: #3a3a3a; --hue-pale: #ececec; --hue-deep: #000000; --on: #fff; }
-/* A colour on its own (no component) tints the text. */
-:is(.reveal,.preview) :is(.blue,.green,.teal,.grey,.yellow,.pink,.cyan,.mint,.navy,.mag,.white,.black) { color: var(--hue); }
+/* A colour on its own (no component) tints the text. It also resets --fill, so a
+   coloured component nested in a shaded one (a .pink chip inside a .light panel)
+   fills with ITS hue, not the parent's inherited --fill. A shade class on the
+   same element sets --fill again after this (source order), so colour+shade still
+   works. */
+:is(.reveal,.preview) :is(.blue,.green,.teal,.grey,.yellow,.pink,.cyan,.mint,.navy,.mag,.white,.black) { color: var(--hue); --fill: initial; }
 
 /* AXIS: SHADE / ALIGN / TIMING */
 :is(.reveal,.preview) .light { --fill: var(--hue-pale); --text: var(--ink); }
@@ -107,6 +111,10 @@
 }
 :is(.reveal,.preview) .panel > p:first-child strong:first-child,
 :is(.reveal,.preview) .panel > strong:first-child { color: var(--hue, inherit); }
+/* On a dark-shaded panel the lead's hue would sit on its own deep fill and
+   vanish, so flip it to the panel's light text. */
+:is(.reveal,.preview) .panel.dark > p:first-child strong:first-child,
+:is(.reveal,.preview) .panel.dark > strong:first-child { color: var(--text, #fff); }
 
 /* COMPONENT: flat tint / chip */
 :is(.reveal,.preview) .bg { background: var(--fill, var(--hue-pale, transparent)); padding: 0.5em 0.7em; }
@@ -146,6 +154,7 @@
 :is(.reveal,.preview) .bignum {
   display: flex; align-items: center; gap: 0.8em; background: var(--bignum-box, #e6f7f6);
   border-radius: 10px; padding: 0.6em 0.9em; margin: 0.4em 0;
+  color: var(--ink); /* its box is always light, so never inherit a dark ancestor's white text */
 }
 :is(.reveal,.preview) .bignum .fig {
   font-size: 2.6em; font-weight: 800; color: var(--bignum-fig, var(--teal-dark)); line-height: 1; white-space: nowrap;
