@@ -173,6 +173,17 @@ export default function SlidesView() {
   // whichever arrives first; both set the same target.
   const onLoad = sendInitialGoto;
 
+  // Jump the deck to a peer's slide when their avatar is clicked (PresenceBar
+  // dispatches the slide index on the window).
+  useEffect(() => {
+    const onJump = (e: Event) => {
+      const idx = (e as CustomEvent<number>).detail;
+      if (typeof idx === "number") iframeRef.current?.contentWindow?.postMessage({ type: "mist-goto", h: idx, f: -1 }, "*");
+    };
+    window.addEventListener("mist-goto-slide", onJump);
+    return () => window.removeEventListener("mist-goto-slide", onJump);
+  }, []);
+
   return (
     <iframe
       ref={iframeRef}

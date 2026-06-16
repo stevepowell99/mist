@@ -1,6 +1,8 @@
 import { useCallback, useMemo, useState } from "react";
 import type { EditorView } from "@codemirror/view";
 import { extractOutlineFromText, moveSection, sectionEnd, toggleHiddenText, type OutlineItem } from "~/lib/outline";
+import { slideIndexForOffset } from "~/lib/slide-cursor";
+import type { Peer } from "~/lib/usePresence";
 
 /**
  * Header-only outline for the open document (CodeMirror / Y.Text core). For a
@@ -14,16 +16,37 @@ export default function OutlinePanel({
   text,
   deck,
   canEdit,
+  peers = [],
   onClose,
 }: {
   view: EditorView | null;
   text: string;
   deck: boolean;
   canEdit: boolean;
+  /** Other connected users, for the per-slide presence markers (decks). */
+  peers?: Peer[];
   onClose: () => void;
 }) {
   const [maxLevel, setMaxLevel] = useState(3);
   const items = useMemo(() => extractOutlineFromText(text), [text]);
+
+  // Group peers by the flat slide index they are on, so each row can show who is
+  // on that slide (deck only).
+  const peersBySlide = useMemo(() => {
+    const m = new Map<number, Peer[]>();
+    if (!deck) return m;
+    for (const p of peers) {
+      if (p.slide == null) continue;
+      const arr = m.get(p.slide) ?? [];
+      arr.push(p);
+      m.set(p.slide, arr);
+    }
+    return m;
+  }, [peers, deck]);
+  const peersOnItem = useCallback(
+    (item: OutlineItem): Peer[] => (deck ? peersBySlide.get(slideIndexForOffset(text, item.pos)) ?? [] : []),
+    [deck, peersBySlide, text],
+  );
 
   const jump = useCallback(
     (pos: number) => {
@@ -160,6 +183,20 @@ export default function OutlinePanel({
             >
               {item.title}
             </button>
+            {deck && peersOnItem(item).length > 0 && (
+              <span className="flex shrink-0 items-center -space-x-1.5 pr-0.5">
+                {peersOnItem(item).slice(0, 3).map((p) => (
+                  <span
+                    key={p.clientID}
+                    title={`${p.name} is here`}
+                    className="flex h-4 w-4 items-center justify-center rounded-full border border-paper text-[9px] font-semibold text-white"
+                    style={{ backgroundColor: p.color }}
+                  >
+                    {p.name.trim()[0]?.toUpperCase() || "?"}
+                  </span>
+                ))}
+              </span>
+            )}
             {deck && canEdit && (
               <button
                 type="button"

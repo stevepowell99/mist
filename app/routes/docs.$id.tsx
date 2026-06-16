@@ -1,5 +1,5 @@
 import { data, Link } from "react-router";
-import { useRef, useCallback, useEffect, useLayoutEffect, useState, type MouseEvent as ReactMouseEvent } from "react";
+import { useRef, useCallback, useEffect, useLayoutEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from "react";
 import type { Route } from "./+types/docs.$id";
 import { getAgentByName } from "agents";
 import { isValidDocumentId } from "~/shared/constants";
@@ -8,8 +8,10 @@ import { getCloudflare } from "~/lib/cloudflare.server";
 import { mintAssetToken, type DriveSessionEnv } from "~/lib/drive-access.server";
 import { EditorView } from "@codemirror/view";
 import { modAltChord } from "~/lib/chord";
-import { offsetForSlideIndex } from "~/lib/slide-cursor";
+import { offsetForSlideIndex, slideIndexForOffset } from "~/lib/slide-cursor";
 import { docFileKey, loadDocSettings, saveDocSettings } from "~/lib/doc-settings";
+import { usePresence } from "~/lib/usePresence";
+import PresenceBar from "~/components/PresenceBar";
 import { useYjsEditor } from "~/lib/useYjsEditor";
 import { DocumentProvider, useDocument } from "~/lib/DocumentContext";
 import CodeMirrorEditor from "~/components/CodeMirrorEditor";
@@ -170,6 +172,7 @@ function DocumentLayout({ id }: { id: string }) {
   const {
     yjs,
     view: editorView,
+    cursorOffset,
     showPreview,
     previewToggled,
     handleViewReady,
@@ -308,6 +311,28 @@ function DocumentLayout({ id }: { id: string }) {
     }, 200);
     return () => clearTimeout(t);
   }, [fileKey, editorPct, previewToggled, followCursor, cleanView, asideCollapsed]);
+
+  // Collaborative presence: broadcast the slide this user is on (the deck's
+  // current slide when its preview is visible, otherwise the editor cursor's
+  // slide) and read the peers, for the navbar avatars and the outline markers.
+  const { peers, setLocalSlide } = usePresence(yjs.awareness);
+  const [deckSlide, setDeckSlide] = useState<number | null>(null);
+  useEffect(() => {
+    const onMsg = (e: MessageEvent) => {
+      const d = e.data as { type?: string; h?: number };
+      if (d?.type === "mist-slide" && typeof d.h === "number") setDeckSlide(d.h);
+    };
+    window.addEventListener("message", onMsg);
+    return () => window.removeEventListener("message", onMsg);
+  }, []);
+  const localSlide = useMemo(() => {
+    if (!deck) return null;
+    if ((splitOpen || slidesFull) && deckSlide != null) return deckSlide;
+    return slideIndexForOffset(markdown, cursorOffset);
+  }, [deck, splitOpen, slidesFull, deckSlide, markdown, cursorOffset]);
+  useEffect(() => {
+    setLocalSlide(localSlide);
+  }, [localSlide, setLocalSlide]);
 
   useEffect(() => {
     const mq = window.matchMedia("(min-width: 1024px)");
@@ -670,6 +695,11 @@ function DocumentLayout({ id }: { id: string }) {
           <div className="flex items-center border-l border-border px-3 lg:min-w-0 lg:flex-1 lg:justify-center lg:overflow-hidden lg:px-2">
             <ConnectionStatus />
           </div>
+          {peers.length > 0 && (
+            <div className="hidden shrink-0 items-center border-l border-border px-2 lg:flex">
+              <PresenceBar peers={peers} />
+            </div>
+          )}
           <div className="hidden shrink-0 items-center border-l border-border lg:flex">
             <UserName />
           </div>
@@ -709,6 +739,7 @@ function DocumentLayout({ id }: { id: string }) {
               text={markdown}
               deck={deck}
               canEdit={role === "edit"}
+              peers={peers}
               onClose={() => setOutlineOpen(false)}
             />
           )}
