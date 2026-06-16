@@ -77,18 +77,47 @@ export function parseCssClasses(css: string): string[] {
 
 /** Reveal.js and Quarto authoring classes that are not in the deck's own CSS, so
  *  the deck-CSS parse never offers them. Merged into the picker so `.fragment`
- *  and friends are available everywhere. */
-const BUILTIN_CLASSES = [
+ *  and friends are available everywhere, each with a one-line description so the
+ *  picker is self-explanatory for these too. */
+const BUILTIN_CLASSES: Record<string, string> = {
   // reveal fragments (incremental reveal + effects)
-  "fragment", "fade-in", "fade-out", "fade-up", "fade-down", "fade-left", "fade-right",
-  "fade-in-then-out", "fade-in-then-semi-out", "semi-fade-out", "current-visible",
-  "grow", "shrink", "strike", "highlight-red", "highlight-green", "highlight-blue",
-  "highlight-current-red", "highlight-current-green", "highlight-current-blue",
+  fragment: "Reveal on click (incremental)",
+  "fade-in": "Fragment: fade in",
+  "fade-out": "Fragment: fade out",
+  "fade-up": "Fragment: fade in, rise up",
+  "fade-down": "Fragment: fade in, drop down",
+  "fade-left": "Fragment: fade in from the right",
+  "fade-right": "Fragment: fade in from the left",
+  "fade-in-then-out": "Fragment: in, then out next step",
+  "fade-in-then-semi-out": "Fragment: in, then dim",
+  "semi-fade-out": "Fragment: dim on next step",
+  "current-visible": "Fragment: shown on its step only",
+  grow: "Fragment: scale up",
+  shrink: "Fragment: scale down",
+  strike: "Fragment: strike through",
+  "highlight-red": "Fragment: turn red",
+  "highlight-green": "Fragment: turn green",
+  "highlight-blue": "Fragment: turn blue",
+  "highlight-current-red": "Fragment: red on its step",
+  "highlight-current-green": "Fragment: green on its step",
+  "highlight-current-blue": "Fragment: blue on its step",
   // quarto / reveal layout + text helpers
-  "columns", "column", "incremental", "nonincremental", "smaller", "center",
-  "r-fit-text", "r-stretch", "r-frame", "nostretch",
-  "callout-note", "callout-tip", "callout-warning", "callout-important", "callout-caution",
-];
+  columns: "Quarto: flex row of columns",
+  column: "Quarto: one column (set width=)",
+  incremental: "Quarto: reveal items one by one",
+  nonincremental: "Quarto: reveal all at once",
+  smaller: "Quarto: smaller slide text",
+  center: "Centre slide content",
+  "r-fit-text": "Reveal: scale text to fill",
+  "r-stretch": "Reveal: stretch media to fit",
+  "r-frame": "Reveal: framed border",
+  nostretch: "Opt out of r-stretch",
+  "callout-note": "Note callout (blue)",
+  "callout-tip": "Tip callout (green)",
+  "callout-warning": "Warning callout (yellow)",
+  "callout-important": "Important callout (pink)",
+  "callout-caution": "Caution callout (yellow)",
+};
 
 export function classSource(getClasses: () => string[]): CompletionSource {
   return (ctx: CompletionContext): CompletionResult | null => {
@@ -105,19 +134,19 @@ export function classSource(getClasses: () => string[]): CompletionSource {
 
     // Deck-CSS classes first (the deck's own composable styles), then the
     // built-in reveal/Quarto authoring classes, deduped.
-    const classes = [...new Set([...getClasses(), ...BUILTIN_CLASSES])];
+    const classes = [...new Set([...getClasses(), ...Object.keys(BUILTIN_CLASSES)])];
     if (!classes.length) return null;
     const q = token.text.slice(1).toLowerCase();
     const options: Completion[] = [];
     for (const c of classes) {
       if (q && !c.toLowerCase().includes(q)) continue;
       const info = CLASS_INFO[c];
-      const sectionName = info?.section ?? (BUILTIN_CLASSES.includes(c) ? "Reveal/Quarto" : "Deck CSS");
+      const sectionName = info?.section ?? (c in BUILTIN_CLASSES ? "Reveal/Quarto" : "Deck CSS");
       options.push({
         label: `.${c}`,
         apply: `.${c}`,
         type: "class",
-        detail: info?.detail || undefined,
+        detail: info?.detail || BUILTIN_CLASSES[c] || undefined,
         section: { name: sectionName, rank: SECTION_RANK[sectionName] ?? 99 },
       });
       if (options.length >= 80) break;

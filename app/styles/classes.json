@@ -24,8 +24,10 @@
     "colour": {
       "desc": "Variable-only: sets --hue, --hue-bright, --hue-pale, --hue-deep, --on. Shows nothing alone; recolour a deck by overriding these in its own CSS.",
       "classes": {
-        "blue": "", "cyan": "", "teal": "", "green": "", "mint": "", "yellow": "",
-        "pink": "", "mag": "", "navy": "", "grey": "", "white": "", "black": ""
+        "blue": "Blue", "cyan": "Cyan", "teal": "Teal (brand)", "green": "Green",
+        "mint": "Mint (brand)", "yellow": "Yellow (brand)", "pink": "Pink (brand)",
+        "mag": "Magenta", "navy": "Navy (brand)", "grey": "Grey",
+        "white": "White", "black": "Black"
       }
     },
     "shade": {
@@ -38,16 +40,16 @@
         "values": [25, 33, 40, 50, 60, 75, 80, 90, 100, 110, 125, 150, 175, 200, 250, 300, 400, 500] }
     },
     "order": {
-      "desc": "Later flares on a line fire in turn (sets --flare-delay).",
-      "classes": { "cascade-2": "", "cascade-3": "", "cascade-4": "", "cascade-5": "" }
+      "desc": "Bring later items in one after another. On its own a cascade class fades the element in on its delay (it arrives from nothing); add .flare to colour it in instead.",
+      "classes": { "cascade-2": "Arrive 2nd", "cascade-3": "Arrive 3rd", "cascade-4": "Arrive 4th", "cascade-5": "Arrive 5th" }
     },
     "timing": {
       "desc": "Sets the global --dur / --ease knobs the animations read.",
-      "classes": { "fast": "1.6s", "slow": "6s", "instant": "0.01s" }
+      "classes": { "fast": "Faster (1.6s)", "slow": "Slower (6s)", "instant": "Instant (0.01s)" }
     },
     "align": {
       "desc": "Text alignment.",
-      "classes": { "left": "", "center": "", "right": "" }
+      "classes": { "left": "Align left", "center": "Centre", "right": "Align right" }
     },
     "place": {
       "desc": "Float a block absolutely within the slide, then position it with the coordinate utilities or top=/left=/width= attributes.",

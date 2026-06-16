@@ -90,6 +90,14 @@
 :is(.reveal,.preview) .cascade-3 { --flare-delay: 4.1s; }
 :is(.reveal,.preview) .cascade-4 { --flare-delay: 5.5s; }
 :is(.reveal,.preview) .cascade-5 { --flare-delay: 6.9s; }
+/* A cascade class on its own (no .flare) is not an invisible setter: it fades the
+   element in on its delay, so it arrives from nothing in sequence, with no colour
+   flash (that is what adding .flare does). Deck-only, like the flare animation;
+   the flare+cascade case is handled by the .flare rule below. */
+.reveal .slides section.present :is(.cascade-2,.cascade-3,.cascade-4,.cascade-5):not(.flare) {
+  animation: cascadeIn 0.6s var(--ease, ease-out) var(--flare-delay, 1.3s) both;
+}
+@keyframes cascadeIn { from { opacity: 0; } to { opacity: 1; } }
 
 /* COMPONENT: panel (padded box with accent left border) */
 :is(.reveal,.preview) .panel {
@@ -125,6 +133,7 @@
 :is(.reveal,.preview) .card p { margin: 0; }
 :is(.reveal,.preview) .card p + p { margin-top: 0.4em; }
 :is(.reveal,.preview) .cards .cards { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
+:is(.reveal,.preview) .cards.cols-1 { grid-template-columns: 1fr; }
 :is(.reveal,.preview) .cards.cols-2 { grid-template-columns: repeat(2, 1fr); }
 :is(.reveal,.preview) .cards.cols-3 { grid-template-columns: repeat(3, 1fr); }
 :is(.reveal,.preview) .cards.cols-4 { grid-template-columns: repeat(4, 1fr); }
