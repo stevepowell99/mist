@@ -15,6 +15,8 @@ const fenceLine = [
   Decoration.line({ class: "cm-fence-d2" }),
   Decoration.line({ class: "cm-fence-d3" }),
   Decoration.line({ class: "cm-fence-d4" }),
+  Decoration.line({ class: "cm-fence-d5" }),
+  Decoration.line({ class: "cm-fence-d6" }),
 ];
 
 function build(view: EditorView): DecorationSet {
@@ -41,7 +43,7 @@ function build(view: EditorView): DecorationSet {
       decoDepth = depth;
     }
     if (decoDepth > 0 && isVisible(line.from)) {
-      builder.add(line.from, line.from, fenceLine[Math.min(decoDepth, 4)]!);
+      builder.add(line.from, line.from, fenceLine[Math.min(decoDepth, 6)]!);
     }
   }
   return builder.finish();
