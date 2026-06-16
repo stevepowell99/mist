@@ -11,6 +11,8 @@ This is Steve Powell's fork of [inanimate-tech/mist](https://github.com/inanimat
 - Global guidance: read `C:\Users\Zoom\.claude\CLAUDE.md`. This project is registered in its Project Index.
 - Editor: Claude Code.
 - **Always deploy to remote after changes** (`npm run deploy`) so Steve can test on the live worker, then give him the URL. The dev server has cold-start flakiness on first open of a fresh room; the deployed worker does not, so remote is the source of truth for verification.
+- **Commit in focused chunks.** This is a solo project that deploys from `main`, so commit directly to `main` (no PR/branch workflow needed), one concern per commit, once the change typechecks. `npm run deploy` does NOT commit (it only uploads to Cloudflare), so commit separately. End commit messages with `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`.
+- **One agent at a time on this working tree.** If two Claude sessions edit here at once they share one working tree: their edits interleave in the same files, either one's `git commit` bundles both sets of changes, and either one's `npm run deploy` ships the other's in-progress code. Run one at a time, or give each session its own `git worktree`.
 
 ### Current state (14 June 2026). READ THIS FIRST.
 
