@@ -8,7 +8,7 @@ import { serializeThreads, rawFrontmatter } from "~/lib/thread-serialization";
 import { quickHash } from "~/shared/hash";
 import { rawAssetUrl } from "~/lib/github";
 import { driveAssetUrl } from "~/lib/asset-urls";
-import { extractCssPaths } from "~/lib/slides-build";
+import { extractCssPaths, extractBibPaths } from "~/lib/slides-build";
 import { parseCssClasses } from "~/lib/cm-classes";
 import { parseBib, type BibLibrary } from "~/lib/citations";
 
@@ -360,7 +360,9 @@ export function DocumentProvider({
   // picker and rendering work for both GitHub repos and Drive folders. The same
   // candidate names are tried; Drive resolves them through the asset proxy.
   const [bibLib, setBibLib] = useState<BibLibrary | null>(null);
-  const bibFetchedRef = useRef(false);
+  // The doc's own `bibliography:` paths (if any), so the bib is resolved directly
+  // rather than folder-guessed. Re-fetch when it appears (frontmatter loads).
+  const bibKey = useMemo(() => extractBibPaths(frontmatter).join("|"), [frontmatter]);
   // Class names from the deck's own CSS, for the editor's `.`-class picker.
   const [cssClasses, setCssClasses] = useState<string[]>([]);
   const cssKey = useMemo(() => extractCssPaths(frontmatter).join("|"), [frontmatter]);
@@ -386,15 +388,18 @@ export function DocumentProvider({
     };
   }, [drive, assetToken, cssKey]);
   useEffect(() => {
-    if ((!github && !drive) || bibFetchedRef.current) return;
-    bibFetchedRef.current = true;
+    if (!github && !drive) return;
     let cancelled = false;
     (async () => {
-      // Drive: one request that finds a .bib in the doc's folder (or assets/).
+      // Drive: resolve the doc's `bibliography:` paths if it has them, else find a
+      // .bib in the doc's folder (or assets/), walking up.
       if (drive) {
         if (!drive.folderId) return;
+        const q = bibKey
+          ? bibKey.split("|").filter(Boolean).map((p) => `&path=${encodeURIComponent(p)}`).join("")
+          : "";
         try {
-          const res = await fetch(`/drive/bib?folder=${encodeURIComponent(drive.folderId)}`);
+          const res = await fetch(`/drive/bib?folder=${encodeURIComponent(drive.folderId)}${q}`);
           if (res.ok && !cancelled) setBibLib(parseBib(await res.text()));
         } catch {
           // no library available
@@ -426,7 +431,7 @@ export function DocumentProvider({
     return () => {
       cancelled = true;
     };
-  }, [github, drive]);
+  }, [github, drive, bibKey]);
 
   const togglePreview = useCallback(() => {
     setPreviewToggled((v) => !v);

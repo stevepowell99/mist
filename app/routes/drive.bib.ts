@@ -6,6 +6,7 @@ import {
   driveListFolder,
   driveGetMeta,
   driveDownload,
+  driveResolvePath,
 } from "~/lib/google.server";
 import { driveAccess, driveUnauthenticated } from "~/lib/drive-access.server";
 
@@ -40,14 +41,31 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   const folder = new URL(request.url).searchParams.get("folder");
   if (!folder) return new Response("missing folder", { status: 400 });
 
+  // Explicit `bibliography:` paths from the doc frontmatter, resolved relative to
+  // the doc's folder (like css:/images). Honoured first, so a deck can point at
+  // its library directly instead of relying on the folder walk.
+  const explicit = new URL(request.url).searchParams.getAll("path").filter(Boolean);
+
   try {
     const token = await getDriveAccessToken(env);
-    let current: string | undefined = folder;
     let bibIds: string[] = [];
-    for (let depth = 0; current && depth < 6; depth++) {
-      bibIds = await bibsInFolder(token, current);
-      if (bibIds.length) break;
-      current = (await driveGetMeta(token, current)).parents?.[0];
+
+    for (const p of explicit) {
+      try {
+        const id = await driveResolvePath(token, folder, p);
+        if (id) bibIds.push(id);
+      } catch {
+        // a bad bibliography path just falls through to the folder walk
+      }
+    }
+
+    if (!bibIds.length) {
+      let current: string | undefined = folder;
+      for (let depth = 0; current && depth < 6; depth++) {
+        bibIds = await bibsInFolder(token, current);
+        if (bibIds.length) break;
+        current = (await driveGetMeta(token, current)).parents?.[0];
+      }
     }
     if (!bibIds.length) return new Response("no .bib found", { status: 404 });
 

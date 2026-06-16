@@ -276,12 +276,14 @@ function extractNavMode(frontmatter: string): "linear" | "grid" | "default" {
   return "linear";
 }
 
-/** Pull the deck's `css:` entries from the frontmatter (inline or list form). */
-export function extractCssPaths(frontmatter: string): string[] {
+/** Pull a frontmatter key's path entries, in inline (`key: a` / `key: [a, b]`)
+ *  or YAML list form. Used for `css:` and `bibliography:`. */
+function extractFmPaths(frontmatter: string, key: string): string[] {
   const lines = frontmatter.split("\n");
   const paths: string[] = [];
+  const re = new RegExp(`^\\s*${key}:\\s*(.*)$`);
   for (let i = 0; i < lines.length; i++) {
-    const m = lines[i].match(/^\s*css:\s*(.*)$/);
+    const m = lines[i].match(re);
     if (!m) continue;
     const inline = m[1].trim();
     if (inline) {
@@ -300,6 +302,17 @@ export function extractCssPaths(frontmatter: string): string[] {
     }
   }
   return paths;
+}
+
+/** Pull the deck's `css:` entries from the frontmatter (inline or list form). */
+export function extractCssPaths(frontmatter: string): string[] {
+  return extractFmPaths(frontmatter, "css");
+}
+
+/** Pull the deck's `bibliography:` entries (paths relative to the doc's folder,
+ *  like `css:`), so the bib can be resolved directly instead of folder-guessed. */
+export function extractBibPaths(frontmatter: string): string[] {
+  return extractFmPaths(frontmatter, "bibliography");
 }
 
 function ghJsdelivr(github: GitHubMeta, repoPath: string): string {
