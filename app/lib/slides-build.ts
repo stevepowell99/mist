@@ -224,11 +224,13 @@ html,body{margin:0;height:100%}
 .callout-tip{border-left:4px solid #3aa76d}
 .callout-warning,.callout-important{border-left:4px solid #e0a800}
 .no-title h1,.no-title h2,.no-title h3{display:none}
-/* A full-bleed background slide pins its caption with position:absolute;
-   bottom:0, which only reaches the slide edge if the section fills the stage
-   height. Reveal leaves a short slide at content height (so the caption rides up
-   to the top), so stretch any slide that carries a .shot-cap. */
-.reveal .slides section:has(.shot-cap){height:100%}
+/* Make the preview WYSIWYG with fullscreen/PDF: stretch every slide to the full
+   stage height (1280x720) and clip its overflow. Reveal otherwise leaves a slide
+   at its content height, so in a narrow preview (which letterboxes the 16:9
+   slide) the spare space below shows content that overflows the slide height,
+   making an overstuffed slide look fine here yet get cut off in fullscreen. This
+   also pins a .shot-cap caption to the slide edge (it needs the full height). */
+.reveal .slides section:not(.stack){height:100%;overflow:hidden}
 /* "Waiter" overlay: an opaque cover with a spinner that hides the deck until it
    has rendered AND jumped to the right slide, so the cover slide never flashes
    in the live preview. Shown only while embedded; removed by showDeck(). */
