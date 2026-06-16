@@ -128,12 +128,23 @@ export default function SlidesView() {
     initialSlide.current = s !== null && /^\d+$/.test(s) ? Number(s) : -1; // -1 = none
   }
 
-  // On cursor move (no reload). While a URL slide is still waiting to be
-  // restored (first load), don't let the initial cursor position (slide 0)
-  // pre-empt it.
+  // Follow the editor cursor. But a deck opened at ?slide=N must STAY there: the
+  // cursor sits at offset 0 (slide 0) on load, and a later recompute (content
+  // finishing its sync) would otherwise fire this and yank the deck back to
+  // slide 0. So when a URL slide was restored, hold the follow until the user
+  // actually moves the cursor. Without a URL slide there is nothing to protect.
+  const cursorMoved = useRef(false);
+  const firstCursor = useRef(true);
+  useEffect(() => {
+    if (firstCursor.current) {
+      firstCursor.current = false;
+      return;
+    }
+    cursorMoved.current = true;
+  }, [cursorOffset]);
   useEffect(() => {
     if (!followCursor) return;
-    if (!restored.current && (initialSlide.current ?? -1) >= 0) return;
+    if ((initialSlide.current ?? -1) >= 0 && !cursorMoved.current) return;
     sendGoto(slide, fragment);
   }, [slide, fragment, followCursor]);
 
@@ -158,7 +169,8 @@ export default function SlidesView() {
       // was booting (content syncing in after a reload), the srcDoc it loaded is
       // stale, and this is what refreshes it without needing manual reloads.
       if (d?.type === "mist-need-goto") {
-        if (sectionsRef.current !== embeddedSectionsRef.current) {
+        const stale = sectionsRef.current !== embeddedSectionsRef.current;
+        if (stale) {
           iframeRef.current?.contentWindow?.postMessage(
             { type: "mist-render", sections: sectionsRef.current, goto: gotoTargetRef.current },
             "*",

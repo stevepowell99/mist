@@ -584,6 +584,8 @@ window.addEventListener("keydown", function(e){
   else if (c.indexOf("Numpad") === 0 && /\\d$/.test(c)) chord = c.slice(-1);
   else if (c === "BracketLeft") chord = "[";
   else if (c === "BracketRight") chord = "]";
+  else if (c === "Minus") chord = "-";
+  else if (c === "Equal") chord = "=";
   else if (c === "Slash") chord = "/";
   if (chord) {
     // Stop reveal's own keydown (S notes, F fullscreen, O overview) from also
