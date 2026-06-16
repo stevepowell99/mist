@@ -72,6 +72,9 @@ export interface DocumentContextValue {
 
   // Preview
   showPreview: boolean;
+  /** The persistent preview toggle, without the transient hover-peek; this is
+   *  what the per-file layout remembers. */
+  previewToggled: boolean;
   togglePreview: () => void;
   setPreview: (show: boolean) => void;
   setPreviewHeld: (held: boolean) => void;
@@ -79,6 +82,7 @@ export interface DocumentContextValue {
   // Clean view
   cleanView: boolean;
   toggleCleanView: () => void;
+  setCleanView: (on: boolean) => void;
 
   // Comments
   commentActive: boolean;
@@ -337,23 +341,10 @@ export function DocumentProvider({
     }
   }, []);
 
-  // Whether the slide preview follows the editor cursor (persisted). On a large
-  // deck this sync is the main per-cursor-move cost, so turning it off makes the
-  // editor snappier.
-  const [followCursor, setFollowCursorState] = useState(true);
-  useEffect(() => {
-    if (typeof window !== "undefined" && window.localStorage.getItem("mistFollowCursor") === "off") {
-      setFollowCursorState(false); // eslint-disable-line react-hooks/set-state-in-effect
-    }
-  }, []);
-  const setFollowCursor = useCallback((on: boolean) => {
-    setFollowCursorState(on);
-    try {
-      window.localStorage.setItem("mistFollowCursor", on ? "on" : "off");
-    } catch {
-      // storage unavailable; the toggle still applies for this session
-    }
-  }, []);
+  // Whether the slide preview follows the editor cursor. On a large deck this
+  // sync is the main per-cursor-move cost, so turning it off makes the editor
+  // snappier. Persistence is per-file, handled by the layout (doc-settings).
+  const [followCursor, setFollowCursor] = useState(true);
 
   // Live save: once the document core became a faithful Y.Text (#13), a save is
   // byte-identical, so auto-save is safe. Debounce on edit-idle and let the
@@ -557,11 +548,13 @@ export function DocumentProvider({
     mode: role === "suggest" ? "suggest" : yjs.mode,
     toggleMode,
     showPreview,
+    previewToggled,
     togglePreview,
     setPreview,
     setPreviewHeld,
     cleanView,
     toggleCleanView,
+    setCleanView,
     commentActive,
     commentSelection,
     commentHighlight,

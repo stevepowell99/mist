@@ -9,6 +9,7 @@ import { mintAssetToken, type DriveSessionEnv } from "~/lib/drive-access.server"
 import { EditorView } from "@codemirror/view";
 import { modAltChord } from "~/lib/chord";
 import { offsetForSlideIndex } from "~/lib/slide-cursor";
+import { docFileKey, loadDocSettings, saveDocSettings } from "~/lib/doc-settings";
 import { useYjsEditor } from "~/lib/useYjsEditor";
 import { DocumentProvider, useDocument } from "~/lib/DocumentContext";
 import CodeMirrorEditor from "~/components/CodeMirrorEditor";
@@ -170,6 +171,7 @@ function DocumentLayout({ id }: { id: string }) {
     yjs,
     view: editorView,
     showPreview,
+    previewToggled,
     handleViewReady,
     setEditorText,
     activeCommentRange,
@@ -194,6 +196,7 @@ function DocumentLayout({ id }: { id: string }) {
     setAutoSave,
     followCursor,
     setFollowCursor,
+    setCleanView,
   } = useDocument();
 
   const title = fileTitle(github, drive, id);
@@ -266,17 +269,45 @@ function DocumentLayout({ id }: { id: string }) {
   }, []);
 
   // Collapsible right panel: a thin strip when collapsed, peeking on hover as an
-  // overlay so the editor does not reflow. Persisted per browser.
+  // overlay so the editor does not reflow. Persistence is per-file (below).
   const [asideCollapsed, setAsideCollapsed] = useState(false);
   const [asidePeek, setAsidePeek] = useState(false);
-  useEffect(() => {
-    setAsideCollapsed(localStorage.getItem("mistAsideCollapsed") === "1"); // eslint-disable-line react-hooks/set-state-in-effect
-  }, []);
   const setAsideCollapsedPersist = useCallback((v: boolean) => {
     setAsideCollapsed(v);
     setAsidePeek(false);
-    localStorage.setItem("mistAsideCollapsed", v ? "1" : "0");
   }, []);
+
+  // Per-file UI settings (divider, view, follow-cursor, clean view, comments
+  // collapsed): remember the layout each file was left in, and default a new
+  // file to the most-recently-used layout. Keyed by the stable file id so it
+  // survives re-imports. Theme and the autosave safety toggle stay global.
+  const fileKey = docFileKey(github, drive, id);
+  const settingsLoaded = useRef(false);
+  useEffect(() => {
+    settingsLoaded.current = false;
+    const s = loadDocSettings(fileKey);
+    // A shared link's ?view wins for the gross layout; otherwise restore the
+    // file's saved layout. The cursor/clean/comments toggles are never in the URL.
+    const hasUrlView = typeof window !== "undefined" && new URL(window.location.href).searchParams.has("view");
+    if (!hasUrlView) {
+      if (typeof s.showPreview === "boolean") setPreview(s.showPreview);
+      if (typeof s.editorPct === "number") setEditorPct(s.editorPct);
+    }
+    if (typeof s.followCursor === "boolean") setFollowCursor(s.followCursor);
+    if (typeof s.cleanView === "boolean") setCleanView(s.cleanView);
+    if (typeof s.asideCollapsed === "boolean") setAsideCollapsed(s.asideCollapsed);
+    settingsLoaded.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fileKey]);
+  useEffect(() => {
+    if (!settingsLoaded.current) return;
+    // Debounced so a divider drag (editorPct changes per frame) writes once, on
+    // settle. previewToggled, not showPreview, so a hover-peek is not persisted.
+    const t = setTimeout(() => {
+      saveDocSettings(fileKey, { editorPct, showPreview: previewToggled, followCursor, cleanView, asideCollapsed });
+    }, 200);
+    return () => clearTimeout(t);
+  }, [fileKey, editorPct, previewToggled, followCursor, cleanView, asideCollapsed]);
 
   useEffect(() => {
     const mq = window.matchMedia("(min-width: 1024px)");
