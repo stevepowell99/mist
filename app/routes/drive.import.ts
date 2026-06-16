@@ -12,7 +12,7 @@ import {
 } from "~/lib/google.server";
 import type { DriveMeta } from "~/shared/types";
 import { stripMistBanner } from "~/shared/mist-banner";
-import { driveAccess, canAccessFile, driveUnauthenticated, driveForbidden } from "~/lib/drive-access.server";
+import { driveAccess, fileAccessRole, driveUnauthenticated, driveForbidden } from "~/lib/drive-access.server";
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -48,7 +48,10 @@ export async function action({ request, context }: Route.ActionArgs) {
   if (!fileId) {
     return json({ error: "not a Drive file URL or id" }, 400);
   }
-  if (!(await canAccessFile(env, fileId, access.email))) return driveForbidden();
+  // The file's own Drive sharing decides the mist role: a writer/owner edits, a
+  // commenter or reader gets a suggest-only link. No access at all is forbidden.
+  const docRole = await fileAccessRole(env, fileId, access.email);
+  if (!docRole) return driveForbidden();
 
   let drive: DriveMeta;
   let content: string;
@@ -88,6 +91,8 @@ export async function action({ request, context }: Route.ActionArgs) {
     return json({ error: "failed to create document" }, 502);
   }
 
-  const { editKey } = (await res.json()) as { editKey: string };
-  return json({ url: `/docs/${id}?k=${editKey}` }, 201);
+  const { editKey, suggestKey } = (await res.json()) as { editKey: string; suggestKey: string };
+  // A Drive commenter/reader opens the suggest link, so they can only suggest.
+  const key = docRole === "edit" ? editKey : suggestKey;
+  return json({ url: `/docs/${id}?k=${key}` }, 201);
 }

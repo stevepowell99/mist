@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import * as Y from "yjs";
 import type { Awareness } from "y-protocols/awareness";
-import { EditorState } from "@codemirror/state";
+import { EditorState, Prec } from "@codemirror/state";
 import {
   EditorView,
   keymap,
@@ -28,6 +28,7 @@ import { wrapKeymap, wrapOnSelection } from "~/lib/cm-shortcuts";
 import { activeCommentField, setActiveComment } from "~/lib/cm-active-comment";
 import { citationSource } from "~/lib/cm-citations";
 import { classSource } from "~/lib/cm-classes";
+import { slashSource, slashWrapSelection } from "~/lib/cm-slash";
 import { modAltChord } from "~/lib/chord";
 import type { BibLibrary } from "~/lib/citations";
 import type { DocMode } from "~/shared/types";
@@ -171,6 +172,28 @@ export default function CodeMirrorEditor({
         closeBrackets(),
         highlightSelectionMatches(),
         wrapOnSelection,
+        // Typing "/" over a selection wraps it as a styled span/div; with no
+        // selection it falls through to the slash-command menu.
+        slashWrapSelection,
+        // Rebuild the slide preview now, without waiting out the debounce.
+        // Ctrl/Cmd+S (and Ctrl/Cmd+Enter) ask for an immediate render; the deck
+        // preview listens for the event. preventDefault stops the browser's save
+        // dialog. Highest precedence so it beats any default binding.
+        Prec.highest(
+          keymap.of([
+            {
+              key: "Mod-s",
+              mac: "Mod-s",
+              preventDefault: true,
+              run: () => (window.dispatchEvent(new CustomEvent("mist-rebuild-deck")), true),
+            },
+            {
+              key: "Mod-Enter",
+              preventDefault: true,
+              run: () => (window.dispatchEvent(new CustomEvent("mist-rebuild-deck")), true),
+            },
+          ]),
+        ),
         suggestMode(() => modeRef.current),
         keymap.of([
           ...closeBracketsKeymap,
@@ -186,7 +209,11 @@ export default function CodeMirrorEditor({
         markdown(),
         EditorView.lineWrapping,
         autocompletion({
-          override: [citationSource(() => bibRef.current), classSource(() => classRef.current)],
+          override: [
+            slashSource(),
+            citationSource(() => bibRef.current),
+            classSource(() => classRef.current),
+          ],
           icons: false,
         }),
         markdownLineStyle,

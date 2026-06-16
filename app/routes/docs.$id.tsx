@@ -187,6 +187,12 @@ function DocumentLayout({ id }: { id: string }) {
     docKey,
     uploadImage,
     cssClasses,
+    saveNow,
+    backed,
+    autoSave,
+    setAutoSave,
+    followCursor,
+    setFollowCursor,
   } = useDocument();
 
   const title = fileTitle(github, drive, id);
@@ -314,14 +320,13 @@ function DocumentLayout({ id }: { id: string }) {
   const runChord = useCallback(
     (c: string): boolean => {
       switch (c) {
-        // E and S both toggle the binary edit/suggest mode (toggleMode is a
-        // no-op for suggest-only links).
-        case "e":
+        // S toggles the binary edit/suggest mode (a no-op for suggest-only links).
         case "s": toggleMode(); return true;
         case "1": setView("editor"); return true;
         case "2": if (isDesktop) setView("split"); return true;
         case "3": setView("preview"); return true;
-        case "o": setOutlineOpen((v) => !v); return true;
+        // D opens the outline / slide list (the slide-out TOC).
+        case "d": setOutlineOpen((v) => !v); return true;
         case "c": setAsideCollapsedPersist(!asideCollapsed); return true;
         // Resize on - / = (not [ / ], which CodeMirror uses for fold-all).
         case "-": nudgeSplit(-5); return true;
@@ -334,6 +339,15 @@ function DocumentLayout({ id }: { id: string }) {
     },
     [toggleMode, setView, isDesktop, setAsideCollapsedPersist, asideCollapsed, nudgeSplit],
   );
+
+  // Ctrl/Cmd+S (and Ctrl/Cmd+Enter, dispatched by the editor) flushes a save to
+  // the backend now and refreshes the deck preview. The deck rebuild is handled
+  // in SlidesView; here we force the write so "save" actually saves.
+  useEffect(() => {
+    const onSave = () => saveNow();
+    window.addEventListener("mist-rebuild-deck", onSave);
+    return () => window.removeEventListener("mist-rebuild-deck", onSave);
+  }, [saveNow]);
 
   useEffect(() => {
     // Bubble phase: the editor handles its own keydown first and stops
@@ -758,6 +772,36 @@ function DocumentLayout({ id }: { id: string }) {
               <CommentInput />
               <ThreadList />
             </div>
+            {(backed || deck) && (
+              <div className="shrink-0 border-t border-border">
+                {backed && (
+                  <label className="flex cursor-pointer items-center justify-between gap-2 px-3 py-2 text-sm text-muted hover:text-ink">
+                    <span title="When off, edits do not write to Drive automatically. Manual save (Ctrl/Cmd+S or the Saving badge) still works.">
+                      Autosave to Drive
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={autoSave}
+                      onChange={(e) => setAutoSave(e.target.checked)}
+                      className="h-4 w-4 cursor-pointer accent-coral"
+                    />
+                  </label>
+                )}
+                {deck && (
+                  <label className="flex cursor-pointer items-center justify-between gap-2 px-3 py-2 text-sm text-muted hover:text-ink">
+                    <span title="When off, the slide preview stops jumping to follow the editor cursor. Turn off on a large deck for a snappier editor.">
+                      Follow cursor in slides
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={followCursor}
+                      onChange={(e) => setFollowCursor(e.target.checked)}
+                      className="h-4 w-4 cursor-pointer accent-coral"
+                    />
+                  </label>
+                )}
+              </div>
+            )}
           </aside>
         )}
       </div>

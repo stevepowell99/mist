@@ -11,9 +11,12 @@ import { verifySession, readSessionCookie, signAssetToken, verifyAssetToken } fr
 import {
   driveListPermissions,
   emailHasAccess,
+  driveRoleForEmail,
+  driveRoleCanEdit,
   getDriveAccessToken,
   type DriveEnv,
 } from "./google.server";
+import type { DocRole } from "~/shared/types";
 
 export interface DriveSessionEnv extends DriveEnv {
   SESSION_SECRET?: string;
@@ -72,6 +75,30 @@ export async function canAccessFile(
     return emailHasAccess(grants, email);
   } catch {
     return false; // fail closed if we cannot read the sharing
+  }
+}
+
+/**
+ * The mist role a user gets when opening a Drive file, from the file's own
+ * sharing: a writer/owner edits; a commenter or reader gets suggest-only (their
+ * changes land as CriticMarkup suggestions, never silent edits). Returns null if
+ * the user has no access at all. A session without an email (asset-token path)
+ * gets "edit", since there is no per-user role to enforce there.
+ */
+export async function fileAccessRole(
+  env: DriveSessionEnv,
+  fileId: string,
+  email: string | null,
+): Promise<DocRole | null> {
+  if (!email) return "edit";
+  try {
+    const token = await getDriveAccessToken(env);
+    const grants = await driveListPermissions(token, fileId);
+    const role = driveRoleForEmail(grants, email);
+    if (!role) return null;
+    return driveRoleCanEdit(role) ? "edit" : "suggest";
+  } catch {
+    return null; // fail closed if we cannot read the sharing
   }
 }
 

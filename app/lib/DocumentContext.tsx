@@ -39,6 +39,14 @@ export interface DocumentContextValue {
   backed: boolean;
   /** Force an immediate write of the doc back to its backend (GitHub or Drive) */
   saveNow: () => void;
+  /** Whether edits auto-save to the backend. A user toggle (persisted) for
+   *  diagnosing sync issues; manual save (Ctrl+S / the badge) always works. */
+  autoSave: boolean;
+  setAutoSave: (on: boolean) => void;
+  /** Whether the slide preview follows the editor cursor (a perf toggle for big
+   *  decks). */
+  followCursor: boolean;
+  setFollowCursor: (on: boolean) => void;
   /** True when the document has edits not yet written back to its backend */
   unsaved: boolean;
   /** True when the backend rejected a write because the file changed upstream */
@@ -146,7 +154,21 @@ export function DocumentProvider({
   const [markdown, setMarkdown] = useState("");
   const [view, setView] = useState<EditorView | null>(null);
   const [cursorOffset, setCursorOffset] = useState(0);
-  const setCursor = useCallback((o: number) => setCursorOffset(o), []);
+  // Throttle cursor-offset state: every cursor move re-renders the document tree
+  // and re-derives the slide it sits in, which is heavy on a large deck. Coalesce
+  // to ~10/sec (trailing) so the editor stays responsive; the slide-follow lags
+  // imperceptibly. The editor's own cursor is unaffected (this is only the React
+  // mirror that downstream views read).
+  const cursorTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingCursor = useRef(0);
+  const setCursor = useCallback((o: number) => {
+    pendingCursor.current = o;
+    if (cursorTimer.current != null) return;
+    cursorTimer.current = setTimeout(() => {
+      cursorTimer.current = null;
+      setCursorOffset(pendingCursor.current);
+    }, 90);
+  }, []);
 
   // The editor body now carries the file's own YAML frontmatter (the Y.Text
   // core makes that safe), so derive it from the markdown. Fall back to the
@@ -298,15 +320,50 @@ export function DocumentProvider({
 
   const unsaved = backed && !!currentHash && currentHash !== lastCommittedHash;
 
+  // Auto-save toggle (persisted), so sync issues can be isolated by turning it
+  // off. Manual save still works when off. Read after mount to avoid SSR drift.
+  const [autoSave, setAutoSaveState] = useState(true);
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.localStorage.getItem("mistAutoSave") === "off") {
+      setAutoSaveState(false); // eslint-disable-line react-hooks/set-state-in-effect
+    }
+  }, []);
+  const setAutoSave = useCallback((on: boolean) => {
+    setAutoSaveState(on);
+    try {
+      window.localStorage.setItem("mistAutoSave", on ? "on" : "off");
+    } catch {
+      // storage unavailable; the toggle still applies for this session
+    }
+  }, []);
+
+  // Whether the slide preview follows the editor cursor (persisted). On a large
+  // deck this sync is the main per-cursor-move cost, so turning it off makes the
+  // editor snappier.
+  const [followCursor, setFollowCursorState] = useState(true);
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.localStorage.getItem("mistFollowCursor") === "off") {
+      setFollowCursorState(false); // eslint-disable-line react-hooks/set-state-in-effect
+    }
+  }, []);
+  const setFollowCursor = useCallback((on: boolean) => {
+    setFollowCursorState(on);
+    try {
+      window.localStorage.setItem("mistFollowCursor", on ? "on" : "off");
+    } catch {
+      // storage unavailable; the toggle still applies for this session
+    }
+  }, []);
+
   // Live save: once the document core became a faithful Y.Text (#13), a save is
   // byte-identical, so auto-save is safe. Debounce on edit-idle and let the
   // relay write conditionally (it rejects rather than clobbering an upstream
   // edit). A conflict pauses auto-save until the user reloads.
   useEffect(() => {
-    if (!unsaved || conflict || upstreamChanged) return;
+    if (!autoSave || !unsaved || conflict || upstreamChanged) return;
     const t = setTimeout(saveNow, AUTOSAVE_DEBOUNCE_MS);
     return () => clearTimeout(t);
-  }, [unsaved, conflict, upstreamChanged, saveNow]);
+  }, [autoSave, unsaved, conflict, upstreamChanged, saveNow]);
 
   // Fetch and parse the backend's BibTeX library once, so the `@`-citation
   // picker and rendering work for both GitHub repos and Drive folders. The same
@@ -484,6 +541,10 @@ export function DocumentProvider({
     drive,
     backed,
     saveNow,
+    autoSave,
+    setAutoSave,
+    followCursor,
+    setFollowCursor,
     unsaved,
     conflict,
     upstreamChanged,

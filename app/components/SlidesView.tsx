@@ -1,13 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDocument } from "~/lib/DocumentContext";
-import { buildSlidesHtml } from "~/lib/slides-build";
-import { slideIndexForOffset } from "~/lib/slide-cursor";
+import { buildSlidesHtml, buildSlideSections } from "~/lib/slides-build";
+import { slideIndexForOffset, fragmentIndexForOffset } from "~/lib/slide-cursor";
 
 export { isSlideDeck } from "~/lib/slides-build";
 
-/** Wait this long after the last edit before rebuilding the deck preview. A
- *  deck reload is heavier than a document re-render, so it gets a longer pause. */
-const SLIDES_REFRESH_DEBOUNCE_MS = 5000;
+/** Wait this long after the last edit before rebuilding the deck preview. The
+ *  rebuild is now an in-place reveal re-init (tens of ms, no iframe reload), so
+ *  this is short: just enough to coalesce a burst of typing into one rebuild.
+ *  Ctrl/Cmd+S forces a rebuild immediately. */
+const SLIDES_REFRESH_DEBOUNCE_MS = 700;
 
 /**
  * Inline slides renderer for `.qmd` / RevealJS decks. It is the Preview for a
@@ -17,19 +19,30 @@ const SLIDES_REFRESH_DEBOUNCE_MS = 5000;
  * sandboxed iframe. The deck's theme/css come from the document frontmatter.
  */
 export default function SlidesView() {
-  const { markdown, github, drive, frontmatter, cursorOffset, assetToken } = useDocument();
+  const { markdown, github, drive, frontmatter, cursorOffset, assetToken, followCursor } = useDocument();
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   // The session-minted asset token lets the sandboxed iframe fetch private-Drive
   // assets (it cannot send the session cookie).
   const driveToken = drive ? assetToken ?? "" : "";
-  // Rebuilding the iframe reloads reveal (a brief flash and a reflow), so wait
-  // for a real pause in typing before refreshing the deck rather than chasing
-  // every keystroke.
+  // Debounce body edits before refreshing the deck rather than chasing every
+  // keystroke. A body change now re-renders the deck in place (postMessage), not
+  // a full iframe reload, so this only paces how often we re-parse the markdown.
   const [debounced, setDebounced] = useState(markdown);
   useEffect(() => {
     const t = setTimeout(() => setDebounced(markdown), SLIDES_REFRESH_DEBOUNCE_MS);
     return () => clearTimeout(t);
   }, [markdown]);
+
+  // Force an immediate refresh (Ctrl/Cmd+S or Ctrl/Cmd+Enter in the editor),
+  // skipping the debounce. Flushing the latest markdown into `debounced` drives
+  // the in-place render below; no iframe reload.
+  const markdownRef = useRef(markdown);
+  markdownRef.current = markdown;
+  useEffect(() => {
+    const rebuild = () => setDebounced(markdownRef.current);
+    window.addEventListener("mist-rebuild-deck", rebuild);
+    return () => window.removeEventListener("mist-rebuild-deck", rebuild);
+  }, []);
 
   // Cache-bust token, set after mount (avoids an SSR/hydration mismatch).
   const [bust, setBust] = useState("");
@@ -37,38 +50,73 @@ export default function SlidesView() {
     setBust(Date.now().toString(36)); // eslint-disable-line react-hooks/set-state-in-effect
   }, []);
 
-  const html = useMemo(
-    () => buildSlidesHtml(debounced, { github, drive, origin, driveToken, bust, docFrontmatter: frontmatter }),
-    [debounced, github, drive, origin, driveToken, bust, frontmatter],
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  // The slide the editor cursor is in, kept in a ref so the in-place render
+  // (declared before the cursor logic below) can read the latest value. This is
+  // the authoritative target after an edit: derived from the live markdown, so
+  // it accounts for slides the edit added or removed.
+  const gotoTargetRef = useRef(0);
+
+  // The deck's body, as reveal `<section>` markup. Depends only on the body and
+  // the asset context, so an edit changes this without rebuilding the shell.
+  const sections = useMemo(
+    () => buildSlideSections(debounced, { github, drive, origin, driveToken, bust, docFrontmatter: frontmatter }),
+    [debounced, github, drive, origin, driveToken],
   );
 
-  // Measure the full reload cost (srcDoc swap to deck ready) so the slow part is
-  // visible. The iframe reports its own internal time; the difference is the
-  // script download/parse and iframe setup.
-  const reloadStartRef = useRef(0);
+  // The iframe only reloads when the shell changes: theme, css links, nav mode
+  // (all from the frontmatter), the asset identity, or the cache-bust. A body
+  // edit does not, so reveal and its CDN scripts stay loaded across edits.
+  const shellSig = useMemo(
+    () => JSON.stringify([frontmatter, bust, origin, driveToken, github, drive]),
+    [frontmatter, bust, origin, driveToken, github, drive],
+  );
+  const sectionsRef = useRef(sections);
+  sectionsRef.current = sections;
+  // The sections the current srcDoc embeds, so the in-place effect can tell a
+  // fresh reload (already current) from a body-only change (needs a render).
+  const embeddedSectionsRef = useRef("");
+  const html = useMemo(() => {
+    embeddedSectionsRef.current = sectionsRef.current;
+    return buildSlidesHtml(debounced, { github, drive, origin, driveToken, bust, docFrontmatter: frontmatter });
+    // Rebuild on shell change only; body edits go in place via postMessage.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shellSig]);
+
+  // In-place render: push new sections into the live iframe when the body
+  // changes (but not on a fresh reload, which already carries them).
   useEffect(() => {
-    reloadStartRef.current = typeof performance !== "undefined" ? performance.now() : 0;
-  }, [html]);
-  useEffect(() => {
-    const onMsg = (e: MessageEvent) => {
-      const d = e.data as { type?: string; ms?: number; slides?: number; mermaidMs?: number };
-      if (d?.type !== "mist-ready") return;
-      const total = Math.round((typeof performance !== "undefined" ? performance.now() : 0) - reloadStartRef.current);
-      // eslint-disable-next-line no-console
-      console.log(`[mist-deck] reload ${total}ms total | iframe ${d.ms}ms (mermaid ${d.mermaidMs}ms) | ${d.slides} slides`);
-    };
-    window.addEventListener("message", onMsg);
-    return () => window.removeEventListener("message", onMsg);
-  }, []);
+    if (sections === embeddedSectionsRef.current) return;
+    iframeRef.current?.contentWindow?.postMessage(
+      { type: "mist-render", sections, goto: gotoTargetRef.current },
+      "*",
+    );
+  }, [sections]);
 
   // Cursor-driven sync: as the cursor moves in the editor, jump the deck to the
   // slide it is in. The deck's slide split matches `slideIndexForOffset`. Sent
   // by postMessage because the deck runs in a sandboxed (cross-origin) iframe.
-  const iframeRef = useRef<HTMLIFrameElement>(null);
-  const slide = useMemo(() => slideIndexForOffset(markdown, cursorOffset), [markdown, cursorOffset]);
+  // Only scan the markdown for the cursor's slide when the follow-cursor sync is
+  // on; the scan is O(n) and ran on every cursor move otherwise, which is the
+  // main editor lag on a large deck. -1 means "no target" (keep the deck where
+  // it is on a rebuild).
+  const slide = useMemo(
+    () => (followCursor ? slideIndexForOffset(markdown, cursorOffset) : -1),
+    [markdown, cursorOffset, followCursor],
+  );
   const slideRef = useRef(slide);
   slideRef.current = slide;
-  const sendGoto = (h: number) => iframeRef.current?.contentWindow?.postMessage({ type: "mist-goto", h }, "*");
+  gotoTargetRef.current = slide; // latest cursor slide, for the in-place render target
+  // The reveal fragment the cursor is in (or -1 for none), so the deck reveals up
+  // to the `.fragment` being edited. Kept in a ref for the initial-goto callback.
+  const fragment = useMemo(
+    () => (followCursor ? fragmentIndexForOffset(markdown, cursorOffset) : -1),
+    [markdown, cursorOffset, followCursor],
+  );
+  const fragmentRef = useRef(fragment);
+  fragmentRef.current = fragment;
+  const sendGoto = (h: number, f: number) =>
+    iframeRef.current?.contentWindow?.postMessage({ type: "mist-goto", h, f }, "*");
 
   // The deck reports its slide back (cursor-driven or manual nav); mirror it to
   // the URL (?slide=) so a reload restores the same slide. On the first load,
@@ -84,13 +132,33 @@ export default function SlidesView() {
   // restored (first load), don't let the initial cursor position (slide 0)
   // pre-empt it.
   useEffect(() => {
+    if (!followCursor) return;
     if (!restored.current && (initialSlide.current ?? -1) >= 0) return;
-    sendGoto(slide);
-  }, [slide]);
+    sendGoto(slide, fragment);
+  }, [slide, fragment, followCursor]);
+
+  // Send the deck the slide it should open on: the URL's ?slide on the very
+  // first load (so a shared link restores it), otherwise the cursor's slide.
+  // Stable (reads refs only), so the handshake listener below can depend on it.
+  const sendInitialGoto = useCallback(() => {
+    if (!restored.current && initialSlide.current != null && initialSlide.current >= 0) {
+      restored.current = true;
+      sendGoto(initialSlide.current, -1);
+    } else {
+      sendGoto(slideRef.current, fragmentRef.current);
+    }
+  }, []);
 
   useEffect(() => {
     const onMsg = (e: MessageEvent) => {
       const d = e.data as { type?: string; h?: number };
+      // The deck asks for its opening slide once it is ready (more reliable than
+      // pushing on iframe load, whose timing races the iframe's own setup).
+      if (d?.type === "mist-need-goto") {
+        sendInitialGoto();
+        return;
+      }
+      // The deck reports its current slide; mirror it to the URL (?slide=).
       if (d?.type !== "mist-slide" || typeof d.h !== "number") return;
       const url = new URL(window.location.href);
       if (d.h > 0) url.searchParams.set("slide", String(d.h));
@@ -99,19 +167,11 @@ export default function SlidesView() {
     };
     window.addEventListener("message", onMsg);
     return () => window.removeEventListener("message", onMsg);
-  }, []);
+  }, [sendInitialGoto]);
 
-  // After a rebuild the iframe reloads and reveal resets to slide 1; re-send the
-  // current slide once the new document is ready. The very first load restores
-  // the URL's slide if present.
-  const onLoad = () => {
-    if (!restored.current && initialSlide.current != null && initialSlide.current >= 0) {
-      restored.current = true;
-      sendGoto(initialSlide.current);
-    } else {
-      sendGoto(slideRef.current);
-    }
-  };
+  // Belt-and-braces: also push the slide on iframe load. The deck reveals on
+  // whichever arrives first; both set the same target.
+  const onLoad = sendInitialGoto;
 
   return (
     <iframe

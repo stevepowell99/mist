@@ -37,6 +37,24 @@ export function slideIndexForOffset(md: string, offset: number): number {
 }
 
 /**
+ * The 0-based reveal fragment index the cursor sits at within its slide, or -1
+ * when the cursor is before any fragment, so the preview can reveal the deck up
+ * to the `.fragment` the cursor is editing. Counts `.fragment` class markers
+ * (fenced divs, `[..]{.fragment}` spans, images) from the slide start to the
+ * cursor: being inside the Nth fragment means N markers precede the cursor, so
+ * the index is N - 1, matching reveal's DOM-order fragment numbering. CriticMarkup
+ * deletions are dropped first, since their `.fragment` never reaches the deck.
+ */
+export function fragmentIndexForOffset(md: string, offset: number): number {
+  const slide = slideIndexForOffset(md, offset);
+  const slideStart = offsetForSlideIndex(md, slide);
+  if (offset <= slideStart) return -1;
+  const prefix = md.slice(slideStart, offset).replace(/\{--[\s\S]*?--\}/g, "");
+  const matches = prefix.match(/\.fragment\b/g);
+  return matches ? matches.length - 1 : -1;
+}
+
+/**
  * The inverse: the editor offset (in the full markdown, frontmatter included) of
  * the first line of slide `index`. Mirrors the same split, so jumping the editor
  * to the slide shown in the preview lands on that slide's source.

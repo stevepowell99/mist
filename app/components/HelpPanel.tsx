@@ -17,7 +17,7 @@ interface Shortcut {
 }
 
 const LAYOUT: Shortcut[] = [
-  { keys: [MOD, "Alt", "E / S"], label: "Toggle edit / suggest" },
+  { keys: [MOD, "Alt", "S"], label: "Toggle edit / suggest" },
   { keys: [MOD, "Alt", "1"], label: "Editor only" },
   { keys: [MOD, "Alt", "2"], label: "Split editor + preview" },
   { keys: [MOD, "Alt", "3"], label: "Preview only" },
@@ -27,7 +27,7 @@ const LAYOUT: Shortcut[] = [
 
 const PANELS: Shortcut[] = [
   { keys: [MOD, "Alt", "F"], label: "Drive / files sidebar" },
-  { keys: [MOD, "Alt", "O"], label: "Outline / slide list" },
+  { keys: [MOD, "Alt", "D"], label: "Outline / slide list" },
   { keys: [MOD, "Alt", "C"], label: "Comments panel" },
   { keys: [MOD, "Alt", "G"], label: "Editor to current slide (decks)" },
   { keys: [MOD, "Alt", "/"], label: "This help" },
@@ -42,6 +42,7 @@ const EDITOR: Shortcut[] = [
   { keys: ["Alt", "drag"], label: "Rectangular (column) select" },
   { keys: [MOD, "F"], label: "Find in document" },
   { keys: ["@"], label: "Insert citation (if a .bib is found)" },
+  { keys: ["/"], label: "Slash menu: insert a structure" },
   { keys: ["Tab"], label: "Indent" },
   { keys: [MOD, "Z"], label: "Undo (collaborative-safe)" },
   { keys: [MOD, "Shift", "[ / ]"], label: "Fold / unfold block" },
@@ -49,6 +50,7 @@ const EDITOR: Shortcut[] = [
 ];
 
 const SLIDES: Shortcut[] = [
+  { keys: [MOD, "S"], label: "Rebuild preview now (or Ctrl/⌘ Enter)" },
   { keys: ["F"], label: "Fullscreen the deck" },
   { keys: ["Esc"], label: "Overview of all slides" },
   { keys: ["S"], label: "Speaker notes" },
@@ -69,6 +71,27 @@ const CLASS_EXAMPLES: { code: string; note: string }[] = [
   { code: "[big idea]{.flare .yellow}", note: "highlight a phrase" },
   { code: "::: {.panel .teal}\n  body\n:::", note: "a tinted panel" },
   { code: "# Section {.center .no-title}", note: "section divider" },
+];
+
+// Slash-command menu, mirroring cm-slash.ts. Type "/" to insert one of these
+// Quarto/Pandoc structures; the class snippets then open the `.`-class picker.
+const SLASH: { cmd: string; label: string }[] = [
+  { cmd: "/columns", label: "two columns (50/50)" },
+  { cmd: "/column", label: "single column block" },
+  { cmd: "/columns3", label: "three columns (33%)" },
+  { cmd: "/place", label: "float a block (top/left %)" },
+  { cmd: "/div", label: "fenced div with a class" },
+  { cmd: "/panel", label: "panel box, then pick a colour" },
+  { cmd: "/card", label: "one card" },
+  { cmd: "/cards", label: "grid of cards (one per item)" },
+  { cmd: "/span", label: "inline [text]{.class}" },
+  { cmd: "/highlight", label: "static highlight, pick a colour" },
+  { cmd: "/flare", label: "animated highlight, pick a colour" },
+  { cmd: "/fragment", label: "reveal one step at a time" },
+  { cmd: "/incremental", label: "reveal list items one by one" },
+  { cmd: "/notes", label: "speaker notes" },
+  { cmd: "/image", label: "insert an image by path" },
+  { cmd: "/unwrap", label: "remove the surrounding div" },
 ];
 
 const TIPS = [
@@ -112,8 +135,23 @@ function Section({ title, items }: { title: string; items: Shortcut[] }) {
   );
 }
 
+function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`cursor-pointer rounded px-2.5 py-1 text-sm transition-colors ${
+        active ? "bg-border/60 font-medium text-ink" : "text-muted hover:text-ink"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
 export default function HelpPanel() {
   const [open, setOpen] = useState(false);
+  const [tab, setTab] = useState<"shortcuts" | "styling">("shortcuts");
 
   useEffect(() => {
     // Toggled by the layout's shortcut handler (Ctrl/Cmd+Alt+/, from any focus).
@@ -156,7 +194,15 @@ export default function HelpPanel() {
             className="max-h-[85vh] w-full max-w-3xl overflow-y-auto rounded-lg border border-border bg-paper shadow-2xl"
           >
             <div className="flex items-center justify-between border-b border-border px-5 py-3">
-              <h2 className="font-medium text-ink">Keyboard shortcuts &amp; tips</h2>
+              <div className="flex items-center gap-1">
+                <h2 className="mr-3 font-medium text-ink">Help</h2>
+                <TabButton active={tab === "shortcuts"} onClick={() => setTab("shortcuts")}>
+                  Shortcuts
+                </TabButton>
+                <TabButton active={tab === "styling"} onClick={() => setTab("styling")}>
+                  Styling
+                </TabButton>
+              </div>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
@@ -166,54 +212,71 @@ export default function HelpPanel() {
                 &times;
               </button>
             </div>
-            <div className="grid gap-x-10 gap-y-6 px-5 py-4 sm:grid-cols-2">
-              <Section title="View &amp; mode" items={LAYOUT} />
-              <Section title="Panels" items={PANELS} />
-              <Section title="Editor" items={EDITOR} />
-              <div className="flex flex-col gap-6">
-                <Section title="Slides preview" items={SLIDES} />
-                <div>
-                  <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted">Tips</h3>
-                  <ul className="list-disc space-y-1 pl-4 text-sm text-muted">
-                    {TIPS.map((t) => (
-                      <li key={t}>{t}</li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-            </div>
 
-            <div className="border-t border-border px-5 py-4">
-              <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted">Slide classes</h3>
-              <p className="mb-3 text-sm text-muted">
-                Style an element by composing a <span className="text-ink">component</span> + a{" "}
-                <span className="text-ink">colour</span> + optional <span className="text-ink">modifiers</span>. Type{" "}
-                <Kbd>.</Kbd> inside <span className="font-mono text-ink">{"{ }"}</span> or after a{" "}
-                <span className="font-mono text-ink">:::</span> to autocomplete from this deck&apos;s CSS.
-              </p>
-              <div className="grid gap-x-10 gap-y-3 sm:grid-cols-2">
-                <div className="space-y-2">
-                  {CLASS_GROUPS.map((g) => (
-                    <div key={g.title} className="text-sm">
-                      <span className="mr-2 inline-block w-24 shrink-0 text-xs uppercase tracking-wider text-muted">
-                        {g.title}
-                      </span>
-                      <span className="font-mono text-ink">{g.items}</span>
-                    </div>
-                  ))}
-                </div>
-                <div className="space-y-2">
-                  {CLASS_EXAMPLES.map((e) => (
-                    <div key={e.code}>
-                      <pre className="overflow-x-auto rounded border border-border bg-border/30 px-2 py-1 font-mono text-xs text-ink">
-                        {e.code}
-                      </pre>
-                      <span className="text-xs text-muted">{e.note}</span>
-                    </div>
-                  ))}
+            {tab === "shortcuts" ? (
+              <div className="grid gap-x-10 gap-y-6 px-5 py-4 sm:grid-cols-2">
+                <Section title="View &amp; mode" items={LAYOUT} />
+                <Section title="Panels" items={PANELS} />
+                <Section title="Editor" items={EDITOR} />
+                <div className="flex flex-col gap-6">
+                  <Section title="Slides preview" items={SLIDES} />
+                  <div>
+                    <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted">Tips</h3>
+                    <ul className="list-disc space-y-1 pl-4 text-sm text-muted">
+                      {TIPS.map((t) => (
+                        <li key={t}>{t}</li>
+                      ))}
+                    </ul>
+                  </div>
                 </div>
               </div>
-            </div>
+            ) : (
+              <div className="px-5 py-4">
+                <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted">Slash commands</h3>
+                <p className="mb-3 text-sm text-muted">
+                  Type <Kbd>/</Kbd> at the start of a line (or after a space) to insert a structure; with text
+                  selected, <Kbd>/</Kbd> wraps it. In suggest mode the insert lands as one suggested block.
+                </p>
+                <div className="mb-6 grid gap-x-10 sm:grid-cols-2">
+                  {SLASH.map((s) => (
+                    <div key={s.cmd} className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1">
+                      <span className="font-mono text-sm text-ink">{s.cmd}</span>
+                      <span className="text-right text-xs text-muted">{s.label}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted">Slide classes</h3>
+                <p className="mb-3 text-sm text-muted">
+                  Style an element by composing a <span className="text-ink">component</span> + a{" "}
+                  <span className="text-ink">colour</span> + optional <span className="text-ink">modifiers</span>. Type{" "}
+                  <Kbd>.</Kbd> inside <span className="font-mono text-ink">{"{ }"}</span> or after a{" "}
+                  <span className="font-mono text-ink">:::</span> to autocomplete from this deck&apos;s CSS.
+                </p>
+                <div className="grid gap-x-10 gap-y-3 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    {CLASS_GROUPS.map((g) => (
+                      <div key={g.title} className="text-sm">
+                        <span className="mr-2 inline-block w-24 shrink-0 text-xs uppercase tracking-wider text-muted">
+                          {g.title}
+                        </span>
+                        <span className="font-mono text-ink">{g.items}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="space-y-2">
+                    {CLASS_EXAMPLES.map((e) => (
+                      <div key={e.code}>
+                        <pre className="overflow-x-auto rounded border border-border bg-border/30 px-2 py-1 font-mono text-xs text-ink">
+                          {e.code}
+                        </pre>
+                        <span className="text-xs text-muted">{e.note}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

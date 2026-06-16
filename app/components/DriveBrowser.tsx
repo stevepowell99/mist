@@ -83,6 +83,9 @@ export function Spinner() {
   );
 }
 
+/** localStorage key for the persisted recent-list divider height. */
+const RECENT_HEIGHT_KEY = "mistDriveRecentHeight";
+
 const gprops = { width: 14, height: 14, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round" as const, strokeLinejoin: "round" as const, "aria-hidden": true };
 const PencilGlyph = () => <svg {...gprops}><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" /></svg>;
 const CopyGlyph = () => <svg {...gprops}><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>;
@@ -125,23 +128,38 @@ export default function DriveBrowser({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [recentHeight, setRecentHeight] = useState(180);
+  // Persist the recent-list height so the divider position survives reloads. The
+  // recent section only renders client-side (after the localStorage read below),
+  // so reading the stored height in the initialiser causes no SSR mismatch.
+  const [recentHeight, setRecentHeight] = useState(() => {
+    if (typeof window === "undefined") return 180;
+    const v = Number(window.localStorage.getItem(RECENT_HEIGHT_KEY));
+    return Number.isFinite(v) && v >= 40 ? v : 180;
+  });
   const rootRef = useRef<HTMLDivElement>(null);
   const reqId = useRef(0); // guards against out-of-order responses racing
 
-  // Drag the divider above the recent list to resize it against the list above.
+  // Drag the divider above the recent list to resize it against the list above;
+  // store the final height on release.
   const startRecentDrag = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     const root = rootRef.current;
     if (!root) return;
     const rect = root.getBoundingClientRect();
+    let last = rect.bottom; // overwritten on first move
     const onMove = (ev: MouseEvent) => {
-      setRecentHeight(Math.max(40, Math.min(rect.height - 140, rect.bottom - ev.clientY)));
+      last = Math.max(40, Math.min(rect.height - 140, rect.bottom - ev.clientY));
+      setRecentHeight(last);
     };
     const onUp = () => {
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
       document.body.style.userSelect = "";
+      try {
+        window.localStorage.setItem(RECENT_HEIGHT_KEY, String(Math.round(last)));
+      } catch {
+        // storage may be unavailable (private mode); the size still applies live
+      }
     };
     document.body.style.userSelect = "none";
     window.addEventListener("mousemove", onMove);

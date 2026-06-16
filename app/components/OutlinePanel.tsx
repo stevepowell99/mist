@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import type { EditorView } from "@codemirror/view";
-import { extractOutlineFromText, toggleHiddenText, type OutlineItem } from "~/lib/outline";
+import { extractOutlineFromText, moveSection, sectionEnd, toggleHiddenText, type OutlineItem } from "~/lib/outline";
 
 /**
  * Header-only outline for the open document (CodeMirror / Y.Text core). For a
@@ -48,6 +48,37 @@ export default function OutlinePanel({
 
   const shown = deck ? items.filter((i) => i.level <= 2) : items.filter((i) => i.level <= maxLevel);
 
+  // Drag-and-drop reorder: dragging a TOC row moves its whole source block (a
+  // slide, or a section with its subsections) above or below the drop target.
+  // Applied as one minimal-diff dispatch, so it is a single undo and relays
+  // through Yjs like any edit; the preview then rebuilds in place.
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [overIdx, setOverIdx] = useState<number | null>(null);
+  const [overBelow, setOverBelow] = useState(false);
+
+  const reorder = useCallback(
+    (srcShown: number, dstShown: number, below: boolean) => {
+      if (!view || !canEdit) return;
+      const srcIdx = items.indexOf(shown[srcShown]);
+      const dstIdx = items.indexOf(shown[dstShown]);
+      if (srcIdx < 0 || dstIdx < 0 || srcShown === dstShown) return;
+      const dstPos = below ? sectionEnd(items, dstIdx, text.length) : items[dstIdx].pos;
+      const next = moveSection(items, text, srcIdx, dstPos);
+      if (next == null) return;
+      // Minimal diff so cursors outside the moved span survive.
+      let p = 0;
+      const max = Math.min(text.length, next.length);
+      while (p < max && text[p] === next[p]) p++;
+      let s = 0;
+      while (s < max - p && text[text.length - 1 - s] === next[next.length - 1 - s]) s++;
+      view.dispatch({
+        changes: { from: p, to: text.length - s, insert: next.slice(p, next.length - s) },
+        userEvent: "move.section",
+      });
+    },
+    [view, canEdit, items, shown, text],
+  );
+
   return (
     <aside className="panel-slide-left hidden w-64 shrink-0 flex-col overflow-hidden border-r border-border bg-paper lg:flex">
       <div className="flex shrink-0 items-center justify-between border-b border-border px-3 py-2">
@@ -81,9 +112,46 @@ export default function OutlinePanel({
         {shown.map((item, i) => (
           <div
             key={`${item.pos}-${i}`}
-            className={`group flex items-center gap-1 pr-1 ${item.hidden ? "opacity-45" : ""}`}
+            onDragOver={(e) => {
+              if (dragIdx == null) return;
+              e.preventDefault();
+              const r = e.currentTarget.getBoundingClientRect();
+              setOverIdx(i);
+              setOverBelow(e.clientY > r.top + r.height / 2);
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              if (dragIdx != null) reorder(dragIdx, i, overBelow);
+              setDragIdx(null);
+              setOverIdx(null);
+            }}
+            className={`group flex items-center gap-1 pr-1 ${item.hidden ? "opacity-45" : ""} ${dragIdx === i ? "opacity-40" : ""} ${
+              overIdx === i && dragIdx !== i ? (overBelow ? "border-b-2 border-coral" : "border-t-2 border-coral") : ""
+            }`}
             style={{ paddingLeft: `${0.5 + (item.level - 1) * 0.9}rem` }}
           >
+            {canEdit && (
+              <span
+                draggable
+                onDragStart={(e) => {
+                  setDragIdx(i);
+                  e.dataTransfer.effectAllowed = "move";
+                }}
+                onDragEnd={() => {
+                  setDragIdx(null);
+                  setOverIdx(null);
+                }}
+                title="Drag to reorder"
+                aria-label="Drag to reorder"
+                className="shrink-0 cursor-grab select-none px-0.5 text-muted opacity-0 hover:text-ink group-hover:opacity-100 active:cursor-grabbing"
+              >
+                <svg width="11" height="15" viewBox="0 0 6 10" fill="currentColor" aria-hidden="true">
+                  <circle cx="1.5" cy="1.5" r="1" /><circle cx="4.5" cy="1.5" r="1" />
+                  <circle cx="1.5" cy="5" r="1" /><circle cx="4.5" cy="5" r="1" />
+                  <circle cx="1.5" cy="8.5" r="1" /><circle cx="4.5" cy="8.5" r="1" />
+                </svg>
+              </span>
+            )}
             <button
               type="button"
               onClick={() => jump(item.pos)}

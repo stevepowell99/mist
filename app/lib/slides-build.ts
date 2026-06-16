@@ -229,6 +229,16 @@ html,body{margin:0;height:100%}
    height. Reveal leaves a short slide at content height (so the caption rides up
    to the top), so stretch any slide that carries a .shot-cap. */
 .reveal .slides section:has(.shot-cap){height:100%}
+/* "Waiter" overlay: an opaque cover with a spinner that hides the deck until it
+   has rendered AND jumped to the right slide, so the cover slide never flashes
+   in the live preview. Shown only while embedded; removed by showDeck(). */
+#mist-loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#fff;z-index:9999}
+.mist-spinner{width:28px;height:28px;border:3px solid #e2e2e2;border-top-color:#999;border-radius:50%;animation:mist-spin .7s linear infinite}
+@keyframes mist-spin{to{transform:rotate(360deg)}}
+/* Kill the slide/background transition during a programmatic jump so the deck
+   lands on the target slide instantly, instead of sliding across from slide 0
+   the moment the waiter lifts. */
+.no-anim .reveal .slides section,.no-anim .reveal .backgrounds .slide-background{transition:none !important}
 `;
 
 const REVEAL_THEMES = new Set([
@@ -362,18 +372,31 @@ export function buildSlidesHtml(md: string, opts: BuildSlidesOptions): string {
     .join("\n");
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/reveal.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/theme/${theme}.css">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js-menu@2/menu.css">
 <style>${PREVIEW_CSS}</style>
 ${deckCss}
 ${inlineStyles}
 </head><body>
+<div id="mist-loading"><div class="mist-spinner"></div></div>
 <div class="reveal"><div class="slides">${sections}</div></div>
+<script>
+// Runs during parse, before the blocking reveal.js download, so the raw slide
+// markup never paints. The waiter overlay is opaque by default (CSS), covering
+// everything from the first frame. Keep it (and hide the deck) only while
+// embedded in the editor; the standalone print page drops it at once.
+(function(){
+  var embedded = window.parent !== window;
+  var l = document.getElementById('mist-loading');
+  var r = document.querySelector('.reveal');
+  if (embedded) { if (r) r.style.visibility = 'hidden'; }
+  else if (l) { l.style.display = 'none'; }
+})();
+</script>
 <script src="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/reveal.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/reveal.js@5/plugin/markdown/markdown.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/reveal.js@5/plugin/notes/notes.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/reveal.js-menu@2/menu.js"></script>
 <script>
 // scrollActivationWidth:null stops reveal v5 auto-switching to scroll view in a
 // narrow pane (the split), which in a sandboxed iframe hits sessionStorage and
@@ -383,28 +406,147 @@ ${inlineStyles}
 // Keep reveal's own controls, progress bar, overview (Esc/O) and keyboard
 // shortcuts (F fullscreen, S notes, arrows) on, and add the hamburger menu
 // plugin if it loaded (best-effort, like Quarto's decks).
-var __t0=(window.performance&&performance.now)?performance.now():0;
 var revealPlugins=[RevealMarkdown,RevealNotes];
-if (window.RevealMenu) revealPlugins.push(RevealMenu);
 // Cursor-driven sync: the editor posts {type:"mist-goto", h} as the cursor
 // moves and after each rebuild. Buffer the target so a message that arrives
 // before reveal is ready (e.g. right after the iframe reloads) still lands,
 // which is what keeps an edit from snapping the deck back to slide 1.
-var pendingGoto = null, revealReady = false;
+var pendingGoto = null, pendingFrag = -1, revealReady = false;
+// The deck and waiter overlay are set up by the early script above (hidden while
+// embedded). showDeck() lifts the waiter and reveals the deck once it has
+// rendered and jumped to the right slide, so the cover slide never flashes.
+var deckEl = document.querySelector('.reveal');
+var loadingEl = document.getElementById('mist-loading');
+var deckShown = false;
+function showDeck(){
+  if (deckShown || !revealReady) return;
+  deckShown = true;
+  if (deckEl) deckEl.style.visibility = '';
+  if (loadingEl) loadingEl.style.display = 'none';
+}
 // The editor sends a flat slide index (its split is flat). With 2D nesting a
 // flat index is not reveal's horizontal index, so map it through the slide
-// element to reveal's (h,v).
-function gotoFlat(n){
+// element to reveal's (h,v). f is the reveal fragment to reveal up to (the
+// editor's cursor fragment), or <0 for none, so the deck follows the cursor down
+// to the fragment being edited.
+function gotoFlat(n, f){
   var slides = Reveal.getSlides();
   if (!slides.length) return;
   if (n < 0) n = 0; else if (n >= slides.length) n = slides.length - 1;
   var idx = Reveal.getIndices(slides[n]);
-  Reveal.slide(idx.h, idx.v);
+  var cur = Reveal.getIndices();
+  // Only navigate when the slide actually changes, and then with no transition
+  // (the cursor-driven follow should snap, not animate). Re-navigating the same
+  // slide would reset its fragments and flash.
+  if (cur.h !== idx.h || cur.v !== idx.v) {
+    document.body.classList.add('no-anim');
+    Reveal.slide(idx.h, idx.v);
+    requestAnimationFrame(function(){ requestAnimationFrame(function(){ document.body.classList.remove('no-anim'); }); });
+  }
+  // Drive fragments explicitly. Reveal.slide's fragment argument only lands on a
+  // slide change, so moving the cursor between fragments of the SAME slide needs
+  // this. navigateFragment(index) jumps straight to a fragment index (reveal v5);
+  // fall back to stepping with next/prevFragment. Both act on the current slide.
+  var target = (typeof f === 'number') ? f : -1;
+  if (typeof Reveal.navigateFragment === 'function') {
+    Reveal.navigateFragment(target);
+  } else {
+    var fi = Reveal.getIndices().f; if (typeof fi !== 'number') fi = -1;
+    var guard = 0;
+    while (fi < target && guard++ < 500 && Reveal.nextFragment()) fi++;
+    while (fi > target && guard++ < 500 && Reveal.prevFragment()) fi--;
+  }
 }
-function applyGoto(){ if (revealReady && pendingGoto != null) gotoFlat(pendingGoto); }
+function applyGoto(){ if (revealReady && pendingGoto != null) gotoFlat(pendingGoto, pendingFrag); }
+// Mermaid is best-effort and must never block reveal. Skip the import entirely
+// unless the deck actually has a mermaid block, which saves loading and running
+// a large module on a deck that has none. Reused by init and in-place rerender.
+async function runMermaid(){
+  if (!document.querySelector("code.language-mermaid")) return 0;
+  var mt = performance.now ? performance.now() : 0;
+  try {
+    const m = await import("https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs");
+    m.default.initialize({ startOnLoad: false, theme: "neutral" });
+    document.querySelectorAll("code.language-mermaid").forEach(function (c) {
+      const d = document.createElement("div");
+      d.className = "mermaid";
+      d.textContent = c.textContent || "";
+      (c.closest("pre") || c).replaceWith(d);
+    });
+    await m.default.run({ querySelector: ".mermaid" });
+    Reveal.layout();
+  } catch (e) { /* slides render fine without mermaid */ }
+  return Math.round((performance.now ? performance.now() : 0) - mt);
+}
+// Shared reveal config and handlers, used by both the initial boot and the
+// in-place rebuild so both produce an identical deck.
+// center:false matches Quarto (reveal's own default is true). With centring on,
+// every slide's content block is vertically centred, which drags a
+// bottom-pinned .shot-cap caption up to the middle; off, slides top-align.
+var REVEAL_CONFIG = {plugins:revealPlugins,hash:false,controls:true,progress:true,keyboard:true,overview:true,center:false,navigationMode:'${navigationMode}',scrollActivationWidth:null,width:1280,height:720};
+function relayout(){ try { Reveal.layout(); } catch (e) {} }
+// Re-run layout across a few frames. In a sandboxed iframe reveal can init
+// before the pane has its real size, leaving the deck unscaled; these catch it.
+function relayoutBurst(){ relayout(); requestAnimationFrame(relayout); setTimeout(relayout, 120); setTimeout(relayout, 400); }
+// Report the current slide to the parent as a flat index (matching the editor's
+// flat split) so the URL ?slide= round-trips through 2D nesting.
+var slideChangedHandler = function(){ try { parent.postMessage({ type: 'mist-slide', h: Reveal.getSlides().indexOf(Reveal.getCurrentSlide()) }, '*'); } catch (e) {} };
+
+// In-place rebuild: swap the .slides markup, then DESTROY and re-initialise
+// reveal, so the deck is rebuilt by the EXACT same path as a fresh load. Running
+// only the markdown plugin (md.init) re-processed the sections wrongly and
+// inflated the slide count, which shifted every index; a full re-init produces
+// the same slide list the reload path does. The CDN scripts stay loaded, so it
+// is still far cheaper than reloading the iframe.
+var rerendering = false;
+async function rerender(html, target){
+  if (!revealReady || rerendering) return;
+  var slidesEl = document.querySelector(".slides");
+  if (!slidesEl) return;
+  rerendering = true;
+  // Where the deck shows now, captured before the rebuild. For a content edit
+  // (slide count unchanged) we return to exactly this slide.
+  var before = Reveal.getSlides().length;
+  var shown = Reveal.getSlides().indexOf(Reveal.getCurrentSlide());
+  // Hide the deck while it re-initialises: destroy + initialize resets reveal to
+  // slide 0 and paints it before we jump back, which flashes the cover slide.
+  // Revealing only after the jump means the rebuild lands silently on the right
+  // slide. Width/height are preserved (visibility, not display), so layout holds.
+  if (deckEl) deckEl.style.visibility = 'hidden';
+  revealReady = false;
+  // try/finally so a throw in destroy/initialize/goto can never leave the deck
+  // hidden (which showed as no preview at all). The deck is always revealed.
+  try {
+    try { Reveal.off('slidechanged', slideChangedHandler); } catch (e) {}
+    try { await Reveal.destroy(); } catch (e) {}
+    slidesEl.innerHTML = html;
+    await Reveal.initialize(REVEAL_CONFIG);
+    if (Reveal.sync) Reveal.sync();
+    Reveal.on('slidechanged', slideChangedHandler);
+    relayoutBurst();
+    var after = Reveal.getSlides().length;
+    // Content edit: keep the shown slide. Structural edit (count changed): the
+    // shown index has shifted, so use the parent's cursor-derived target.
+    var dest = (after === before && shown >= 0)
+      ? shown
+      : (typeof target === "number" && target >= 0 ? target : shown);
+    if (dest >= 0) { pendingGoto = dest; gotoFlat(dest); }
+    Reveal.layout();
+  } catch (e) {
+    // best-effort: leave whatever rendered rather than wedging the deck
+  } finally {
+    revealReady = true;
+    if (deckEl) deckEl.style.visibility = '';
+    rerendering = false;
+  }
+  await runMermaid();
+}
 window.addEventListener("message", function(e){
-  if (e.data && e.data.type === "mist-goto" && typeof e.data.h === "number") {
-    pendingGoto = e.data.h; applyGoto();
+  if (!e.data) return;
+  if (e.data.type === "mist-goto" && typeof e.data.h === "number") {
+    pendingGoto = e.data.h; pendingFrag = (typeof e.data.f === "number") ? e.data.f : -1; applyGoto(); showDeck();
+  } else if (e.data.type === "mist-render" && typeof e.data.sections === "string") {
+    rerender(e.data.sections, typeof e.data.goto === "number" ? e.data.goto : null);
   }
 });
 // Forward mod+alt layout shortcuts to the parent: this sandboxed iframe has its
@@ -428,56 +570,31 @@ window.addEventListener("keydown", function(e){
     parent.postMessage({ type: "mist-key", chord: chord }, "*");
   }
 }, true);
-// center:false matches Quarto (reveal's own default is true). With centring on,
-// every slide's content block is vertically centred, which drags a
-// bottom-pinned .shot-cap caption up to the middle; off, slides top-align and
-// absolute positioning lands where the deck's CSS intends.
-Reveal.initialize({plugins:revealPlugins,hash:false,controls:true,progress:true,keyboard:true,overview:true,center:false,navigationMode:'${navigationMode}',scrollActivationWidth:null,width:1280,height:720,menu:{openButton:true,openSlideNumber:false,markers:true}}).then(async function(){
+Reveal.initialize(REVEAL_CONFIG).then(async function(){
   // Rebuild slide backgrounds: the markdown plugin sets data-background-image
   // (from the <!-- .slide: --> comment) during init, after reveal first built
   // its background layer, so without a sync the backgrounds come up blank.
   if (Reveal.sync) Reveal.sync();
   revealReady = true; applyGoto();
-  // Report the current slide to the parent as a flat index (matching the
-  // editor's flat split) so the URL ?slide= round-trips through 2D nesting.
-  Reveal.on('slidechanged', function(){ try { parent.postMessage({ type: 'mist-slide', h: Reveal.getSlides().indexOf(Reveal.getCurrentSlide()) }, '*'); } catch (e) {} });
-  // Re-run layout across a few frames. In a sandboxed iframe reveal can init
-  // before the pane has its real size (the split is still settling), leaving
-  // the deck unscaled, a single tall column. These retries catch that without
-  // depending on a resize event firing.
-  function relayout(){ try { Reveal.layout(); } catch (e) {} }
-  relayout();
-  requestAnimationFrame(relayout);
-  setTimeout(relayout, 120);
-  setTimeout(relayout, 400);
+  // Reveal only once we are on the right slide, so the cover slide never flashes.
+  // If the goto already arrived, reveal now. Otherwise ASK the parent for the
+  // slide to open on (a pull, reliable because our listener is attached) and
+  // reveal when it answers (handled in the message listener). A long safety
+  // timeout reveals regardless, so a missing answer can never leave a rendered
+  // deck hidden behind the white overlay.
+  if (pendingGoto != null) {
+    showDeck();
+  } else {
+    try { parent.postMessage({ type: "mist-need-goto" }, "*"); } catch (e) {}
+    setTimeout(showDeck, 1500);
+  }
+  Reveal.on('slidechanged', slideChangedHandler);
+  relayoutBurst();
+  // ResizeObserver / resize live on body+window (not cleared by Reveal.destroy),
+  // so attach them once here, not on every in-place rebuild.
   if (window.ResizeObserver) new ResizeObserver(relayout).observe(document.body);
   window.addEventListener("resize", relayout);
-  // Mermaid is best-effort and must never block reveal. Skip the import entirely
-  // unless the deck actually has a mermaid block, which saves loading and running
-  // a large module on every rebuild of a deck that has none.
-  var mermaidMs = 0;
-  if (document.querySelector("code.language-mermaid")) {
-    var mt = performance.now ? performance.now() : 0;
-    try {
-      const m = await import("https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs");
-      m.default.initialize({ startOnLoad: false, theme: "neutral" });
-      document.querySelectorAll("code.language-mermaid").forEach(function (c) {
-        const d = document.createElement("div");
-        d.className = "mermaid";
-        d.textContent = c.textContent || "";
-        (c.closest("pre") || c).replaceWith(d);
-      });
-      await m.default.run({ querySelector: ".mermaid" });
-      Reveal.layout();
-    } catch (e) { /* slides render fine without mermaid */ }
-    mermaidMs = Math.round((performance.now ? performance.now() : 0) - mt);
-  }
-  // Report timings so the slow part is visible in the console: ms is from the
-  // inline script start (init + markdown render + layout + mermaid), separate
-  // from the script download/parse the parent measures.
-  try {
-    parent.postMessage({ type: "mist-ready", ms: Math.round((performance.now ? performance.now() : 0) - __t0), slides: (Reveal.getSlides() || []).length, mermaidMs: mermaidMs }, "*");
-  } catch (e) {}
+  await runMermaid();
 });
 </script>
 </body></html>`;

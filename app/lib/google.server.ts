@@ -429,10 +429,12 @@ export async function driveFiles(
   return entries;
 }
 
-/** Emails on a file's sharing list (for the later ACL check). */
+/** Emails on a file's sharing list (for the ACL check). */
 export interface DriveGrant {
   /** "user", "group", "domain" or "anyone". */
   type: string;
+  /** "owner", "organizer", "fileOrganizer", "writer", "commenter" or "reader". */
+  role?: string;
   emailAddress?: string;
   domain?: string;
 }
@@ -440,7 +442,7 @@ export interface DriveGrant {
 /** A file's sharing grants (who it is shared with, and how). */
 export async function driveListPermissions(token: string, fileId: string): Promise<DriveGrant[]> {
   const res = await fetch(
-    `${DRIVE}/files/${fileId}/permissions?fields=permissions(emailAddress,type,domain)&${COMMON}`,
+    `${DRIVE}/files/${fileId}/permissions?fields=permissions(emailAddress,type,domain,role)&${COMMON}`,
     { headers: authHeaders(token) },
   );
   if (!res.ok) throw new Error(`Drive permissions failed (${res.status})`);
@@ -448,22 +450,51 @@ export async function driveListPermissions(token: string, fileId: string): Promi
   return body.permissions ?? [];
 }
 
-/**
- * True when an email is authorised by a file's sharing grants: a direct user
- * grant, a domain grant matching the email's domain, or anyone-with-link. Group
- * membership is not resolved (it would need extra calls), so a user shared only
- * via a group is not matched here.
- */
+/** Whether a grant applies to this email: a direct user grant, a domain grant
+ *  matching the email's domain, or anyone-with-link. Group membership is not
+ *  resolved (it would need extra calls), so a group-only share is not matched. */
+function grantMatches(g: DriveGrant, email: string, domain: string): boolean {
+  return (
+    g.type === "anyone" ||
+    (g.type === "user" && g.emailAddress?.toLowerCase() === email) ||
+    (g.type === "domain" && !!domain && g.domain?.toLowerCase() === domain)
+  );
+}
+
+/** True when an email is authorised by a file's sharing grants (any role). */
 export function emailHasAccess(grants: DriveGrant[], email: string): boolean {
   const e = email.trim().toLowerCase();
   if (!e) return false;
   const domain = e.split("@")[1] ?? "";
-  return grants.some(
-    (g) =>
-      g.type === "anyone" ||
-      (g.type === "user" && g.emailAddress?.toLowerCase() === e) ||
-      (g.type === "domain" && !!domain && g.domain?.toLowerCase() === domain),
-  );
+  return grants.some((g) => grantMatches(g, e, domain));
+}
+
+const ROLE_RANK: Record<string, number> = {
+  owner: 5, organizer: 4, fileOrganizer: 4, writer: 3, commenter: 2, reader: 1,
+};
+
+/** The highest Drive role an email is granted on a file (across direct, domain
+ *  and anyone grants), or null if it has no access. */
+export function driveRoleForEmail(grants: DriveGrant[], email: string): string | null {
+  const e = email.trim().toLowerCase();
+  if (!e) return null;
+  const domain = e.split("@")[1] ?? "";
+  let best = 0;
+  let bestRole: string | null = null;
+  for (const g of grants) {
+    if (!grantMatches(g, e, domain)) continue;
+    const rank = ROLE_RANK[g.role ?? ""] ?? 0;
+    if (rank > best) {
+      best = rank;
+      bestRole = g.role ?? null;
+    }
+  }
+  return bestRole;
+}
+
+/** True when the Drive role allows editing the file (owner/organizer/writer). */
+export function driveRoleCanEdit(role: string | null): boolean {
+  return role === "owner" || role === "organizer" || role === "fileOrganizer" || role === "writer";
 }
 
 /**

@@ -152,8 +152,13 @@ class DocumentAgent extends Agent {
     }
 
     // Catch an external edit (Obsidian/Drive) made while the room was idle, so
-    // a reload shows fresh content. Never let a Drive hiccup break the connect.
+    // a reload shows fresh content. A fresh connect should always re-read Drive
+    // (the throttle is only meant to damp reconnect storms, but it can also
+    // suppress the pull right after a reload), so clear it first. The version
+    // check inside still skips the pull when nothing actually changed. Never let
+    // a Drive hiccup break the connect.
     try {
+      this.lastUpstreamCheck = 0;
       await this.checkUpstream(false);
     } catch {
       // upstream check is best-effort; fall through to sync the current state
@@ -402,7 +407,20 @@ class DocumentAgent extends Agent {
     }
   }
 
-  private async commitPending(): Promise<void> {
+  // Commits are serialised through this chain so two saves never race. Without
+  // it, a manual save and the auto-save firing with identical content both read
+  // the same baseline version, both write conditionally on it, and the second
+  // write is rejected as "changed upstream" (the first bumped the version),
+  // a false conflict that latches on the client and pauses all auto-save.
+  private commitChain: Promise<void> = Promise.resolve();
+
+  private commitPending(): Promise<void> {
+    // catch keeps the chain alive: one failed commit must not block later ones.
+    this.commitChain = this.commitChain.then(() => this.doCommit()).catch(() => {});
+    return this.commitChain;
+  }
+
+  private async doCommit(): Promise<void> {
     // Only ever reached via an explicit save (handleControl requires commitNow).
     // The doc resets per id (keyed provider + SPA nav), so a save writes this
     // doc's own content, and the frontmatter round-trips verbatim. No banner is
