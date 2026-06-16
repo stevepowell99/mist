@@ -292,12 +292,16 @@ export function DocumentProvider({
     [backed, markdown, threads, frontmatter],
   );
 
-  // The freshly opened content came from the backend, so treat it as already saved.
+  // The freshly opened content came from the backend, so treat it as already
+  // saved. Wait for the provider's initial sync: the body, the `threads` map and
+  // the legacy `meta` map can land on separate ticks, so baselining on the first
+  // non-empty body would snapshot before threads/meta arrive, then drift the hash
+  // the moment they do and flash a spurious "Saving…" (and a real save) on load.
   useEffect(() => {
-    if (!backed || baselineSetRef.current || !markdown) return;
+    if (!backed || baselineSetRef.current || !yjs.synced || !markdown) return;
     baselineSetRef.current = true;
     setLastCommittedHash(currentHash); // eslint-disable-line react-hooks/set-state-in-effect
-  }, [backed, markdown, currentHash]);
+  }, [backed, yjs.synced, markdown, currentHash]);
 
   // saveNow read through a ref so the socket listener below does not re-subscribe
   // on every keystroke (saveNow changes with the content).
