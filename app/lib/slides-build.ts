@@ -231,6 +231,13 @@ html,body{margin:0;height:100%}
    making an overstuffed slide look fine here yet get cut off in fullscreen. This
    also pins a .shot-cap caption to the slide edge (it needs the full height). */
 .reveal .slides section:not(.stack){height:100%;overflow:hidden}
+/* In the embedded preview, tint the letterbox (the area above/below or beside
+   the 16:9 slide) light grey so it is clear where the slide ends, while keeping
+   the slide itself white. Only the default (transparent) slide background gets
+   white; a slide with its own colour/image background keeps it (reveal sets that
+   inline). Scoped to .mist-embedded so the print/PDF page stays plain white. */
+html.mist-embedded{background:#ececec !important}
+html.mist-embedded .reveal .backgrounds .slide-background{background-color:#fff}
 /* "Waiter" overlay: an opaque cover with a spinner that hides the deck until it
    has rendered AND jumped to the right slide, so the cover slide never flashes
    in the live preview. Shown only while embedded; removed by showDeck(). */
@@ -392,7 +399,12 @@ ${inlineStyles}
   var embedded = window.parent !== window;
   var l = document.getElementById('mist-loading');
   var r = document.querySelector('.reveal');
-  if (embedded) { if (r) r.style.visibility = 'hidden'; }
+  if (embedded) {
+    if (r) r.style.visibility = 'hidden';
+    // Mark the embedded preview so the letterbox area can be tinted light grey
+    // (the print/PDF page keeps a plain white page).
+    document.documentElement.classList.add('mist-embedded');
+  }
   else if (l) { l.style.display = 'none'; }
 })();
 </script>
