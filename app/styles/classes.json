@@ -1,0 +1,63 @@
+{
+  "_comment": "Machine-readable catalogue for the gmist house framework (deck-base.css). One source for the grouped/described `.` picker, the HelpPanel axes explainer, and the generated step utilities (scale, position). Phase 3 of plans/class-system.md: a build script generates the stepped rules in deck-base.css and the README catalogue from this file. Until that build exists, keep this in step with deck-base.css by hand.",
+  "axes": {
+    "component": {
+      "desc": "What the element is. Reads the global knobs; combine with a colour.",
+      "classes": {
+        "flare": "Animated inline highlight (flares in, resolves to its colour)",
+        "hl": "Static inline highlight (same look, no animation)",
+        "panel": "Padded box with an accent left border",
+        "bg": "Flat background tint (no border or padding)",
+        "chip": "Small inline pill",
+        "card": "A single card (use inside .cards)",
+        "cards": "Responsive grid of cards/panels (+ .cols-2/3/4)",
+        "bignum": "Headline figure beside a note (.fig + .bn-body inside)",
+        "callout": "Alias: a neutral .panel for a noted aside",
+        "lead": "Larger intro paragraph",
+        "brand": "Causal Map logo pinned top-left (the logo's only home)",
+        "caption": "Plain small caption under an image (no background)",
+        "shot-cap": "Caption pinned over a full-bleed background-image slide"
+      }
+    },
+    "colour": {
+      "desc": "Variable-only: sets --hue, --hue-bright, --hue-pale, --hue-deep, --on. Shows nothing alone; recolour a deck by overriding these in its own CSS.",
+      "classes": {
+        "blue": "", "cyan": "", "teal": "", "green": "", "mint": "", "yellow": "",
+        "pink": "", "mag": "", "navy": "", "grey": "", "white": "", "black": ""
+      }
+    },
+    "shade": {
+      "desc": "Which version of the hue a component fills with.",
+      "classes": { "light": "Pale fill (--hue-pale)", "dark": "Deep fill (--hue-deep)" }
+    },
+    "scale": {
+      "desc": "Uniformly shrink or grow everything inside and reflow. .scale-50 = half, .scale-300 = triple; or .scale with --scale for any amount.",
+      "generated": { "prefix": "scale", "property": "zoom", "unit": "ratio",
+        "values": [25, 33, 40, 50, 60, 75, 80, 90, 100, 110, 125, 150, 175, 200, 250, 300, 400, 500] }
+    },
+    "order": {
+      "desc": "Later flares on a line fire in turn (sets --flare-delay).",
+      "classes": { "cascade-2": "", "cascade-3": "", "cascade-4": "", "cascade-5": "" }
+    },
+    "timing": {
+      "desc": "Sets the global --dur / --ease knobs the animations read.",
+      "classes": { "fast": "1.6s", "slow": "6s", "instant": "0.01s" }
+    },
+    "align": {
+      "desc": "Text alignment.",
+      "classes": { "left": "", "center": "", "right": "" }
+    },
+    "place": {
+      "desc": "Float a block absolutely within the slide, then position it with the coordinate utilities or top=/left=/width= attributes.",
+      "classes": { "place": "position:absolute" },
+      "generated": { "prefix": ["top", "left", "right", "bottom"], "property": "self",
+        "unit": "%", "step": 5, "from": 0, "to": 100,
+        "note": "Class name drops the % sign: .top-25 means top:25%." }
+    }
+  },
+  "external": {
+    "_comment": "Reveal.js / Quarto authoring classes that are NOT in this framework CSS. gmist keeps these in cm-classes.ts BUILTIN_CLASSES so the picker still offers them; do not duplicate their appearance here.",
+    "classes": ["fragment", "fade-in", "fade-out", "fade-up", "fade-down", "columns", "column",
+      "incremental", "r-fit-text", "r-stretch", "callout-note", "callout-tip", "callout-warning"]
+  }
+}

@@ -7,6 +7,10 @@
 import { driveAssetUrl, resolveAssetSrc, rewriteImages, type AssetCtx } from "~/lib/asset-urls";
 import { convertCitations, formatReferenceList, type BibLibrary } from "~/lib/citations";
 import type { DriveMeta } from "~/shared/types";
+// The house framework, served as the default stylesheet for every deck BEFORE
+// any per-deck `css:`, so a deck anywhere renders correctly and a local file can
+// override it via the cascade. Edited as a plain CSS file, not a TS string.
+import DECK_BASE_CSS from "~/styles/deck-base.css?raw";
 
 export function stripFrontmatter(md: string): { frontmatter: string; body: string } {
   const m = md.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
@@ -407,8 +411,8 @@ export function buildSlidesHtml(md: string, opts: BuildSlidesOptions): string {
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/reveal.css">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/theme/${theme}.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/${theme}.css">
 <style>${PREVIEW_CSS}</style>
 ${deckCss}
 ${inlineStyles}
@@ -433,9 +437,9 @@ ${inlineStyles}
   else if (l) { l.style.display = 'none'; }
 })();
 </script>
-<script src="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/reveal.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/reveal.js@5/plugin/markdown/markdown.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/reveal.js@5/plugin/notes/notes.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/markdown/markdown.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/notes/notes.js"></script>
 <script>
 // scrollActivationWidth:null stops reveal v5 auto-switching to scroll view in a
 // narrow pane (the split), which in a sandboxed iframe hits sessionStorage and

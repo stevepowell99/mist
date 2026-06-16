@@ -67,7 +67,13 @@ export async function loader({ request, context }: Route.LoaderArgs) {
         current = (await driveGetMeta(token, current)).parents?.[0];
       }
     }
-    if (!bibIds.length) return new Response("no .bib found", { status: 404 });
+    // No bib is a normal state, not an error: return an empty library (200) so
+    // the client just shows no references, rather than logging a 404.
+    if (!bibIds.length) {
+      return new Response("", {
+        headers: { "Content-Type": "text/plain", "Cache-Control": "public, max-age=60" },
+      });
+    }
 
     // Merge every .bib at that level (a vault can keep several); parseBib reads
     // concatenated BibTeX fine.
