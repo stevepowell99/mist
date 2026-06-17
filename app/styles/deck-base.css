@@ -87,7 +87,9 @@
    the keyframes can play). */
 :is(.reveal,.preview) .hl, :is(.reveal,.preview) .flare {
   padding: 0.02em 0.22em; border-radius: 5px; font-weight: 700;
-  background: var(--fill, var(--hue-bright, var(--hue))); color: var(--ink);
+  /* Always a bright pill: read --hue-bright, never the container's --fill shade
+     (a .dark ancestor sets --fill deep, which would paint dark-on-dark). */
+  background: var(--hue-bright, var(--hue, var(--cm-yellow))); color: var(--ink);
   -webkit-box-decoration-break: clone; box-decoration-break: clone;
 }
 :is(.reveal,.preview) .cascade-2 { --flare-delay: 2.7s; }
