@@ -410,7 +410,7 @@ export default function LibraryGallery() {
                   <button
                     type="button"
                     disabled={!view}
-                    onClick={() => insertAt(`![${cleanName(it.name)}](drive:${it.id})`)}
+                    onClick={() => insertAt(`\n\n::: {.scale-75}\n\n![${cleanName(it.name)}](drive:${it.id})\n\n:::\n\n`)}
                     title={`Insert ${it.name}`}
                     className="flex w-full cursor-pointer flex-col items-stretch gap-1 rounded border border-border p-2 transition-colors hover:border-ink disabled:opacity-50"
                   >
