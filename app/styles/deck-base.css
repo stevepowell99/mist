@@ -264,4 +264,8 @@
 .reveal .slide-breadcrumb { position: fixed; bottom: 8px; right: 6.8em; left: auto; transform: none; z-index: 31; font-size: 12px; font-weight: 600; letter-spacing: 0.02em; text-align: right; color: #1b1b3a; background: rgba(255,255,255,0.7); padding: 3px 7px; border-radius: 4px; pointer-events: none; max-width: 36vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .reveal .slide-breadcrumb:empty { display: none; }
 .reveal .slide-number { bottom: 8px; right: 8px; background: rgba(255,255,255,0.7) !important; color: #1b1b3a !important; padding: 3px 7px; border-radius: 4px; font-weight: 600; }
+/* Global footer (from `footer:` in the frontmatter), shown on every slide.
+   Bottom-left so it clears the slide number / breadcrumb on the right. A
+   translucent pill keeps it readable on any theme background. */
+.reveal .deck-footer { position: fixed; bottom: 8px; left: 8px; z-index: 31; font-size: 13px; font-weight: 600; color: #1b1b3a; background: rgba(255,255,255,0.7); padding: 3px 8px; border-radius: 4px; max-width: 60vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; }
 .reveal .references-slide { text-align: left; }

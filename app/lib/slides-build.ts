@@ -319,6 +319,25 @@ function extractNavMode(frontmatter: string): "linear" | "grid" | "default" {
   return "linear";
 }
 
+/** A global footer line shown on every slide, from `footer:` (top-level or
+ *  nested under format.revealjs, both reached by the multiline match). Plain
+ *  text; empty/missing means no footer. */
+function extractFooter(frontmatter: string): string {
+  const m = frontmatter.match(/^\s*footer:\s*(.+)$/m);
+  return m ? m[1].trim().replace(/^["']|["']$/g, "") : "";
+}
+
+/** Reveal's slideNumber config from `slide-number:` (default off). `true` ->
+ *  'c/t' (current/total); a format string like 'c/t' or 'h.v' passes through. */
+function extractSlideNumber(frontmatter: string): string {
+  const m = frontmatter.match(/^\s*slide-number:\s*(.+)$/m);
+  if (!m) return "false";
+  const v = m[1].trim().replace(/^["']|["']$/g, "").toLowerCase();
+  if (v === "true" || v === "yes") return "'c/t'";
+  if (v === "false" || v === "no" || v === "") return "false";
+  return `'${v.replace(/'/g, "")}'`;
+}
+
 /** Pull a frontmatter key's path entries, in inline (`key: a` / `key: [a, b]`)
  *  or YAML list form. Used for `css:` and `bibliography:`. */
 function extractFmPaths(frontmatter: string, key: string): string[] {
@@ -447,6 +466,11 @@ export function buildSlidesHtml(md: string, opts: BuildSlidesOptions): string {
   const sections = buildSlideSections(md, opts);
 
   const navigationMode = extractNavMode(frontmatter);
+  const slideNumber = extractSlideNumber(frontmatter);
+  const footer = extractFooter(frontmatter);
+  const footerHtml = footer
+    ? `<div class="deck-footer">${footer.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</div>`
+    : "";
   const deckCss = extractCssPaths(frontmatter)
     .map((p) => cssUrl(p, drive, origin, driveToken))
     .filter((u): u is string => u !== null)
@@ -463,7 +487,7 @@ ${deckCss}
 ${inlineStyles}
 </head><body>
 <div id="mist-loading"><div class="mist-spinner"></div></div>
-<div class="reveal"><div class="slides">${sections}</div></div>
+<div class="reveal"><div class="slides">${sections}</div>${footerHtml}</div>
 <script>
 // Runs during parse, before the blocking reveal.js download, so the raw slide
 // markup never paints. The waiter overlay is opaque by default (CSS), covering
@@ -574,7 +598,7 @@ async function runMermaid(){
 // keyboard:{27:null} unbinds Esc so it no longer toggles overview: in fullscreen
 // the browser swallows Esc (it exits fullscreen), so leaving Esc on overview made
 // it work in one place and not the other. Overview is now O only (reveal default).
-var REVEAL_CONFIG = {plugins:revealPlugins,hash:false,controls:true,progress:true,keyboard:{27:null},overview:true,center:false,navigationMode:'${navigationMode}',pdfSeparateFragments:${separateFragments},scrollActivationWidth:null,width:1280,height:720};
+var REVEAL_CONFIG = {plugins:revealPlugins,hash:false,controls:true,progress:true,slideNumber:${slideNumber},keyboard:{27:null},overview:true,center:false,navigationMode:'${navigationMode}',pdfSeparateFragments:${separateFragments},scrollActivationWidth:null,width:1280,height:720};
 function relayout(){ try { Reveal.layout(); } catch (e) {} }
 // Re-run layout across a few frames. In a sandboxed iframe reveal can init
 // before the pane has its real size, leaving the deck unscaled; these catch it.
