@@ -151,17 +151,24 @@ const SLASH_COMMANDS: Completion[] = [
     type: "keyword",
     boost: 47,
   }),
-  // Red shapes: inserted centred-ish at 75% so something visible appears; move
-  // with .top-/.left- and resize with .scale-, recolour with a colour class.
-  snippetCompletion("::: {.rect .place .top-40 .left-40 .scale-75}\n:::\n\n${}", {
-    label: "/rect",
-    detail: "red rectangle (move with .top-/.left-, size with .scale-)",
+  // Red outline shapes, inserted centred-ish at 75% so something visible appears;
+  // the cursor lands inside for an optional label (centred), move with .top-/.left-
+  // and resize with .scale-, recolour the outline with a colour class.
+  snippetCompletion("::: {.rectangle .place .top-40 .left-40 .scale-75}\n\n${1}\n\n:::\n\n${}", {
+    label: "/rectangle",
+    detail: "red outline rectangle (type a label inside, move/size with .top-/.left-/.scale-)",
     type: "keyword",
     boost: 40,
   }),
-  snippetCompletion("::: {.circle .place .top-40 .left-40 .scale-75}\n:::\n\n${}", {
+  snippetCompletion("::: {.circle .place .top-40 .left-40 .scale-75}\n\n${1}\n\n:::\n\n${}", {
     label: "/circle",
-    detail: "red circle (move with .top-/.left-, size with .scale-)",
+    detail: "red outline circle (type a label inside, move/size with .top-/.left-/.scale-)",
+    type: "keyword",
+    boost: 40,
+  }),
+  snippetCompletion("::: {.oval .place .top-40 .left-40 .scale-75}\n\n${1}\n\n:::\n\n${}", {
+    label: "/oval",
+    detail: "red outline oval (type a label inside, move/size with .top-/.left-/.scale-)",
     type: "keyword",
     boost: 40,
   }),

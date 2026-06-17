@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 import { useDocument } from "~/lib/DocumentContext";
@@ -60,6 +60,28 @@ function SlideThumb({ id, markdown }: { id?: string; markdown?: string }) {
   );
 }
 
+const IMG_RE = /(!\[[^\]]*\]\()([^)\s]+)((?:\s+"[^"]*")?\))/g;
+
+/** Relative image paths in markdown (not absolute, root-relative, data: or
+ *  drive:), so a picked deck's images can be resolved to portable ids. */
+function relImagePaths(md: string): string[] {
+  const out = new Set<string>();
+  for (const m of md.matchAll(IMG_RE)) {
+    const u = m[2];
+    if (!/^https?:\/\//.test(u) && !u.startsWith("/") && !u.startsWith("data:") && !u.startsWith("drive:")) out.add(u);
+  }
+  return [...out];
+}
+
+/** Rewrite each relative image whose path resolved to a Drive id into a portable
+ *  `drive:<id>` reference; leave unresolved (null) paths untouched. */
+function rewriteRel(md: string, map: Record<string, string | null>): string {
+  return md.replace(IMG_RE, (full, pre: string, url: string, post: string) => {
+    const id = map[url];
+    return id ? `${pre}drive:${id}${post}` : full;
+  });
+}
+
 /**
  * The reusable slide/image library gallery (plans/slide-image-library.md).
  *  - Slides: `.md` fragments from the library `slides/` folder; click inserts
@@ -87,6 +109,10 @@ export default function LibraryGallery() {
   const [folders, setFolders] = useState<{ slides: string | null; images: string | null }>({ slides: null, images: null });
   const [items, setItems] = useState<SearchResult[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [inserting, setInserting] = useState(false);
+  // Multi-select: keys are item ids (slides/images) or `s<index>` (deck slides).
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const fileInput = useRef<HTMLInputElement>(null);
   // "From a deck": the deck whose slides are being shown, and its slides.
   const [deckPick, setDeckPick] = useState<{ id: string; name: string } | null>(null);
   const [deckSlideList, setDeckSlideList] = useState<{ index: number; raw: string; title: string }[]>([]);
@@ -108,6 +134,9 @@ export default function LibraryGallery() {
     const t = setTimeout(() => setDebounced(query.trim()), 250);
     return () => clearTimeout(t);
   }, [query]);
+
+  // Clear the selection whenever the visible set changes.
+  useEffect(() => setSelected(new Set()), [tab, debounced, deckPick]);
 
   // Resolve the library once on first open.
   useEffect(() => {
@@ -167,6 +196,8 @@ export default function LibraryGallery() {
   }, [open, configured, tab, debounced, folders, deckPick, refreshTick]);
 
   const cleanName = (n: string) => n.replace(/\.(md|qmd)$/i, "");
+  // A library image as a scalable block, so a beginner just edits the number.
+  const imageBlock = (it: SearchResult) => `::: {.scale-75}\n\n![${cleanName(it.name)}](drive:${it.id})\n\n:::`;
 
   // Save the slide the cursor is in into the library's slides/ folder, so the
   // gallery grows from inside gmist.
@@ -175,7 +206,7 @@ export default function LibraryGallery() {
     if (!slides.length) return;
     const idx = Math.min(Math.max(0, slideIndexForOffset(markdown, cursorOffset)), slides.length - 1);
     const slide = slides[idx];
-    const suggested = (slide.title || "slide").replace(/[^\w \-]/g, "").trim().slice(0, 40) || "slide";
+    const suggested = (slide.title || "slide").replace(/[^\w -]/g, "").trim().slice(0, 40) || "slide";
     const name = typeof window !== "undefined" ? window.prompt("Save the current slide to the library as", suggested) : null;
     if (!name) return;
     setError(null);
@@ -232,7 +263,24 @@ export default function LibraryGallery() {
       setError(null);
       try {
         const md = await fetchMarkdown(item.id);
-        setDeckSlideList(deckSlides(md));
+        let slides = deckSlides(md);
+        // Rewrite the deck's relative images to portable drive:<id> refs, so a
+        // picked slide's pictures still resolve once inserted into another deck.
+        const paths = relImagePaths(md);
+        if (paths.length) {
+          try {
+            const res = await fetch("/drive/resolve", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ deck: item.id, paths }),
+            });
+            const body = (await res.json()) as { map?: Record<string, string | null> };
+            if (res.ok && body.map) slides = slides.map((s) => ({ ...s, raw: rewriteRel(s.raw, body.map!) }));
+          } catch {
+            /* leave relative paths as-is */
+          }
+        }
+        setDeckSlideList(slides);
         setDeckPick({ id: item.id, name: item.name });
       } catch (e) {
         setError(e instanceof Error ? e.message : "could not open the deck");
@@ -243,6 +291,71 @@ export default function LibraryGallery() {
     [fetchMarkdown],
   );
 
+  const uploadImage = useCallback(async (file: File) => {
+    setError(null);
+    setBusyId("upload");
+    try {
+      const res = await fetch(`/drive/library-upload?name=${encodeURIComponent(file.name)}`, {
+        method: "POST",
+        headers: { "Content-Type": file.type || "application/octet-stream" },
+        body: file,
+      });
+      const body = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok || !body.ok) throw new Error(body.error ?? "upload failed");
+      setRefreshTick((n) => n + 1);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "could not upload");
+    } finally {
+      setBusyId(null);
+    }
+  }, []);
+
+  // Keys for the currently visible, selectable grid (no multi-select on the
+  // deck-search list, where you pick one deck to drill into).
+  const currentKeys: string[] =
+    tab === "deck" && deckPick
+      ? deckSlideList.map((s) => `s${s.index}`)
+      : tab === "deck"
+        ? []
+        : items.map((it) => it.id);
+  const allSelected = currentKeys.length > 0 && currentKeys.every((k) => selected.has(k));
+
+  const toggleSel = (key: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+
+  const selectAllNone = () => setSelected(allSelected ? new Set() : new Set(currentKeys));
+
+  // Insert every selected item at the cursor, in the order they appear.
+  const insertSelected = async () => {
+    setInserting(true);
+    setError(null);
+    try {
+      const parts: string[] = [];
+      if (tab === "deck" && deckPick) {
+        for (const s of deckSlideList) if (selected.has(`s${s.index}`)) parts.push(s.raw.trim());
+      } else if (tab === "images") {
+        for (const it of items) if (selected.has(it.id)) parts.push(imageBlock(it));
+      } else {
+        for (const it of items)
+          if (selected.has(it.id)) {
+            try {
+              parts.push((await fetchMarkdown(it.id)).trim());
+            } catch {
+              /* skip one that failed to read */
+            }
+          }
+      }
+      if (parts.length) insertAt(`\n\n${parts.join("\n\n")}\n\n`);
+    } finally {
+      setInserting(false);
+    }
+  };
+
   if (!open) return null;
 
   const TABS: { id: Tab; label: string }[] = [
@@ -252,6 +365,39 @@ export default function LibraryGallery() {
   ];
   const searchHint = tab === "deck" ? "Search decks by title or name" : `Search ${tab} by title or name`;
   const folderMissing = configured === true && tab !== "deck" && !(tab === "slides" ? folders.slides : folders.images);
+
+  // A selection checkbox overlaid on a card's top-left; stops the click reaching
+  // the card so ticking does not also insert that one item.
+  const selBox = (key: string) => (
+    <input
+      type="checkbox"
+      checked={selected.has(key)}
+      onChange={() => toggleSel(key)}
+      onClick={(e) => e.stopPropagation()}
+      aria-label="Select"
+      className="absolute left-2 top-2 z-10 h-4 w-4 cursor-pointer accent-ink"
+    />
+  );
+
+  // A bar with select-all/none and an insert-selected action, shown above a
+  // selectable grid.
+  const selectionBar = currentKeys.length > 0 && (
+    <div className="mb-3 flex items-center gap-3 text-xs">
+      <button type="button" onClick={selectAllNone} className="cursor-pointer text-muted hover:text-ink">
+        {allSelected ? "Select none" : "Select all"}
+      </button>
+      {selected.size > 0 && (
+        <button
+          type="button"
+          disabled={inserting || !view}
+          onClick={() => void insertSelected()}
+          className="cursor-pointer rounded bg-ink px-2 py-1 font-medium text-paper transition-opacity hover:opacity-90 disabled:opacity-50"
+        >
+          {inserting ? "Inserting…" : `Insert ${selected.size} selected`}
+        </button>
+      )}
+    </div>
+  );
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4" onClick={() => setOpen(false)}>
@@ -323,9 +469,11 @@ export default function LibraryGallery() {
               <p className="mb-2 text-sm text-muted">
                 Slides in <span className="text-ink">{cleanName(deckPick.name)}</span>:
               </p>
+              {selectionBar}
               <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                 {deckSlideList.map((s) => (
-                  <li key={s.index}>
+                  <li key={s.index} className="relative">
+                    {selBox(`s${s.index}`)}
                     <button
                       type="button"
                       disabled={!view}
@@ -358,9 +506,12 @@ export default function LibraryGallery() {
 
           {/* Slides tab: a grid of live thumbnails. */}
           {tab === "slides" && configured === true && !loading && !folderMissing && (
+            <>
+            {selectionBar}
             <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               {items.map((it) => (
-                <li key={it.id}>
+                <li key={it.id} className="relative">
+                  {selBox(it.id)}
                   <button
                     type="button"
                     disabled={busyId !== null || !view}
@@ -377,6 +528,7 @@ export default function LibraryGallery() {
               ))}
               {items.length === 0 && <li className="text-sm text-muted">Nothing found.</li>}
             </ul>
+            </>
           )}
 
           {/* Deck search results: a list (pick a deck to see its slides). */}
@@ -404,13 +556,37 @@ export default function LibraryGallery() {
 
           {/* Images tab: thumbnails. */}
           {tab === "images" && configured === true && !loading && !folderMissing && (
+            <>
+            <div className="mb-3 flex items-center gap-3">
+              <input
+                ref={fileInput}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) void uploadImage(f);
+                  e.target.value = "";
+                }}
+              />
+              <button
+                type="button"
+                disabled={busyId === "upload"}
+                onClick={() => fileInput.current?.click()}
+                className="cursor-pointer rounded border border-border px-2 py-1 text-xs text-muted transition-colors hover:border-ink hover:text-ink disabled:opacity-50"
+              >
+                {busyId === "upload" ? "Uploading…" : "+ Upload an image to the library"}
+              </button>
+            </div>
+            {selectionBar}
             <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               {items.map((it) => (
-                <li key={it.id}>
+                <li key={it.id} className="relative">
+                  {selBox(it.id)}
                   <button
                     type="button"
                     disabled={!view}
-                    onClick={() => insertAt(`\n\n::: {.scale-75}\n\n![${cleanName(it.name)}](drive:${it.id})\n\n:::\n\n`)}
+                    onClick={() => insertAt(`\n\n${imageBlock(it)}\n\n`)}
                     title={`Insert ${it.name}`}
                     className="flex w-full cursor-pointer flex-col items-stretch gap-1 rounded border border-border p-2 transition-colors hover:border-ink disabled:opacity-50"
                   >
@@ -426,6 +602,7 @@ export default function LibraryGallery() {
               ))}
               {items.length === 0 && <li className="py-2 text-sm text-muted">Nothing found.</li>}
             </ul>
+            </>
           )}
         </div>
       </div>

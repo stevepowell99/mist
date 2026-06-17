@@ -193,11 +193,19 @@
   font-size: 2.6em; font-weight: 800; color: var(--bignum-fig, var(--teal-dark)); line-height: 1; white-space: nowrap;
 }
 
-/* COMPONENT: shapes (decoration). A solid red rectangle / circle by default;
-   recolour with a colour class, move with .place + .top-/.left-, size with
-   .scale-. Empty on purpose: ::: {.rect .place .top-40 .left-40 .scale-75} ::: */
-:is(.reveal,.preview) .rect { background: var(--hue, #ff2f00); width: 200px; height: 120px; border-radius: 4px; }
-:is(.reveal,.preview) .circle { background: var(--hue, #ff2f00); width: 160px; height: 160px; border-radius: 50%; }
+/* COMPONENT: shapes. A red OUTLINE rectangle / circle / oval with a transparent
+   body; type text inside and it centres in both axes. Recolour the outline with a
+   colour class, move with .place + .top-/.left-, size with .scale-. */
+:is(.reveal,.preview) :is(.rectangle, .circle, .oval) {
+  border: 3px solid var(--hue, #ff2f00);
+  background: transparent;
+  display: flex; align-items: center; justify-content: center;
+  text-align: center; padding: 0.4em 0.6em; box-sizing: border-box;
+}
+:is(.reveal,.preview) :is(.rectangle, .circle, .oval) > * { margin: 0; }
+:is(.reveal,.preview) .rectangle { width: 200px; height: 120px; border-radius: 6px; }
+:is(.reveal,.preview) .circle    { width: 170px; height: 170px; border-radius: 50%; }
+:is(.reveal,.preview) .oval      { width: 240px; height: 150px; border-radius: 50%; }
 
 /* COMPONENT: callout. The Obsidian/Quartz `> [!type] Title` syntax is converted
    to ::: {.callout .callout-type}. Each type is an alias setting the colour knobs. */

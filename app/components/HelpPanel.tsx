@@ -79,7 +79,7 @@ const DECK_SETTINGS: { key: string; val: string }[] = [
 // component, a colour and optional modifiers. Type `.` inside `{ }` or after a
 // `:::` to autocomplete from the deck's own CSS.
 const CLASS_GROUPS: { title: string; items: string }[] = [
-  { title: "Components", items: ".flare .hl .panel .bg .chip .card .cards .bignums .columns .column .callout .lead .footer .rect .circle" },
+  { title: "Components", items: ".flare .hl .panel .bg .chip .card .cards .bignums .columns .column .callout .lead .footer .rectangle .circle .oval" },
   { title: "Colours", items: ".blue .cyan .teal .green .mint .yellow .pink .mag .navy .grey" },
   { title: "Modifiers", items: ".light .dark .fast .slow .cascade-2…5 .scale-* .width-* .height-* .left .center .right .align-top .align-middle .align-bottom" },
   { title: "Callouts", items: "> [!note] / [!tip] / [!warning] / [!important]" },
@@ -110,8 +110,9 @@ const SLASH: { cmd: string; label: string }[] = [
   { cmd: "/span", label: "inline [text]{.class}" },
   { cmd: "/footer", label: "small dimmed footer line" },
   { cmd: "/place", label: "float a block (top/left %)" },
-  { cmd: "/rect", label: "red rectangle (place + scale it)" },
-  { cmd: "/circle", label: "red circle (place + scale it)" },
+  { cmd: "/rectangle", label: "red outline rectangle (label inside; place + scale)" },
+  { cmd: "/circle", label: "red outline circle (label inside; place + scale)" },
+  { cmd: "/oval", label: "red outline oval (label inside; place + scale)" },
   { cmd: "/fragment", label: "reveal one step at a time" },
   { cmd: "/incremental", label: "reveal list items one by one" },
   { cmd: "/notes", label: "speaker notes" },
