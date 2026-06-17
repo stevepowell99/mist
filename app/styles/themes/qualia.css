@@ -27,11 +27,13 @@
 
 /* Page types: deep-teal title slide with bright-teal accents; section-divider
  * h1 in the deep teal. */
-.reveal .title-page { background: var(--theme-deep); color: #fff; }
+.reveal .title-page { color: #fff; }
+.reveal .title-page:not(.has-slide-bg) { background: var(--theme-deep); }
 .reveal .title-page .headline { color: #fff; }
 .reveal .title-page .eyebrow, .reveal .title-page .headline .teal { color: #76F7FF; }
 .reveal .title-page .subhead, .reveal .title-page .byline, .reveal .title-page .contact { color: #bfe3df; }
 /* A section-divider slide (a lone #) gets a deep-teal background with light
-   text, like a mini title slide. */
-.reveal .slides section:has(> h1) { background: var(--theme-deep); color: #fff; }
+   text, like a mini title slide. A slide with its own background keeps that. */
+.reveal .slides section:has(> h1) { color: #fff; }
+.reveal .slides section:has(> h1):not(.has-slide-bg) { background: var(--theme-deep); }
 .reveal .slides section:has(> h1) > h1 { color: #fff; }

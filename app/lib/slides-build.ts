@@ -135,6 +135,10 @@ function parseHeading(line: string, ctx: AssetCtx): { heading: string; classAttr
     bg.push(`data-${key}="${val}"`);
   }
   const heading = text ? `${hashes} ${text}` : ""; // drop empty (e.g. .no-title) headings
+  // Mark a slide that sets its own background, so a theme's dark section-divider
+  // / title-page fill steps aside (:not(.has-slide-bg)) and the chosen background
+  // shows instead of being painted over on the section element.
+  if (bg.length) classes.push("has-slide-bg");
   return { heading, classAttr: classes.length ? ` class="${classes.join(" ")}"` : "", bgAttr: bg.join(" ") };
 }
 

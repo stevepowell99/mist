@@ -12,9 +12,12 @@
 
 /* Page types: the title slide stays brand-dark (so it works even when the deck
  * does not set its own background-color); section-divider h1 in the accent. */
-.reveal .title-page { background: var(--cm-dark, #1F1F36); color: #fff; }
+.reveal .title-page { color: #fff; }
+.reveal .title-page:not(.has-slide-bg) { background: var(--cm-dark, #1F1F36); }
 .reveal .title-page .eyebrow, .reveal .title-page .headline .teal { color: var(--cm-blue, #6DC4C8); }
 /* A section-divider slide (a lone #) gets a dark brand background with light
-   text, like a mini title slide. :has(> h1) targets the divider section. */
-.reveal .slides section:has(> h1) { background: var(--cm-dark, #1F1F36); color: #fff; }
+   text, like a mini title slide. :has(> h1) targets the divider section. A slide
+   with its own background (.has-slide-bg) keeps that instead of the dark fill. */
+.reveal .slides section:has(> h1) { color: #fff; }
+.reveal .slides section:has(> h1):not(.has-slide-bg) { background: var(--cm-dark, #1F1F36); }
 .reveal .slides section:has(> h1) > h1 { color: #fff; }
