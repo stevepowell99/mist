@@ -399,7 +399,10 @@ function DocumentLayout({ id }: { id: string }) {
   useEffect(() => {
     const onMsg = (e: MessageEvent) => {
       const d = e.data as { type?: string; h?: number };
-      if (d?.type === "mist-slide" && typeof d.h === "number") setDeckSlide(d.h);
+      if (d?.type === "mist-slide" && typeof d.h === "number") {
+        setDeckSlide(d.h);
+        followDeckInEditorRef.current(d.h);
+      }
     };
     window.addEventListener("message", onMsg);
     return () => window.removeEventListener("message", onMsg);
@@ -467,23 +470,37 @@ function DocumentLayout({ id }: { id: string }) {
   // 1/2/3. Panels: O outline, C comments, F Drive sidebar, / help. Resize: - =.
   // The folder and help panels own their open state, so they are toggled by a
   // custom event rather than reaching into them here.
-  // Reverse sync: move the editor cursor to the source of the slide currently
-  // shown in the preview (the deck reports it into ?slide). Held in a ref so the
-  // shortcut handler does not rebuild on every keystroke as markdown changes.
-  const syncEditorToSlideRef = useRef<() => void>(() => {});
-  syncEditorToSlideRef.current = () => {
+  // Move the editor cursor to a slide's source heading. `focus` says whether to
+  // pull focus back to the editor. y:"start" puts the heading near the top of the
+  // viewport, rather than scrollIntoView's default of the nearest edge.
+  const moveCursorToSlide = (idx: number, focus: boolean) => {
     if (!editorView) return;
-    const s = typeof window !== "undefined" ? new URL(window.location.href).searchParams.get("slide") : null;
-    const idx = s && /^\d+$/.test(s) ? Number(s) : 0;
     const pos = Math.min(offsetForSlideIndex(markdown, idx), editorView.state.doc.length);
-    // y:"start" puts the slide's heading near the top of the viewport (a small
-    // margin above), rather than scrollIntoView's default of the nearest edge,
-    // which left the heading at the very bottom when scrolling down.
     editorView.dispatch({
       selection: { anchor: pos },
       effects: EditorView.scrollIntoView(pos, { y: "start", yMargin: 48 }),
     });
-    editorView.focus();
+    if (focus) editorView.focus();
+  };
+
+  // Manual reverse sync (the gutter button and Ctrl/Cmd+Alt+G): jump to AND edit
+  // the slide currently shown in the preview (the deck reports it into ?slide).
+  // Held in a ref so the shortcut handler does not rebuild on every keystroke.
+  const syncEditorToSlideRef = useRef<() => void>(() => {});
+  syncEditorToSlideRef.current = () => {
+    const s = typeof window !== "undefined" ? new URL(window.location.href).searchParams.get("slide") : null;
+    moveCursorToSlide(s && /^\d+$/.test(s) ? Number(s) : 0, true);
+  };
+
+  // Automatic reverse sync: as the deck moves (its arrow keys, clicking a slide),
+  // follow it in the editor too, WITHOUT stealing focus. Skipped while the editor
+  // is focused, so typing (which drives the deck the other way) always wins and
+  // the cursor is never yanked mid-edit: the editor is the higher-priority side.
+  // Ref so the once-registered message listener reads the current markdown/editor.
+  const followDeckInEditorRef = useRef<(idx: number) => void>(() => {});
+  followDeckInEditorRef.current = (idx: number) => {
+    if (!editorView || editorView.hasFocus) return;
+    moveCursorToSlide(idx, false);
   };
 
   const runChord = useCallback(

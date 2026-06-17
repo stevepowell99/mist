@@ -355,7 +355,10 @@
 .reveal .bottom-0{bottom:0%}.reveal .bottom-5{bottom:5%}.reveal .bottom-10{bottom:10%}.reveal .bottom-15{bottom:15%}.reveal .bottom-20{bottom:20%}.reveal .bottom-25{bottom:25%}.reveal .bottom-30{bottom:30%}.reveal .bottom-35{bottom:35%}.reveal .bottom-40{bottom:40%}.reveal .bottom-45{bottom:45%}.reveal .bottom-50{bottom:50%}.reveal .bottom-55{bottom:55%}.reveal .bottom-60{bottom:60%}.reveal .bottom-65{bottom:65%}.reveal .bottom-70{bottom:70%}.reveal .bottom-75{bottom:75%}.reveal .bottom-80{bottom:80%}.reveal .bottom-85{bottom:85%}.reveal .bottom-90{bottom:90%}.reveal .bottom-95{bottom:95%}.reveal .bottom-100{bottom:100%}
 
 /* Deck media / code / quotes */
-.reveal section img { max-height: 60vh; margin: 0.3em 0; border-radius: 4px; }
+/* Default cap: an image never spills past the slide edge or runs taller than the
+   slide. A `.scale-*` wrapper or width=/height= still overrides intentionally. */
+.reveal section img { max-width: 100%; max-height: 72vh; margin: 0.3em 0; border-radius: 4px; }
+.preview img { max-width: 100%; height: auto; }
 .reveal code { font-size: 0.85em; background: #f4f6f9; padding: 0.1em 0.3em; border-radius: 3px; color: var(--ink); }
 .reveal blockquote { border-left: 3px solid var(--teal); background: none; padding: 0.2em 0 0.2em 0.8em; margin: 0.4em 0; font-style: italic; font-size: 0.85em; box-shadow: none; width: auto; }
 
