@@ -35,7 +35,7 @@ Background and the staged plan to converge the two are in
 | Callout | `> [!type] Title` + `> ` lines | becomes `::: {.callout .callout-type}` | `.callout.callout-type` (+ foldable `<details>`) | type set agreed (below); colour buckets differ slightly |
 | Inline span | `[text]{.class}` | yes | yes | yes |
 | Fenced div | `::: {.class}` ... `:::` | full (any classes, nesting) | partial (heading/section classes) | converge in Phase 3 |
-| Image attrs | `![alt](src){.class width=…}` | yes | yes | yes |
+| Image attrs | `![alt](src){.class width=…}` | yes (capped to the slide by default; `.scale-*` or `width=`/`height=` overrides) | yes | yes |
 | Citation | `[@key]` / bare `@key` + a `.bib` | inline APA + reference list | inline APA + reference list | yes |
 | Math | `$…$`, `$$…$$` | yes | yes (MathJax) | yes |
 | Mermaid | ` ```mermaid ` | yes | yes | yes |
