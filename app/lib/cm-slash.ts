@@ -81,12 +81,6 @@ const SLASH_COMMANDS: Completion[] = [
     "::: {.cards}\n\n- ${1}\n- ${2}\n\n:::\n\n${}",
     { label: "/cards", detail: "grid of cards (one per list item)", type: "keyword", boost: 92 },
   ),
-  snippetCompletion("::: {.card}\n\n${1}\n\n:::\n\n${}", {
-    label: "/card",
-    detail: "one card (add a colour to tint it)",
-    type: "keyword",
-    boost: 91,
-  }),
   snippetCompletion("::: {.callout .callout-${1:note}}\n\n${2}\n\n:::\n\n${}", {
     label: "/callout",
     detail: "callout box (note/tip/warning/important)",

@@ -18,9 +18,11 @@
  *
  * GRAMMAR (orthogonal axes; components READ the global knobs, the colour / scale
  * / timing classes only SET them, so a semantic name is an alias, never a look):
- *   COMPONENT .flare .hl .panel .bg .chip .card/.cards .bignum .callout .lead
+ *   COMPONENT .flare .hl .panel .chip .cards/.card .bignum .callout .lead
  *   COLOUR    .blue .cyan .teal .green .mint .yellow .orange .pink .mag .navy .grey .white .black
- *   FILL      .bg-<colour>     sets only the background (pale; + .solid for a strong fill)
+ *   FILL      .bg-<colour>     fills the background (pale; + .solid for a strong fill); on a
+ *                              bare fenced div it IS the box (padded + rounded). A plain box is
+ *                              `::: {.bg-<colour>}`; .panel adds an accent bar; .cards is the grid.
  *   BORDER    .border-<colour> draws a border in that colour (a panel keeps its left
  *             accent, a shape its outline; both just take the colour)
  *   SCALE .scale-25..500   SHADE .light/.dark   ORDER .cascade-2..5
@@ -62,7 +64,7 @@
   --c-black:#1a1a1a;  --c-black-pale:#ececec;  --c-black-deep:#000000;  --c-black-bright:#3a3a3a; --c-black-on:#fff;
   /* Global timing knobs (the TIMING axis sets these) */
   --dur: 3.8s; --ease: ease-out;
-  /* One padding for every box component (.panel, .bg, .card) and any bare
+  /* One padding for every box (.panel, .card) and any bare
      fill/border box, so they are all the same size. */
   --box-pad: 0.5em 0.75em;
 }
@@ -116,7 +118,7 @@
 :is(.reveal,.preview) .bg-black  { background: var(--c-black-pale);  --fill: var(--c-black-pale);  --text: var(--ink); }  :is(.reveal,.preview) .bg-black.solid  { background: var(--c-black);  --fill: var(--c-black);  color: var(--c-black-on);  --text: var(--c-black-on); }
 
 /* AXIS: BORDER (.border-<colour>). Draws a 2px border in that colour AND sets the
-   --border slot. On a plain box (a bare element, a .bg or .card) the 2px border
+   --border slot. On a plain box (a bare fill div or a .card) the 2px border
    shows. The components with their OWN border style (.panel's left accent, the
    shapes' thick outline) are defined later in this file and re-declare border, so
    they keep their shape and just read --border for the colour: `.panel .border-teal`
@@ -129,11 +131,11 @@
 :is(.reveal,.preview) .border-navy   { border: 2px solid var(--c-navy);   --border: var(--c-navy); }   :is(.reveal,.preview) .border-mag   { border: 2px solid var(--c-mag);   --border: var(--c-mag); }
 :is(.reveal,.preview) .border-white  { border: 2px solid var(--c-white);  --border: var(--c-white); }  :is(.reveal,.preview) .border-black { border: 2px solid var(--c-black); --border: var(--c-black); }
 
-/* A bare fill or border colour on a fenced div is a self-contained padded box,
-   so `::: {.bg-teal}` or `::: {.border-navy}` on their own look like a box. Zero
-   specificity (:where) so the .panel/.bg/.card components keep their own padding
-   when combined; inline `[text]{.bg-pink}` spans (not divs) stay untouched. */
-:where(.reveal,.preview) div:where([class*="bg-"], [class*="border-"]) { padding: var(--box-pad); }
+/* A bare fill or border colour on a fenced div IS the box: `::: {.bg-teal}` or
+   `::: {.border-navy}` on their own are a padded, rounded box. This replaces the
+   old .bg component. Zero specificity (:where) so .panel/.card keep their own
+   padding when combined; inline `[text]{.bg-pink}` spans (not divs) stay flat. */
+:where(.reveal,.preview) div:where([class*="bg-"], [class*="border-"]) { padding: var(--box-pad); border-radius: 6px; }
 
 /* AXIS: SHADE / ALIGN / TIMING */
 /* Shade also sets the text colour directly (readable on the fill), so a box
@@ -204,8 +206,7 @@
 :is(.reveal,.preview) .panel.dark > p:first-child strong:first-child,
 :is(.reveal,.preview) .panel.dark > strong:first-child { color: var(--text, #fff); }
 
-/* COMPONENT: flat tint / chip */
-:is(.reveal,.preview) .bg { background: var(--fill, var(--hue-pale, transparent)); padding: var(--box-pad); }
+/* COMPONENT: chip */
 :is(.reveal,.preview) .chip {
   display: inline-block; padding: 0.12em 0.6em; border-radius: 999px;
   font-size: 0.8em; font-weight: 700; line-height: 1.3; letter-spacing: 0.02em;
