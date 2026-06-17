@@ -22,5 +22,5 @@
 :is(.reveal,.preview) .bignum .fig { color: var(--theme-accent); }
 
 /* The wordmark is wide, so give it more room than the square default. */
-.reveal .brand { width: 22%; top: 4%; }
-.preview .brand { width: 220px; }
+.reveal .brand { width: 11%; }
+.preview .brand { width: 110px; }
