@@ -153,23 +153,23 @@ const SLASH_COMMANDS: Completion[] = [
     boost: 47,
   }),
   // Outline shapes: opens the colour picker for the outline (skip it for the
-  // default red), then the cursor lands inside for an optional centred label.
-  // Move with .top-/.left-, resize with .scale-.
-  classSnippet("::: {.rectangle .${1} .place .top-40 .left-40 .scale-75}\n\n${2}\n\n:::\n\n${}", {
+  // default red), then tab through the exact top/left % (edit for precise
+  // placement) to an optional centred label. Resize with .scale- or width/height.
+  classSnippet('::: {.rectangle .${1} .place .scale-75 style="top:${2:40}%; left:${3:40}%"}\n\n${4}\n\n:::\n\n${}', {
     label: "/rectangle",
-    detail: "outline rectangle: pick a colour, then type a label inside",
+    detail: "outline rectangle: colour, exact top/left %, label",
     type: "keyword",
     boost: 40,
   }),
-  classSnippet("::: {.circle .${1} .place .top-40 .left-40 .scale-75}\n\n${2}\n\n:::\n\n${}", {
+  classSnippet('::: {.circle .${1} .place .scale-75 style="top:${2:40}%; left:${3:40}%"}\n\n${4}\n\n:::\n\n${}', {
     label: "/circle",
-    detail: "outline circle: pick a colour, then type a label inside",
+    detail: "outline circle: colour, exact top/left %, label",
     type: "keyword",
     boost: 40,
   }),
-  classSnippet("::: {.oval .${1} .place .top-40 .left-40 .scale-75}\n\n${2}\n\n:::\n\n${}", {
+  classSnippet('::: {.oval .${1} .place .scale-75 style="top:${2:40}%; left:${3:40}%"}\n\n${4}\n\n:::\n\n${}', {
     label: "/oval",
-    detail: "outline oval: pick a colour, then type a label inside",
+    detail: "outline oval: colour, exact top/left %, label",
     type: "keyword",
     boost: 40,
   }),
