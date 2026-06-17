@@ -5,7 +5,7 @@ import { getAgentByName } from "agents";
 import { isValidDocumentId } from "~/shared/constants";
 import type { DocRole, DriveMeta } from "~/shared/types";
 import { getCloudflare } from "~/lib/cloudflare.server";
-import { mintAssetToken, mintAssetTokenForDoc, type DriveSessionEnv } from "~/lib/drive-access.server";
+import { mintAssetToken, mintAssetTokenForDoc, authorizeDoc, type DriveSessionEnv } from "~/lib/drive-access.server";
 import { EditorView } from "@codemirror/view";
 import { modAltChord } from "~/lib/chord";
 import { offsetForSlideIndex, slideIndexForOffset } from "~/lib/slide-cursor";
@@ -31,6 +31,7 @@ import NamePrompt from "~/components/NamePrompt";
 import FolderSidebar from "~/components/FolderSidebar";
 import OutlinePanel from "~/components/OutlinePanel";
 import HelpPanel from "~/components/HelpPanel";
+import GoogleSignIn from "~/components/GoogleSignIn";
 import SlidesView, { isSlideDeck } from "~/components/SlidesView";
 
 // useLayoutEffect on the client (so scroll is restored before paint, no flash),
@@ -46,7 +47,8 @@ function fileTitle(drive: DriveMeta | null, fallback: string): string {
 }
 
 export function meta({ data }: Route.MetaArgs) {
-  const title = data?.drive ? fileTitle(data.drive, "mist") : "mist";
+  const drive = data && "drive" in data ? data.drive : null;
+  const title = drive ? fileTitle(drive, "mist") : "mist";
   return [{ title: title || "mist" }];
 }
 
@@ -76,15 +78,33 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
     throw data(null, { status: 404 });
   }
 
+  // The secret link is NOT sufficient: a Drive-bound doc requires a signed-in
+  // user the file is shared with (Drive sharing is the source of truth). The
+  // same check gates the WebSocket in workers/app.ts. The effective role is the
+  // more restrictive of the link's role and the user's Drive role.
+  const auth = await authorizeDoc(env as unknown as DriveSessionEnv, request, drive, role);
+  if (auth.status === "badkey") throw data(null, { status: 404 });
+  if (auth.status === "needsAuth") return { id, gate: "needsAuth" as const };
+  if (auth.status === "forbidden") return { id, gate: "forbidden" as const };
+  const effectiveRole = auth.role ?? role;
+
   // Short-lived token so the sandboxed slides iframe (and document preview) can
-  // fetch private-Drive assets without the session cookie. A valid doc key (the
-  // secret link) is enough, so a collaborator sees styles/images with no Google
-  // account; a signed-in session also works.
+  // fetch private-Drive assets without the session cookie.
   const assetToken =
     (await mintAssetTokenForDoc(env as unknown as DriveSessionEnv, !!role)) ??
     (await mintAssetToken(request, env as unknown as DriveSessionEnv));
 
-  return { id, createdAt, role, suggestKey: suggestKey ?? null, docKey, drive, initialPreview, assetToken };
+  return {
+    id,
+    createdAt,
+    role: effectiveRole,
+    suggestKey: effectiveRole === "edit" ? suggestKey ?? null : null,
+    docKey,
+    drive,
+    initialPreview,
+    assetToken,
+    gate: null,
+  };
 }
 
 // Navbar toggle icons. Stroke-only 18px glyphs so they sit quietly in the bar.
@@ -131,7 +151,49 @@ function ToolbarToggle({
   );
 }
 
+/** The editor payload (the loader's non-gate return). */
+type EditorData = {
+  id: string;
+  createdAt: number | null;
+  role: DocRole;
+  suggestKey: string | null;
+  docKey: string | null;
+  drive: DriveMeta | null;
+  initialPreview: boolean;
+  assetToken: string | null;
+  gate: null;
+};
+
+/** Sign-in / no-access screen shown instead of the editor when the viewer is not
+ *  authorised for the file. The WebSocket is gated server-side regardless, so
+ *  this is the friendly face of that gate. */
+function DocGate({ kind }: { kind: "needsAuth" | "forbidden" }) {
+  return (
+    <div className="flex h-screen flex-col items-center justify-center gap-5 bg-paper p-6 text-center">
+      <Link to="/" className="rounded bg-ink px-3 py-1.5 font-medium text-paper hover:bg-chartreuse hover:text-[#1a1a1a]">
+        mist
+      </Link>
+      {kind === "needsAuth" ? (
+        <>
+          <p className="max-w-sm text-ink">
+            This file is private. Sign in with the Google account it is shared with to open it.
+          </p>
+          <GoogleSignIn onSignedIn={() => window.location.reload()} />
+        </>
+      ) : (
+        <p className="max-w-sm text-ink">
+          You do not have access to this file. Ask the owner to share it with your Google
+          account in Google Drive, then reload.
+        </p>
+      )}
+    </div>
+  );
+}
+
 export default function DocumentPage({ loaderData }: Route.ComponentProps) {
+  // Not authorised for this file: show the sign-in / no-access screen, never the
+  // editor (and the WebSocket is gated server-side too).
+  if (loaderData.gate) return <DocGate kind={loaderData.gate} />;
   // React Router reuses this component across /docs/X to /docs/Y navigation, so
   // key the whole subtree on the document id. This remounts DocumentRoot, which
   // OWNS the Y.Doc (in useYjsEditor). Without a fresh Y.Doc per id, the previous
@@ -149,7 +211,7 @@ function DocumentRoot({
   drive,
   initialPreview,
   assetToken,
-}: Route.ComponentProps["loaderData"]) {
+}: EditorData) {
   const yjs = useYjsEditor(id, docKey);
 
   return (

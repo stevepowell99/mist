@@ -18,7 +18,7 @@ declare global {
 
 const GSI_SRC = "https://accounts.google.com/gsi/client";
 
-export default function GoogleSignIn() {
+export default function GoogleSignIn({ onSignedIn }: { onSignedIn?: () => void } = {}) {
   const [email, setEmail] = useState<string | null>(null);
   const [clientId, setClientId] = useState<string | null>(null);
   const btnRef = useRef<HTMLDivElement>(null);
@@ -58,6 +58,7 @@ export default function GoogleSignIn() {
           if (r.ok) {
             const d = (await r.json()) as { email?: string };
             setEmail(d.email ?? null);
+            onSignedIn?.();
           }
         },
       });
@@ -82,7 +83,7 @@ export default function GoogleSignIn() {
       removed = true;
       script?.removeEventListener("load", render);
     };
-  }, [clientId, email]);
+  }, [clientId, email, onSignedIn]);
 
   const signOut = async () => {
     await fetch("/auth/logout", { method: "POST" });

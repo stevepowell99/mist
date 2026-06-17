@@ -16,7 +16,7 @@ import {
   getDriveAccessToken,
   type DriveEnv,
 } from "./google.server";
-import type { DocRole } from "~/shared/types";
+import type { DocRole, DriveMeta } from "~/shared/types";
 
 export interface DriveSessionEnv extends DriveEnv {
   SESSION_SECRET?: string;
@@ -113,6 +113,39 @@ export async function fileAccessRole(
   } catch {
     return null; // fail closed if we cannot read the sharing
   }
+}
+
+/**
+ * The single authorisation decision for OPENING / EDITING an existing document,
+ * used by both the doc loader and the WebSocket gate so they cannot drift. The
+ * secret link key alone is NOT enough: a Drive-bound doc also requires a signed-
+ * in user whom the file's own Drive sharing grants. The effective role is the
+ * more restrictive of the link's role and the user's Drive role (a suggest link
+ * stays suggest; a Drive commenter never edits, even on an edit link).
+ *
+ *  - "badkey":    the URL key matches no role on this doc.
+ *  - "needsAuth": Drive-bound, but the request carries no signed-in session.
+ *  - "forbidden": signed in, but the file's Drive sharing does not grant them.
+ *  - "ok":        allowed, with the effective role.
+ *
+ * A doc with no Drive file (legacy/unbound) has no ACL to enforce, so the key
+ * stays its only gate.
+ */
+export type DocAuthStatus = "ok" | "needsAuth" | "forbidden" | "badkey";
+export async function authorizeDoc(
+  env: DriveSessionEnv,
+  request: Request,
+  drive: DriveMeta | null,
+  keyRole: DocRole | null,
+): Promise<{ status: DocAuthStatus; role: DocRole | null; email: string | null }> {
+  if (!keyRole) return { status: "badkey", role: null, email: null };
+  if (!drive?.fileId) return { status: "ok", role: keyRole, email: null }; // unbound: key only
+  const email = await getRequestEmail(request, env);
+  if (!email) return { status: "needsAuth", role: null, email: null };
+  const driveRole = await fileAccessRole(env, drive.fileId, email);
+  if (!driveRole) return { status: "forbidden", role: null, email };
+  const role: DocRole = keyRole === "edit" ? driveRole : "suggest";
+  return { status: "ok", role, email };
 }
 
 /** 401 for no/expired session and no passphrase. */
