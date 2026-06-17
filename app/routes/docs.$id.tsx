@@ -249,6 +249,8 @@ function DocumentLayout({ id }: { id: string }) {
     toggleMode,
     role,
     drive,
+    docKey,
+    assetToken,
     bibLib,
     markdown,
     frontmatter,
@@ -679,6 +681,23 @@ function DocumentLayout({ id }: { id: string }) {
             <rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" />
           </svg>
         </button>
+        {/* Present: open the deck as a standalone page in a new tab (a real URL,
+            not the sandboxed preview), so reveal's F fullscreen and S speaker-notes
+            window work natively. Share that tab's window to keep notes private. */}
+        {deck && docKey && assetToken && (
+          <a
+            href={`/slides/${id}?k=${encodeURIComponent(docKey)}&token=${encodeURIComponent(assetToken)}`}
+            target="_blank"
+            rel="noreferrer"
+            title="Present in a new tab (F fullscreen, S speaker notes)"
+            aria-label="Present deck"
+            className="flex shrink-0 cursor-pointer items-center border-r border-border px-3 transition-colors hover:bg-border hover:text-ink"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <rect x="2" y="3" width="20" height="14" rx="2" /><path d="M8 21h8M12 17v4" /><path d="M10 8.5 14.5 11 10 13.5Z" fill="currentColor" stroke="none" />
+            </svg>
+          </a>
+        )}
         <div className="flex min-w-0 grow items-center gap-2 px-4">
           <span
             className="hidden shrink-0 rounded border border-border px-1.5 py-0.5 text-xs uppercase tracking-wider text-muted sm:inline-block"

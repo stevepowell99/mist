@@ -120,7 +120,13 @@ async function runMermaid(){
 // keyboard:{27:null} unbinds Esc so it no longer toggles overview: in fullscreen
 // the browser swallows Esc (it exits fullscreen), so leaving Esc on overview made
 // it work in one place and not the other. Overview is now O only (reveal default).
-var REVEAL_CONFIG = {plugins:revealPlugins,hash:false,controls:true,progress:true,slideNumber:${slideNumber},keyboard:{27:null},overview:true,center:false,navigationMode:'${navigationMode}',pdfSeparateFragments:${separateFragments},scrollActivationWidth:null,width:1280,height:720};
+// Embedded in the editing-preview iframe (vs the standalone /slides present
+// page). In the sandboxed preview there is no navigable deck URL, so reveal's S
+// speaker view can only open a blank popup; disable S there. On the standalone
+// page S is left to reveal so the proper speaker view (separate window) works.
+var EMBEDDED = window.parent !== window;
+var KEYBOARD = EMBEDDED ? {27:null, 83:null} : {27:null};
+var REVEAL_CONFIG = {plugins:revealPlugins,hash:false,controls:true,progress:true,slideNumber:${slideNumber},keyboard:KEYBOARD,overview:true,center:false,navigationMode:'${navigationMode}',pdfSeparateFragments:${separateFragments},scrollActivationWidth:null,width:1280,height:720};
 function relayout(){ try { Reveal.layout(); } catch (e) {} }
 // Re-run layout across a few frames. In a sandboxed iframe reveal can init
 // before the pane has its real size, leaving the deck unscaled; these catch it.
