@@ -14,8 +14,10 @@ import {
   driveRoleForEmail,
   driveRoleCanEdit,
   getDriveAccessToken,
+  driveConfigured,
   type DriveEnv,
 } from "./google.server";
+import { json } from "./http.server";
 import type { DocRole, DriveMeta } from "~/shared/types";
 
 export interface DriveSessionEnv extends DriveEnv {
@@ -47,6 +49,23 @@ export async function driveAccess(request: Request, env: DriveSessionEnv): Promi
   const token = new URL(request.url).searchParams.get("token");
   if (token && (await verifyAssetToken(token, env.SESSION_SECRET ?? ""))) return { ok: true, email: null };
   return { ok: false, email: null };
+}
+
+/**
+ * The shared opening gate for the /drive/* endpoints: a valid session (or asset
+ * token) AND Drive configured. Returns the verified access, or an error Response
+ * to return as-is, so each route drops the repeated four-line preamble. Routes
+ * with their own bespoke flow (per-file ACL, key-gated folder listing) still call
+ * the finer-grained helpers directly.
+ */
+export async function openDriveRequest(
+  request: Request,
+  env: DriveSessionEnv,
+): Promise<{ access: DriveAccess } | { error: Response }> {
+  const access = await driveAccess(request, env);
+  if (!access.ok) return { error: driveUnauthenticated() };
+  if (!driveConfigured(env)) return { error: json({ error: "Drive not configured" }, 501) };
+  return { access };
 }
 
 /**

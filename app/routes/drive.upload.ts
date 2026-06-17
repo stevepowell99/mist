@@ -1,25 +1,14 @@
 import type { Route } from "./+types/drive.upload";
 import { getCloudflare } from "~/lib/cloudflare.server";
 import {
-  driveConfigured,
   getDriveAccessToken,
   driveGetMeta,
   driveCreateBinary,
   driveEnsureSubfolder,
 } from "~/lib/google.server";
-import { driveAccess, canAccessFile, driveUnauthenticated, driveForbidden } from "~/lib/drive-access.server";
-
-function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
-}
-
-const EXT: Record<string, string> = {
-  "image/png": "png",
-  "image/jpeg": "jpg",
-  "image/gif": "gif",
-  "image/webp": "webp",
-  "image/svg+xml": "svg",
-};
+import { openDriveRequest, canAccessFile, driveForbidden } from "~/lib/drive-access.server";
+import { json } from "~/lib/http.server";
+import { EXT_BY_MIME } from "~/lib/mime";
 
 const MAX_BYTES = 10 * 1024 * 1024; // 10 MB
 
@@ -33,9 +22,9 @@ const MAX_BYTES = 10 * 1024 * 1024; // 10 MB
 export async function action({ request, context }: Route.ActionArgs) {
   if (request.method !== "POST") return json({ error: "method not allowed" }, 405);
   const { env } = getCloudflare(context);
-  const access = await driveAccess(request, env);
-  if (!access.ok) return driveUnauthenticated();
-  if (!driveConfigured(env)) return json({ error: "Drive not configured" }, 501);
+  const gate = await openDriveRequest(request, env);
+  if ("error" in gate) return gate.error;
+  const { access } = gate;
 
   const deck = new URL(request.url).searchParams.get("deck");
   if (!deck) return json({ error: "deck (file id) required" }, 400);
@@ -54,7 +43,7 @@ export async function action({ request, context }: Route.ActionArgs) {
     const folder = meta.parents?.[0];
     if (!folder) return json({ error: "document has no folder" }, 404);
     const imgFolder = await driveEnsureSubfolder(token, folder, "img");
-    const ext = EXT[mime] ?? "png";
+    const ext = EXT_BY_MIME[mime] ?? "png";
     const name = `pasted-${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 4)}.${ext}`;
     await driveCreateBinary(token, imgFolder, name, mime, bytes);
     return json({ path: `img/${name}` }, 201);

@@ -1,14 +1,13 @@
 import type { Route } from "./+types/drive.bib";
 import { getCloudflare } from "~/lib/cloudflare.server";
 import {
-  driveConfigured,
   getDriveAccessToken,
   driveListFolder,
   driveGetMeta,
   driveDownload,
   driveResolvePath,
 } from "~/lib/google.server";
-import { driveAccess, driveUnauthenticated } from "~/lib/drive-access.server";
+import { openDriveRequest } from "~/lib/drive-access.server";
 
 const isBib = (n: string) => /\.bib$/i.test(n);
 
@@ -35,8 +34,8 @@ async function bibsInFolder(token: string, folderId: string): Promise<string[]> 
  */
 export async function loader({ request, context }: Route.LoaderArgs) {
   const { env } = getCloudflare(context);
-  if (!(await driveAccess(request, env)).ok) return driveUnauthenticated();
-  if (!driveConfigured(env)) return new Response("Drive not configured", { status: 501 });
+  const gate = await openDriveRequest(request, env);
+  if ("error" in gate) return gate.error;
 
   const folder = new URL(request.url).searchParams.get("folder");
   if (!folder) return new Response("missing folder", { status: 400 });

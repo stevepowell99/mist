@@ -1,7 +1,7 @@
 import type { Route } from "./+types/drive.library-save";
 import { getCloudflare } from "~/lib/cloudflare.server";
-import { driveConfigured, getDriveAccessToken, driveCreateFile } from "~/lib/google.server";
-import { driveAccess, driveUnauthenticated } from "~/lib/drive-access.server";
+import { getDriveAccessToken, driveCreateFile } from "~/lib/google.server";
+import { openDriveRequest } from "~/lib/drive-access.server";
 import { getLibraryFolders, type LibraryEnv } from "~/lib/library.server";
 
 /**
@@ -13,9 +13,8 @@ import { getLibraryFolders, type LibraryEnv } from "~/lib/library.server";
 export async function action({ request, context }: Route.ActionArgs) {
   if (request.method !== "POST") return Response.json({ error: "method not allowed" }, { status: 405 });
   const { env } = getCloudflare(context) as { env: LibraryEnv };
-  const access = await driveAccess(request, env);
-  if (!access.ok) return driveUnauthenticated();
-  if (!driveConfigured(env)) return Response.json({ error: "Drive not configured" }, { status: 501 });
+  const gate = await openDriveRequest(request, env);
+  if ("error" in gate) return gate.error;
 
   let body: { name?: string; markdown?: string };
   try {

@@ -1,7 +1,7 @@
 import type { Route } from "./+types/drive.fragment";
 import { getCloudflare } from "~/lib/cloudflare.server";
-import { driveConfigured, getDriveAccessToken, driveDownload } from "~/lib/google.server";
-import { driveAccess, canAccessFile, driveUnauthenticated, driveForbidden } from "~/lib/drive-access.server";
+import { getDriveAccessToken, driveDownload } from "~/lib/google.server";
+import { openDriveRequest, canAccessFile, driveForbidden } from "~/lib/drive-access.server";
 import { isInLibrary, type LibraryEnv } from "~/lib/library.server";
 import { stripMistBanner } from "~/shared/mist-banner";
 
@@ -16,9 +16,9 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   if (!id) return Response.json({ error: "missing id" }, { status: 400 });
 
   const { env } = getCloudflare(context) as { env: LibraryEnv };
-  const access = await driveAccess(request, env);
-  if (!access.ok) return driveUnauthenticated();
-  if (!driveConfigured(env)) return Response.json({ error: "Drive not configured" }, { status: 501 });
+  const gate = await openDriveRequest(request, env);
+  if ("error" in gate) return gate.error;
+  const { access } = gate;
 
   try {
     const token = await getDriveAccessToken(env);

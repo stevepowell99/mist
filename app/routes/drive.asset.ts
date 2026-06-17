@@ -1,33 +1,14 @@
 import type { Route } from "./+types/drive.asset";
 import { getCloudflare } from "~/lib/cloudflare.server";
 import {
-  driveConfigured,
   getDriveAccessToken,
   driveGetMeta,
   driveResolvePath,
   driveDownload,
 } from "~/lib/google.server";
-import { driveAccess, canAccessFile, driveUnauthenticated, driveForbidden } from "~/lib/drive-access.server";
+import { openDriveRequest, canAccessFile, driveForbidden } from "~/lib/drive-access.server";
 import { isInLibrary, type LibraryEnv } from "~/lib/library.server";
-
-const MIME: Record<string, string> = {
-  css: "text/css",
-  js: "text/javascript",
-  png: "image/png",
-  jpg: "image/jpeg",
-  jpeg: "image/jpeg",
-  gif: "image/gif",
-  webp: "image/webp",
-  svg: "image/svg+xml",
-  woff: "font/woff",
-  woff2: "font/woff2",
-  ttf: "font/ttf",
-};
-
-function mimeFor(path: string): string {
-  const ext = path.split(".").pop()?.toLowerCase() ?? "";
-  return MIME[ext] ?? "application/octet-stream";
-}
+import { mimeForPath } from "~/lib/mime";
 
 /**
  * Stream a deck's relative asset (CSS, image, font) from Drive through the relay
@@ -37,9 +18,9 @@ function mimeFor(path: string): string {
 export async function loader({ request, context }: Route.LoaderArgs) {
   const url = new URL(request.url);
   const { env } = getCloudflare(context) as { env: LibraryEnv };
-  const access = await driveAccess(request, env);
-  if (!access.ok) return driveUnauthenticated();
-  if (!driveConfigured(env)) return new Response("Drive not configured", { status: 501 });
+  const gate = await openDriveRequest(request, env);
+  if ("error" in gate) return gate.error;
+  const { access } = gate;
 
   // id-mode: a shared-library image by Drive id, so the same image is reusable
   // across decks. Two MANDATORY constraints keep this from being a read-any-file
@@ -50,7 +31,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     try {
       const token = await getDriveAccessToken(env);
       const meta = await driveGetMeta(token, id);
-      const mime = mimeFor(meta.name);
+      const mime = mimeForPath(meta.name);
       if (!mime.startsWith("image/")) return new Response("not a library image", { status: 403 });
       if (!(await isInLibrary(token, env, id))) return driveForbidden();
       const body = await driveDownload(token, id);
@@ -79,7 +60,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     const body = await driveDownload(token, fileId);
     return new Response(body, {
       headers: {
-        "Content-Type": mimeFor(path),
+        "Content-Type": mimeForPath(path),
         // Short cache: edited stylesheets should reappear without a long wait.
         "Cache-Control": "public, max-age=60",
       },

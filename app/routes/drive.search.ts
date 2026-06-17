@@ -1,14 +1,13 @@
 import type { Route } from "./+types/drive.search";
 import { getCloudflare } from "~/lib/cloudflare.server";
 import {
-  driveConfigured,
   getDriveAccessToken,
   driveFiles,
   driveTrail,
   type DriveKind,
   type DriveSearchEntry,
 } from "~/lib/google.server";
-import { driveAccess, driveUnauthenticated } from "~/lib/drive-access.server";
+import { openDriveRequest } from "~/lib/drive-access.server";
 
 export interface SearchResult {
   id: string;
@@ -56,11 +55,8 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     // Search runs as the relay over its own tree, so it cannot be scoped per file
     // without a permission call per result. v1 gates it behind a valid session;
     // opening a specific file IS enforced per-file in drive.import.
-    const access = await driveAccess(request, env);
-    if (!access.ok) return driveUnauthenticated();
-    if (!driveConfigured(env)) {
-      return Response.json({ error: "Drive not configured" }, { status: 501 });
-    }
+    const gate = await openDriveRequest(request, env);
+    if ("error" in gate) return gate.error;
 
     const url = new URL(request.url);
     const q = (url.searchParams.get("q") ?? "").trim();

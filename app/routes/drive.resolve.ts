@@ -1,11 +1,8 @@
 import type { Route } from "./+types/drive.resolve";
 import { getCloudflare } from "~/lib/cloudflare.server";
-import { driveConfigured, getDriveAccessToken, driveGetMeta, driveResolvePath } from "~/lib/google.server";
-import { driveAccess, canAccessFile, driveUnauthenticated, driveForbidden } from "~/lib/drive-access.server";
-
-function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
-}
+import { getDriveAccessToken, driveGetMeta, driveResolvePath } from "~/lib/google.server";
+import { openDriveRequest, canAccessFile, driveForbidden } from "~/lib/drive-access.server";
+import { json } from "~/lib/http.server";
 
 /**
  * Resolve a source deck's relative image paths to Drive file ids, so a slide
@@ -17,9 +14,9 @@ function json(body: unknown, status = 200) {
 export async function action({ request, context }: Route.ActionArgs) {
   if (request.method !== "POST") return json({ error: "method not allowed" }, 405);
   const { env } = getCloudflare(context);
-  const access = await driveAccess(request, env);
-  if (!access.ok) return driveUnauthenticated();
-  if (!driveConfigured(env)) return json({ error: "Drive not configured" }, 501);
+  const gate = await openDriveRequest(request, env);
+  if ("error" in gate) return gate.error;
+  const { access } = gate;
 
   let body: { deck?: string; paths?: string[] };
   try {

@@ -5,21 +5,14 @@ import { getCloudflare } from "~/lib/cloudflare.server";
 import { deserializeThreads, serializeThreads } from "~/lib/thread-serialization";
 import { DriveBackend } from "~/lib/backend.server";
 import {
-  driveConfigured,
   getDriveAccessToken,
   driveGetMeta,
   parseDriveFileId,
 } from "~/lib/google.server";
 import type { DriveMeta } from "~/shared/types";
 import { stripMistBanner } from "~/shared/mist-banner";
-import { driveAccess, fileAccessRole, driveUnauthenticated, driveForbidden } from "~/lib/drive-access.server";
-
-function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
-}
+import { openDriveRequest, fileAccessRole, driveForbidden } from "~/lib/drive-access.server";
+import { json } from "~/lib/http.server";
 
 /**
  * Open a Google Drive markdown file into a new mist document, seeded from the
@@ -31,11 +24,9 @@ export async function action({ request, context }: Route.ActionArgs) {
   if (request.method !== "POST") return json({ error: "method not allowed" }, 405);
 
   const { env } = getCloudflare(context);
-  const access = await driveAccess(request, env);
-  if (!access.ok) return driveUnauthenticated();
-  if (!driveConfigured(env)) {
-    return json({ error: "Drive is not configured on this server" }, 501);
-  }
+  const gate = await openDriveRequest(request, env);
+  if ("error" in gate) return gate.error;
+  const { access } = gate;
 
   let payload: { url?: string };
   try {

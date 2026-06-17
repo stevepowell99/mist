@@ -1,7 +1,7 @@
 import type { Route } from "./+types/drive.library";
 import { getCloudflare } from "~/lib/cloudflare.server";
-import { driveConfigured, getDriveAccessToken } from "~/lib/google.server";
-import { driveAccess, driveUnauthenticated } from "~/lib/drive-access.server";
+import { getDriveAccessToken } from "~/lib/google.server";
+import { openDriveRequest } from "~/lib/drive-access.server";
 import { getLibraryFolders, type LibraryEnv } from "~/lib/library.server";
 
 /**
@@ -11,9 +11,8 @@ import { getLibraryFolders, type LibraryEnv } from "~/lib/library.server";
  */
 export async function loader({ request, context }: Route.LoaderArgs) {
   const { env } = getCloudflare(context) as { env: LibraryEnv };
-  const access = await driveAccess(request, env);
-  if (!access.ok) return driveUnauthenticated();
-  if (!driveConfigured(env)) return Response.json({ configured: false, error: "Drive not configured" }, { status: 501 });
+  const gate = await openDriveRequest(request, env);
+  if ("error" in gate) return gate.error;
 
   try {
     const token = await getDriveAccessToken(env);

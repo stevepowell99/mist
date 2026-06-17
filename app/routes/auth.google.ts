@@ -7,13 +7,7 @@ import {
   readSessionCookie,
   sessionCookieHeader,
 } from "~/lib/session.server";
-
-function json(body: unknown, status = 200, headers: Record<string, string> = {}) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json", ...headers },
-  });
-}
+import { json } from "~/lib/http.server";
 
 /** GET: the current signed-in email (for the UI to reflect sign-in state). */
 export async function loader({ request, context }: Route.LoaderArgs) {
