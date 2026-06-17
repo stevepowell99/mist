@@ -8,9 +8,10 @@
 	"observability": {
 		"enabled": true
 	},
-	// Drive folder id of the reusable slide/image library (the parent of the
-	// `slides/` and `images/` subfolders). Set the real id here or in the
-	// dashboard; empty means the library gallery is off. Not secret.
+	// Optional override of the slide/image library folder id. The normal place to
+	// set it is the DEFAULT_LIBRARY_FOLDER_ID constant in app/lib/library.server.ts
+	// (it is just a folder id, not a secret). This var, if non-empty, wins for this
+	// deployment.
 	"vars": {
 		"LIBRARY_FOLDER_ID": ""
 	},

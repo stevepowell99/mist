@@ -301,9 +301,11 @@ export default function LibraryGallery() {
           {error && <p className="text-sm text-coral">{error}</p>}
           {configured === false && (
             <p className="text-sm text-muted">
-              No library is configured. Set <span className="font-mono text-ink">LIBRARY_FOLDER_ID</span> to a Drive
-              folder with <span className="font-mono text-ink">slides/</span> and{" "}
-              <span className="font-mono text-ink">images/</span> subfolders.
+              No library is configured. Set{" "}
+              <span className="font-mono text-ink">DEFAULT_LIBRARY_FOLDER_ID</span> in{" "}
+              <span className="font-mono text-ink">app/lib/library.server.ts</span> to a Drive folder with{" "}
+              <span className="font-mono text-ink">slides/</span> and <span className="font-mono text-ink">images/</span>{" "}
+              subfolders.
             </p>
           )}
           {folderMissing && (

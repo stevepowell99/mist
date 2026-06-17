@@ -17,9 +17,18 @@ export interface LibraryFolders {
   images: string | null;
 }
 
+/**
+ * The library's Drive folder id (the parent of `slides/` and `images/`). This is
+ * just a folder id, not a secret, so the single source of truth is this constant
+ * in the repo: set it here and deploy, no worker var or dashboard needed. The
+ * LIBRARY_FOLDER_ID env var, if set, overrides it for a given deployment. Empty
+ * in both means the library gallery is off.
+ */
+const DEFAULT_LIBRARY_FOLDER_ID = "";
+
 /** The configured library root id, or "" when the library is off. */
 export function libraryRoot(env: LibraryEnv): string {
-  return (env.LIBRARY_FOLDER_ID ?? "").trim();
+  return (env.LIBRARY_FOLDER_ID ?? "").trim() || DEFAULT_LIBRARY_FOLDER_ID;
 }
 
 /** Resolve the library root and its `slides/` + `images/` subfolders (by name).
