@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 /**
  * Keyboard shortcuts and tips, opened by the ? button (bottom-right) or
@@ -6,6 +6,10 @@ import { useEffect, useState } from "react";
  * layout just renders it once. The listed layout shortcuts mirror the mod+alt
  * handlers in docs.$id.tsx and FolderSidebar; the editor ones come from the
  * CodeMirror keymaps (cm-shortcuts, search, fold).
+ *
+ * Once per browser session it auto-shows on load, then flies down to the ? button
+ * and pulses it a few times, so a first-time viewer learns where help lives. The
+ * session flag keeps it from re-firing on every doc the owner opens.
  */
 
 const MOD = "Ctrl/⌘";
@@ -52,7 +56,8 @@ const EDITOR: Shortcut[] = [
 const SLIDES: Shortcut[] = [
   { keys: [MOD, "S"], label: "Rebuild preview now (or Ctrl/⌘ Enter)" },
   { keys: ["F"], label: "Fullscreen the deck" },
-  { keys: ["Esc"], label: "Overview of all slides" },
+  { keys: ["Esc"], label: "Exit fullscreen" },
+  { keys: ["O"], label: "Overview of all slides" },
   { keys: ["S"], label: "Speaker notes" },
   { keys: ["←", "→"], label: "Previous / next slide" },
 ];
@@ -156,12 +161,64 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
 export default function HelpPanel() {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<"shortcuts" | "styling">("shortcuts");
+  // auto: this is the once-a-session intro (no dark backdrop, flies to the
+  // button). flyOut: mid-flight to the corner. pulse: ring the button after.
+  const [auto, setAuto] = useState(false);
+  const [flyOut, setFlyOut] = useState(false);
+  const [pulse, setPulse] = useState(false);
+  const introTimers = useRef<number[]>([]);
+
+  const clearIntro = useCallback(() => {
+    introTimers.current.forEach((t) => clearTimeout(t));
+    introTimers.current = [];
+  }, []);
+
+  // Any deliberate open/close ends the intro and its timers, so a click or a
+  // shortcut never gets yanked away mid-read.
+  const dismiss = useCallback(() => {
+    clearIntro();
+    setAuto(false);
+    setFlyOut(false);
+    setOpen(false);
+  }, [clearIntro]);
+
+  // Auto-intro, gated to once per browser session.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    let shown = true;
+    try {
+      shown = sessionStorage.getItem("mistHelpIntroShown") === "1";
+      sessionStorage.setItem("mistHelpIntroShown", "1");
+    } catch {
+      shown = true; // no storage: skip rather than nag every load
+    }
+    if (shown) return;
+    setAuto(true);
+    setOpen(true);
+    introTimers.current = [
+      window.setTimeout(() => setFlyOut(true), 3200),
+      window.setTimeout(() => {
+        setOpen(false);
+        setFlyOut(false);
+        setAuto(false);
+        setPulse(true);
+      }, 3700),
+      window.setTimeout(() => setPulse(false), 6600),
+    ];
+    return clearIntro;
+  }, [clearIntro]);
 
   useEffect(() => {
     // Toggled by the layout's shortcut handler (Ctrl/Cmd+Alt+/, from any focus).
-    const toggle = () => setOpen((v) => !v);
+    const toggle = () => {
+      clearIntro();
+      setAuto(false);
+      setFlyOut(false);
+      setPulse(false);
+      setOpen((v) => !v);
+    };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") dismiss();
     };
     window.addEventListener("mist-toggle-help", toggle);
     window.addEventListener("keydown", onKey);
@@ -169,16 +226,22 @@ export default function HelpPanel() {
       window.removeEventListener("mist-toggle-help", toggle);
       window.removeEventListener("keydown", onKey);
     };
-  }, []);
+  }, [clearIntro, dismiss]);
 
   return (
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          clearIntro();
+          setAuto(false);
+          setFlyOut(false);
+          setPulse(false);
+          setOpen(true);
+        }}
         title="Shortcuts & tips (Ctrl/Cmd+Alt+/)"
         aria-label="Help"
-        className="fixed bottom-4 right-4 z-40 flex h-9 w-9 cursor-pointer items-center justify-center rounded-full bg-ink text-paper shadow-lg transition-colors hover:bg-chartreuse hover:text-[#1a1a1a]"
+        className={`fixed bottom-4 right-4 z-40 flex h-9 w-9 cursor-pointer items-center justify-center rounded-full bg-ink text-paper shadow-lg transition-colors hover:bg-chartreuse hover:text-[#1a1a1a] ${pulse ? "mist-help-pulse" : ""}`}
       >
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3" />
@@ -188,14 +251,17 @@ export default function HelpPanel() {
 
       {open && (
         <div
-          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4"
-          onClick={() => setOpen(false)}
+          className={`fixed inset-0 z-[70] flex items-center justify-center p-4 transition-colors duration-500 ${auto ? "bg-transparent" : "bg-black/40"}`}
+          onClick={dismiss}
         >
           <div
             role="dialog"
             aria-label="Keyboard shortcuts and tips"
             onClick={(e) => e.stopPropagation()}
-            className="max-h-[85vh] w-full max-w-3xl overflow-y-auto rounded-lg border border-border bg-paper shadow-2xl"
+            style={{ transformOrigin: "bottom right" }}
+            className={`max-h-[85vh] w-full max-w-3xl overflow-y-auto rounded-lg border border-border bg-paper shadow-2xl transition-all duration-500 ease-in ${
+              flyOut ? "translate-x-[38vw] translate-y-[42vh] scale-[0.15] opacity-0" : "translate-x-0 translate-y-0 scale-100 opacity-100"
+            }`}
           >
             <div className="flex items-center justify-between border-b border-border px-5 py-3">
               <div className="flex items-center gap-1">
@@ -209,7 +275,7 @@ export default function HelpPanel() {
               </div>
               <button
                 type="button"
-                onClick={() => setOpen(false)}
+                onClick={dismiss}
                 aria-label="Close"
                 className="cursor-pointer px-2 text-xl leading-none text-muted hover:text-ink"
               >

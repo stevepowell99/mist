@@ -551,6 +551,15 @@ body {
 .panel-slide-left { animation: panel-in-left 0.32s ease-out; }
 .panel-slide-right { animation: panel-in-right 0.32s ease-out; }
 
+/* The ? help button rings a few times after the once-a-session intro flies into
+   it, so a new viewer's eye lands on where help now lives. */
+@keyframes mist-help-pulse {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-chartreuse) 70%, transparent); }
+  70% { box-shadow: 0 0 0 12px color-mix(in srgb, var(--color-chartreuse) 0%, transparent); }
+  100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-chartreuse) 0%, transparent); }
+}
+.mist-help-pulse { animation: mist-help-pulse 1s ease-out 3; }
+
 /* Wide gamut accents */
 @supports (color: color(display-p3 1 0 0)) {
   :root {
