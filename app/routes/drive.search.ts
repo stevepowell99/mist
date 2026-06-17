@@ -69,7 +69,10 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 
     const token = await getDriveAccessToken(env);
     const fullText = url.searchParams.get("full") === "1";
-    const entries = await driveFiles(token, { nameQuery: q || undefined, folderId: folder, types, fullText });
+    // Listing a folder with no query (the library gallery browse) returns the
+    // whole folder; a name search stays a short relevant list.
+    const limit = folder && !q ? 1000 : 30;
+    const entries = await driveFiles(token, { nameQuery: q || undefined, folderId: folder, types, fullText, limit });
     // When browsing a folder, also return its trail (top -> current) so the
     // panel can show a clickable breadcrumb and walk up.
     let folderInfo: { trail: { id: string; name: string }[] } | null = null;

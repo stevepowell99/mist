@@ -396,7 +396,7 @@ async function resolveFolderPath(
  */
 export async function driveFiles(
   token: string,
-  opts: { nameQuery?: string; folderId?: string; types?: DriveKind[]; fullText?: boolean },
+  opts: { nameQuery?: string; folderId?: string; types?: DriveKind[]; fullText?: boolean; limit?: number },
 ): Promise<DriveSearchEntry[]> {
   const clauses = ["trashed = false"];
   if (opts.folderId) clauses.push(`'${escapeQ(opts.folderId)}' in parents`);
@@ -409,10 +409,13 @@ export async function driveFiles(
   const typeParts = (opts.types ?? []).map((t) => KIND_CLAUSE[t]).filter(Boolean);
   if (typeParts.length) clauses.push(`(${typeParts.join(" or ")})`);
 
+  // Cap the total fetched: a name search wants a short relevant list, but a
+  // folder listing (the library gallery) must return everything in the folder.
+  const limit = opts.limit ?? 30;
   const params = new URLSearchParams({
     q: clauses.join(" and "),
-    fields: "files(id,name,mimeType,webViewLink,parents)",
-    pageSize: "30",
+    fields: "nextPageToken,files(id,name,mimeType,webViewLink,parents)",
+    pageSize: String(Math.min(limit, 100)),
     supportsAllDrives: "true",
     includeItemsFromAllDrives: "true",
   });
@@ -421,18 +424,29 @@ export async function driveFiles(
   if (!(opts.fullText && opts.nameQuery)) {
     params.set("orderBy", opts.nameQuery || opts.folderId ? "folder,name" : "viewedByMeTime desc");
   }
-  const res = await fetch(`${DRIVE}/files?${params.toString()}`, { headers: authHeaders(token) });
-  if (!res.ok) throw new Error(`Drive search failed (${res.status}): ${(await res.text()).slice(0, 200)}`);
-  const body = (await res.json()) as {
-    files: { id: string; name: string; mimeType: string; webViewLink?: string; parents?: string[] }[];
-  };
+
+  // Page through results until we reach the limit or run out (Drive caps a page
+  // at 100 with these fields, so a folder of 100+ items needs several requests).
+  const raw: { id: string; name: string; mimeType: string; webViewLink?: string; parents?: string[] }[] = [];
+  let pageToken: string | undefined;
+  do {
+    if (pageToken) params.set("pageToken", pageToken);
+    const res = await fetch(`${DRIVE}/files?${params.toString()}`, { headers: authHeaders(token) });
+    if (!res.ok) throw new Error(`Drive search failed (${res.status}): ${(await res.text()).slice(0, 200)}`);
+    const body = (await res.json()) as {
+      nextPageToken?: string;
+      files: { id: string; name: string; mimeType: string; webViewLink?: string; parents?: string[] }[];
+    };
+    raw.push(...body.files);
+    pageToken = body.nextPageToken;
+  } while (pageToken && raw.length < limit);
 
   // The markdown clause (name contains '.md') over-matches (e.g. "x.md.json"),
   // so re-check the classified kind against the requested types and drop misses.
   const wanted = opts.types && opts.types.length ? new Set(opts.types) : null;
   const cache = new Map<string, { name: string; parent?: string }>();
   const entries: DriveSearchEntry[] = [];
-  for (const f of body.files) {
+  for (const f of raw) {
     const kind = driveKind(f.mimeType, f.name);
     if (wanted && !wanted.has(kind)) continue;
     const { path, trail } = await resolveFolderPath(token, f.parents, cache);
