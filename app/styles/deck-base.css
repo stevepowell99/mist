@@ -177,6 +177,22 @@
 :is(.reveal,.preview) .bignum .fig small { font-size: 0.4em; font-weight: 700; }
 :is(.reveal,.preview) .bignum .bn-body p, :is(.reveal,.preview) .bignum p { margin: 0.15em 0; line-height: 1.35; }
 
+/* COMPONENT: bignums. The simple way: a plain list where each item starts with
+   the figure in **bold**, which is enlarged onto its own line above the text. No
+   nesting. e.g.  ::: {.bignums}  - **87%** of people said ...  :::  */
+:is(.reveal,.preview) .bignums ul, :is(.reveal,.preview) .bignums ol { list-style: none; margin: 0.4em 0; padding: 0; }
+:is(.reveal,.preview) .bignums li { margin: 0.5em 0; line-height: 1.35; }
+:is(.reveal,.preview) .bignums li > strong:first-child,
+:is(.reveal,.preview) .bignums li > p:first-child > strong:first-child {
+  display: block; font-size: 2.4em; font-weight: 800; line-height: 1; color: var(--bignum-fig, var(--teal-dark));
+}
+
+/* COMPONENT: shapes (decoration). A solid red rectangle / circle by default;
+   recolour with a colour class, move with .place + .top-/.left-, size with
+   .scale-. Empty on purpose: ::: {.rect .place .top-40 .left-40 .scale-75} ::: */
+:is(.reveal,.preview) .rect { background: var(--hue, #ff2f00); width: 200px; height: 120px; border-radius: 4px; }
+:is(.reveal,.preview) .circle { background: var(--hue, #ff2f00); width: 160px; height: 160px; border-radius: 50%; }
+
 /* COMPONENT: callout. The Obsidian/Quartz `> [!type] Title` syntax is converted
    to ::: {.callout .callout-type}. Each type is an alias setting the colour knobs. */
 :is(.reveal,.preview) .callout {

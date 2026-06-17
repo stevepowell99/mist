@@ -90,8 +90,8 @@ const SLASH_COMMANDS: Completion[] = [
     boost: 90,
   }),
   snippetCompletion(
-    "::: {.bignum}\n\n::: {.fig}\n${1:90}<small>${2:%}</small>\n:::\n\n::: {.bn-body}\n${3}\n:::\n\n:::\n\n${}",
-    { label: "/bignum", detail: "big headline figure beside a note", type: "keyword", boost: 45 },
+    "::: {.bignums}\n\n- **${1}** ${2}\n- **${3}** ${4}\n\n:::\n\n${}",
+    { label: "/bignums", detail: "list of big figures (bold figure, then a note)", type: "keyword", boost: 45 },
   ),
   snippetCompletion("[${1:footer text}]{.footer}${}", {
     label: "/footer",
@@ -150,6 +150,20 @@ const SLASH_COMMANDS: Completion[] = [
     detail: "insert an image by path",
     type: "keyword",
     boost: 47,
+  }),
+  // Red shapes: inserted centred-ish at 75% so something visible appears; move
+  // with .top-/.left- and resize with .scale-, recolour with a colour class.
+  snippetCompletion("::: {.rect .place .top-40 .left-40 .scale-75}\n:::\n\n${}", {
+    label: "/rect",
+    detail: "red rectangle (move with .top-/.left-, size with .scale-)",
+    type: "keyword",
+    boost: 40,
+  }),
+  snippetCompletion("::: {.circle .place .top-40 .left-40 .scale-75}\n:::\n\n${}", {
+    label: "/circle",
+    detail: "red circle (move with .top-/.left-, size with .scale-)",
+    type: "keyword",
+    boost: 40,
   }),
   // Not a snippet: removes the fenced div around the cursor (opener + matching
   // closer), keeping the content. See unwrapDivAtCursor.

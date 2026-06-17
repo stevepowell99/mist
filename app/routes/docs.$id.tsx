@@ -704,19 +704,6 @@ function DocumentLayout({ id }: { id: string }) {
             <line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" />
           </svg>
         </button>
-        {deck && (
-          <button
-            type="button"
-            onClick={() => syncEditorToSlideRef.current()}
-            title="Jump editor to the current slide (Ctrl/Cmd+Alt+G)"
-            aria-label="Jump editor to current slide"
-            className="flex shrink-0 cursor-pointer items-center border-r border-border px-3 transition-colors hover:bg-border hover:text-ink"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <circle cx="12" cy="12" r="7" /><line x1="12" y1="1" x2="12" y2="4" /><line x1="12" y1="20" x2="12" y2="23" /><line x1="1" y1="12" x2="4" y2="12" /><line x1="20" y1="12" x2="23" y2="12" />
-            </svg>
-          </button>
-        )}
         <button
           type="button"
           onClick={() => window.dispatchEvent(new CustomEvent("mist-toggle-library"))}
@@ -904,12 +891,30 @@ function DocumentLayout({ id }: { id: string }) {
             >
               {/* widen the grab target a few px into each pane */}
               <span className="absolute inset-y-0 -left-1 -right-1" />
-              {/* grip dots so the handle is findable */}
-              <span className="pointer-events-none flex flex-col gap-1 opacity-50 group-hover:opacity-90">
-                <span className="h-1 w-1 rounded-full bg-ink" />
-                <span className="h-1 w-1 rounded-full bg-ink" />
-                <span className="h-1 w-1 rounded-full bg-ink" />
-              </span>
+              {deck ? (
+                /* On a deck, a left-arrow on the divider moves the editor to the
+                   slide shown on the right. stopPropagation so it does not start a
+                   drag. Replaces the old navbar jump icon. */
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={() => syncEditorToSlideRef.current()}
+                  title="Move the editor to the slide shown here (Ctrl/Cmd+Alt+G)"
+                  aria-label="Jump editor to current slide"
+                  className="absolute z-20 flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border border-border bg-paper text-muted shadow hover:text-ink"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="m15 18-6-6 6-6" />
+                  </svg>
+                </button>
+              ) : (
+                /* grip dots so the handle is findable */
+                <span className="pointer-events-none flex flex-col gap-1 opacity-50 group-hover:opacity-90">
+                  <span className="h-1 w-1 rounded-full bg-ink" />
+                  <span className="h-1 w-1 rounded-full bg-ink" />
+                  <span className="h-1 w-1 rounded-full bg-ink" />
+                </span>
+              )}
             </div>
           )}
           {(splitOpen || slidesFull) && (
