@@ -54,11 +54,11 @@ const SLASH_COMMANDS: Completion[] = [
     },
   },
   snippetCompletion(
-    ':::: {.columns}\n\n::: {.column width="50%"}\n${left}\n:::\n\n::: {.column width="50%"}\n${right}\n:::\n\n::::\n\n${}',
+    ':::: {.columns}\n\n::: {.column width="50%"}\n${1}\n:::\n\n::: {.column width="50%"}\n${2}\n:::\n\n::::\n\n${}',
     { label: "/columns", detail: "two columns (50/50)", type: "keyword", boost: 99 },
   ),
   snippetCompletion(
-    '::: {.column width="${1:50}%"}\n\n${content}\n\n:::\n\n${}',
+    '::: {.column width="${1:50}%"}\n\n${2}\n\n:::\n\n${}',
     { label: "/column", detail: "single column block", type: "keyword", boost: 98 },
   ),
   classSnippet("[${2:text}]{.${1}}${}", {
@@ -67,30 +67,30 @@ const SLASH_COMMANDS: Completion[] = [
     type: "keyword",
     boost: 97,
   }),
-  classSnippet("::: {.${1}}\n\n${2:content}\n\n:::\n\n${}", {
-    label: "/div",
-    detail: "fenced div with class",
+  classSnippet("::: {.${1}}\n\n${2}\n\n:::\n\n${}", {
+    label: "/box",
+    detail: "a box with a style (fenced div)",
     type: "keyword",
     boost: 96,
   }),
   snippetCompletion(
-    "::: {.cards}\n\n- **${1:Title}** ${2:body}\n- **${3:Title}** ${4:body}\n\n:::\n\n${}",
+    "::: {.cards}\n\n- ${1}\n- ${2}\n\n:::\n\n${}",
     { label: "/cards", detail: "grid of cards (one per list item)", type: "keyword", boost: 92 },
   ),
-  snippetCompletion("::: {.card}\n\n${1:content}\n\n:::\n\n${}", {
+  snippetCompletion("::: {.card}\n\n${1}\n\n:::\n\n${}", {
     label: "/card",
     detail: "one card (add a colour to tint it)",
     type: "keyword",
     boost: 91,
   }),
-  snippetCompletion("::: {.callout .callout-${1:note}}\n\n${2:content}\n\n:::\n\n${}", {
+  snippetCompletion("::: {.callout .callout-${1:note}}\n\n${2}\n\n:::\n\n${}", {
     label: "/callout",
     detail: "callout box (note/tip/warning/important)",
     type: "keyword",
     boost: 90,
   }),
   snippetCompletion(
-    "::: {.bignum}\n\n::: {.fig}\n${1:90}<small>${2:%}</small>\n:::\n\n::: {.bn-body}\n${3:what it means}\n:::\n\n:::\n\n${}",
+    "::: {.bignum}\n\n::: {.fig}\n${1:90}<small>${2:%}</small>\n:::\n\n::: {.bn-body}\n${3}\n:::\n\n:::\n\n${}",
     { label: "/bignum", detail: "big headline figure beside a note", type: "keyword", boost: 45 },
   ),
   snippetCompletion("[${1:footer text}]{.footer}${}", {
@@ -100,7 +100,7 @@ const SLASH_COMMANDS: Completion[] = [
     boost: 44,
   }),
   snippetCompletion(
-    '::: {.place style="top:${1:50}%; left:${2:50}%"}\n\n${3:content}\n\n:::\n\n${}',
+    '::: {.place style="top:${1:50}%; left:${2:50}%"}\n\n${3}\n\n:::\n\n${}',
     { label: "/place", detail: "float a block anywhere (top/left %)", type: "keyword", boost: 51 },
   ),
   // Component + colour: inserts the component class then opens the picker for the
@@ -127,19 +127,19 @@ const SLASH_COMMANDS: Completion[] = [
     ':::: {.columns}\n\n::: {.column width="33%"}\n${one}\n:::\n\n::: {.column width="33%"}\n${two}\n:::\n\n::: {.column width="33%"}\n${three}\n:::\n\n::::\n\n${}',
     { label: "/columns3", detail: "three columns (33%)", type: "keyword", boost: 50 },
   ),
-  snippetCompletion("::: {.fragment}\n\n${content}\n\n:::\n\n${}", {
+  snippetCompletion("::: {.fragment}\n\n${1}\n\n:::\n\n${}", {
     label: "/fragment",
     detail: "reveal one step at a time",
     type: "keyword",
     boost: 49,
   }),
-  snippetCompletion("::: {.incremental}\n\n${- first\n- second}\n\n:::\n\n${}", {
+  snippetCompletion("::: {.incremental}\n\n- ${1}\n- ${2}\n\n:::\n\n${}", {
     label: "/incremental",
     detail: "reveal list items one at a time",
     type: "keyword",
     boost: 48,
   }),
-  snippetCompletion("::: {.notes}\n\n${Speaker note}\n\n:::\n\n${}", {
+  snippetCompletion("::: {.notes}\n\n${1}\n\n:::\n\n${}", {
     label: "/notes",
     detail: "speaker notes (press S in the deck)",
     type: "keyword",

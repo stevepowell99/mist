@@ -81,7 +81,7 @@ const DECK_SETTINGS: { key: string; val: string }[] = [
 const CLASS_GROUPS: { title: string; items: string }[] = [
   { title: "Components", items: ".flare .hl .panel .bg .chip .card .cards .bignum .columns .column .callout .lead .footer" },
   { title: "Colours", items: ".blue .cyan .teal .green .mint .yellow .pink .mag .navy .grey" },
-  { title: "Modifiers", items: ".light .dark .fast .slow .cascade-2…5 .scale-* .left .center .right .align-top .align-middle .align-bottom" },
+  { title: "Modifiers", items: ".light .dark .fast .slow .cascade-2…5 .scale-* .width-* .height-* .left .center .right .align-top .align-middle .align-bottom" },
   { title: "Callouts", items: "> [!note] / [!tip] / [!warning] / [!important]" },
   { title: "Slide", items: ".place .top-* .left-* .title-page .no-title .shot-cap .brand" },
 ];
@@ -99,7 +99,7 @@ const SLASH: { cmd: string; label: string }[] = [
   { cmd: "/column", label: "single column block" },
   { cmd: "/columns3", label: "three columns (33%)" },
   { cmd: "/place", label: "float a block (top/left %)" },
-  { cmd: "/div", label: "fenced div with a class" },
+  { cmd: "/box", label: "a box with a style" },
   { cmd: "/panel", label: "panel box, then pick a colour" },
   { cmd: "/card", label: "one card" },
   { cmd: "/cards", label: "grid of cards (one per item)" },

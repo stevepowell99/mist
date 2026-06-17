@@ -409,15 +409,18 @@ export async function driveFiles(
   const typeParts = (opts.types ?? []).map((t) => KIND_CLAUSE[t]).filter(Boolean);
   if (typeParts.length) clauses.push(`(${typeParts.join(" or ")})`);
 
-  const orderBy = opts.nameQuery || opts.folderId ? "folder,name" : "viewedByMeTime desc";
   const params = new URLSearchParams({
     q: clauses.join(" and "),
     fields: "files(id,name,mimeType,webViewLink,parents)",
     pageSize: "30",
-    orderBy,
     supportsAllDrives: "true",
     includeItemsFromAllDrives: "true",
   });
+  // Drive rejects orderBy together with a fullText term (results come back in
+  // relevance order), so only sort when not doing a full-text search.
+  if (!(opts.fullText && opts.nameQuery)) {
+    params.set("orderBy", opts.nameQuery || opts.folderId ? "folder,name" : "viewedByMeTime desc");
+  }
   const res = await fetch(`${DRIVE}/files?${params.toString()}`, { headers: authHeaders(token) });
   if (!res.ok) throw new Error(`Drive search failed (${res.status}): ${(await res.text()).slice(0, 200)}`);
   const body = (await res.json()) as {
