@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { SLASH_HELP } from "~/lib/cm-slash";
 
 /**
  * Keyboard shortcuts and tips, opened by the ? button (bottom-right) or
@@ -95,33 +96,8 @@ const CLASS_EXAMPLES: { code: string; note: string }[] = [
   { code: "# Section {.center .no-title}", note: "section divider" },
 ];
 
-// Slash-command menu, mirroring cm-slash.ts. Type "/" to insert one of these
-// Quarto/Pandoc structures; the class snippets then open the `.`-class picker.
-const SLASH: { cmd: string; label: string }[] = [
-  { cmd: "/library", label: "insert a standard slide or image from the library" },
-  { cmd: "/columns", label: "two columns (50/50)" },
-  { cmd: "/column", label: "single column block" },
-  { cmd: "/columns3", label: "three columns (33%)" },
-  { cmd: "/box", label: "a box with a style" },
-  { cmd: "/panel", label: "panel box, then pick a colour" },
-  { cmd: "/card", label: "one card" },
-  { cmd: "/cards", label: "grid of cards (one per item)" },
-  { cmd: "/callout", label: "callout box (note/tip/warning)" },
-  { cmd: "/bignums", label: "list of big figures (bold the figure)" },
-  { cmd: "/highlight", label: "static highlight, pick a colour" },
-  { cmd: "/flare", label: "animated highlight, pick a colour" },
-  { cmd: "/span", label: "inline [text]{.class}" },
-  { cmd: "/footer", label: "small dimmed footer line" },
-  { cmd: "/place", label: "float a block (top/left %)" },
-  { cmd: "/rectangle", label: "red outline rectangle (colour, exact top/left %, label)" },
-  { cmd: "/circle", label: "red outline circle (colour, exact top/left %, label)" },
-  { cmd: "/oval", label: "red outline oval (colour, exact top/left %, label)" },
-  { cmd: "/fragment", label: "reveal one step at a time" },
-  { cmd: "/incremental", label: "reveal list items one by one" },
-  { cmd: "/notes", label: "speaker notes" },
-  { cmd: "/image", label: "insert an image by path" },
-  { cmd: "/unwrap", label: "remove the surrounding box" },
-];
+// The slash-command list comes straight from the editor (SLASH_HELP imported
+// above), so this reference and the live menu cannot drift.
 
 // Sharing & review: the Share menu, who can open, and how comments/suggestions
 // work. Mirrors ShareButton, CommentInput (Ctrl/Cmd+Shift+M) and SuggestionActions.
@@ -390,10 +366,10 @@ export default function HelpPanel() {
                   selected, <Kbd>/</Kbd> wraps it. In suggest mode the insert lands as one suggested block.
                 </p>
                 <div className="mb-6 grid gap-x-10 sm:grid-cols-2">
-                  {SLASH.map((s) => (
+                  {SLASH_HELP.map((s) => (
                     <div key={s.cmd} className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1">
                       <span className="font-mono text-sm text-ink">{s.cmd}</span>
-                      <span className="text-right text-xs text-muted">{s.label}</span>
+                      <span className="text-right text-xs text-muted">{s.detail}</span>
                     </div>
                   ))}
                 </div>

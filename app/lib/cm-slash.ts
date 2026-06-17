@@ -125,8 +125,8 @@ const SLASH_COMMANDS: Completion[] = [
     boost: 93,
   }),
   snippetCompletion(
-    ':::: {.columns}\n\n::: {.column width="33%"}\n${one}\n:::\n\n::: {.column width="33%"}\n${two}\n:::\n\n::: {.column width="33%"}\n${three}\n:::\n\n::::\n\n${}',
-    { label: "/columns3", detail: "three columns (33%)", type: "keyword", boost: 50 },
+    ':::: {.columns}\n\n::: {.column width="33%"}\n${1}\n:::\n\n::: {.column width="33%"}\n${2}\n:::\n\n::: {.column width="33%"}\n${3}\n:::\n\n::::\n\n${}',
+    { label: "/columns3", detail: "three columns (33% each)", type: "keyword", boost: 50 },
   ),
   snippetCompletion("::: {.fragment}\n\n${1}\n\n:::\n\n${}", {
     label: "/fragment",
@@ -142,13 +142,13 @@ const SLASH_COMMANDS: Completion[] = [
   }),
   snippetCompletion("::: {.notes}\n\n${1}\n\n:::\n\n${}", {
     label: "/notes",
-    detail: "speaker notes (press S in the deck)",
+    detail: "speaker notes: off the slide, shown in the speaker view (S on the full deck)",
     type: "keyword",
     boost: 48,
   }),
   snippetCompletion("![${alt}](${url})${}", {
     label: "/image",
-    detail: "insert an image by path",
+    detail: "insert an image by URL or path (or just paste one)",
     type: "keyword",
     boost: 47,
   }),
@@ -183,6 +183,13 @@ const SLASH_COMMANDS: Completion[] = [
     apply: (view, _completion, from, to) => unwrapDivAtCursor(view, from, to),
   },
 ];
+
+/** The slash commands as plain `{ cmd, detail }` rows for the help panel, so the
+ *  reference and the live menu cannot drift (one source of truth). */
+export const SLASH_HELP: { cmd: string; detail: string }[] = SLASH_COMMANDS.map((c) => ({
+  cmd: c.label ?? "",
+  detail: c.detail ?? "",
+}));
 
 /**
  * Slash completion source. Add to the editor's `autocompletion` override
