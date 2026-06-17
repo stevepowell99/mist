@@ -497,7 +497,7 @@ ${inlineStyles}
 // blanks the deck.
 // width/height fix a 16:9 widescreen slide that reveal scales as a unit, so the
 // preview letterboxes instead of reflowing to the pane shape.
-// Keep reveal's own controls, progress bar, overview (Esc/O) and keyboard
+// Keep reveal's own controls, progress bar, overview (O) and keyboard
 // shortcuts (F fullscreen, S notes, arrows) on, and add the hamburger menu
 // plugin if it loaded (best-effort, like Quarto's decks).
 var revealPlugins=[RevealMarkdown,RevealNotes];
@@ -577,7 +577,10 @@ async function runMermaid(){
 // center:false matches Quarto (reveal's own default is true). With centring on,
 // every slide's content block is vertically centred, which drags a
 // bottom-pinned .shot-cap caption up to the middle; off, slides top-align.
-var REVEAL_CONFIG = {plugins:revealPlugins,hash:false,controls:true,progress:true,keyboard:true,overview:true,center:false,navigationMode:'${navigationMode}',pdfSeparateFragments:${separateFragments},scrollActivationWidth:null,width:1280,height:720};
+// keyboard:{27:null} unbinds Esc so it no longer toggles overview: in fullscreen
+// the browser swallows Esc (it exits fullscreen), so leaving Esc on overview made
+// it work in one place and not the other. Overview is now O only (reveal default).
+var REVEAL_CONFIG = {plugins:revealPlugins,hash:false,controls:true,progress:true,keyboard:{27:null},overview:true,center:false,navigationMode:'${navigationMode}',pdfSeparateFragments:${separateFragments},scrollActivationWidth:null,width:1280,height:720};
 function relayout(){ try { Reveal.layout(); } catch (e) {} }
 // Re-run layout across a few frames. In a sandboxed iframe reveal can init
 // before the pane has its real size, leaving the deck unscaled; these catch it.
