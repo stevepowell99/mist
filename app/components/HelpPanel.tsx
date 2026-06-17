@@ -58,8 +58,20 @@ const SLIDES: Shortcut[] = [
   { keys: ["F"], label: "Fullscreen the deck" },
   { keys: ["Esc"], label: "Exit fullscreen" },
   { keys: ["O"], label: "Overview of all slides" },
+  { keys: ["wheel"], label: "Scroll through the overview" },
   { keys: ["S"], label: "Speaker notes" },
   { keys: ["←", "→"], label: "Previous / next slide" },
+];
+
+// Deck/doc settings read from the YAML frontmatter (top-level or nested under
+// `format: revealjs:`). Documented in docs/author-grammar.md.
+const DECK_SETTINGS: { key: string; val: string }[] = [
+  { key: "theme:", val: "causal-map (default), qualia, brutalist, editorial" },
+  { key: "footer:", val: "text shown on every slide" },
+  { key: "slide-number:", val: "true, or a reveal format like c/t" },
+  { key: "navigation-mode:", val: "linear, grid or vertical" },
+  { key: "css:", val: "a Drive stylesheet, layered last (overrides the theme)" },
+  { key: "bibliography:", val: "a .bib for @-citations and the reference list" },
 ];
 
 // Composable Pandoc class system (the slides app's "style map"): pick a
@@ -303,6 +315,24 @@ export default function HelpPanel() {
               </div>
             ) : (
               <div className="px-5 py-4">
+                <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted">Deck &amp; doc settings (YAML)</h3>
+                <p className="mb-3 text-sm text-muted">
+                  Put these at the top of the file, top-level or under{" "}
+                  <span className="font-mono text-ink">format: revealjs:</span> (both are read). The slide size is
+                  fixed at 1280&times;720, so <span className="font-mono text-ink">width</span>/
+                  <span className="font-mono text-ink">height</span> and other Quarto reveal keys are ignored.{" "}
+                  <span className="font-mono text-ink">{"::: {.brand}"}</span> drops the theme&apos;s logo in the
+                  top-left (Causal Map by default, the QualiaInterviews wordmark for the qualia theme).
+                </p>
+                <div className="mb-6 grid gap-x-10 sm:grid-cols-2">
+                  {DECK_SETTINGS.map((s) => (
+                    <div key={s.key} className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1">
+                      <span className="font-mono text-sm text-ink">{s.key}</span>
+                      <span className="text-right text-xs text-muted">{s.val}</span>
+                    </div>
+                  ))}
+                </div>
+
                 <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted">Slash commands</h3>
                 <p className="mb-3 text-sm text-muted">
                   Type <Kbd>/</Kbd> at the start of a line (or after a space) to insert a structure; with text

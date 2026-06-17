@@ -90,6 +90,26 @@ The two column syntaxes are intentionally different and both stay supported:
 A document that needs to render well in both should prefer simple top-to-bottom
 flow; columns will not round-trip between the two.
 
+## Frontmatter settings (gmist decks and docs)
+
+gmist reads a small set of YAML keys, top-level **or** nested under
+`format: revealjs:` (both are matched). It replaced reveal.js's themes with its
+own, so most other Quarto `format: revealjs:` keys are ignored.
+
+| Key | Effect |
+|---|---|
+| `theme:` | gmist theme CSS: `causal-map` (default), `qualia`, `brutalist`, `editorial`. An unknown value (e.g. an old reveal theme like `serif`/`black`) falls back to causal-map. Themes are plain files in `app/styles/themes/*.css`, resolved in `app/lib/themes.ts`, injected after `deck-base.css` and before any `css:`. The same theme CSS drives the document Preview, so a doc reads like its deck. |
+| `footer:` | A global footer line shown on every slide (bottom-left). |
+| `slide-number:` | `true` (current/total) or a reveal format string like `c/t`. |
+| `navigation-mode:` | `linear` (default), `grid`, or `vertical`. |
+| `css:` | A Drive stylesheet, layered after the theme so it overrides it. |
+| `bibliography:` | A `.bib` for `@`-citations and the auto reference list. |
+
+Ignored: `width`/`height` (the slide is fixed at 1280x720) and any other
+reveal/Quarto key. `::: {.brand}` drops the theme's logo in the top-left corner,
+Causal Map by default and the QualiaInterviews wordmark for the `qualia` theme; a
+theme overrides `--brand-logo` (and `--brand-ar`) in `app/styles/themes/brand.css`.
+
 ## Colour tokens
 
 Decision (Steve, 16 June 2026): **keep both token sets.** No forced merge. The
