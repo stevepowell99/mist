@@ -530,11 +530,31 @@ var pendingGoto = null, pendingFrag = -1, revealReady = false;
 var deckEl = document.querySelector('.reveal');
 var loadingEl = document.getElementById('mist-loading');
 var deckShown = false;
+// Replay the entrance animations (.flare, standalone .cascade) on the current
+// slide. The deck is hidden behind the waiter while it loads and jumps to the
+// cursor's slide, and again during every in-place rebuild, so a flare's intro
+// plays unseen and the deck appears with it already filled (the "flares don't
+// animate" report). Re-run them once the deck is actually visible / on a slide
+// change: toggling animation off, forcing a reflow, then back restarts the
+// CSS-defined animation from the start.
+function replayEntrance(){
+  try {
+    var slide = Reveal.getCurrentSlide && Reveal.getCurrentSlide();
+    if (!slide) return;
+    var els = slide.querySelectorAll('.flare, .cascade-2, .cascade-3, .cascade-4, .cascade-5');
+    for (var i = 0; i < els.length; i++) {
+      els[i].style.animation = 'none';
+      void els[i].offsetWidth; // force reflow so the restart takes
+      els[i].style.animation = '';
+    }
+  } catch (e) {}
+}
 function showDeck(){
   if (deckShown || !revealReady) return;
   deckShown = true;
   if (deckEl) deckEl.style.visibility = '';
   if (loadingEl) loadingEl.style.display = 'none';
+  requestAnimationFrame(replayEntrance);
 }
 // The editor sends a flat slide index (its split is flat). With 2D nesting a
 // flat index is not reveal's horizontal index, so map it through the slide
@@ -605,7 +625,7 @@ function relayout(){ try { Reveal.layout(); } catch (e) {} }
 function relayoutBurst(){ relayout(); requestAnimationFrame(relayout); setTimeout(relayout, 120); setTimeout(relayout, 400); }
 // Report the current slide to the parent as a flat index (matching the editor's
 // flat split) so the URL ?slide= round-trips through 2D nesting.
-var slideChangedHandler = function(){ try { parent.postMessage({ type: 'mist-slide', h: Reveal.getSlides().indexOf(Reveal.getCurrentSlide()) }, '*'); } catch (e) {} };
+var slideChangedHandler = function(){ try { parent.postMessage({ type: 'mist-slide', h: Reveal.getSlides().indexOf(Reveal.getCurrentSlide()) }, '*'); } catch (e) {} replayEntrance(); };
 
 // In-place rebuild: swap the .slides markup, then DESTROY and re-initialise
 // reveal, so the deck is rebuilt by the EXACT same path as a fresh load. Running
@@ -660,6 +680,7 @@ async function rerender(html, target){
   } finally {
     revealReady = true;
     if (deckEl) deckEl.style.visibility = '';
+    requestAnimationFrame(replayEntrance); // animate flares now the deck is visible
     rerendering = false;
   }
   await runMermaid();

@@ -71,16 +71,19 @@
 :is(.reveal,.preview) .left   { text-align: left; }
 :is(.reveal,.preview) .center { text-align: center; }
 :is(.reveal,.preview) .right  { text-align: right; }
-/* VERTICAL align (the partner of left/center/right). On a slide, .top/.middle/
-   .bottom place the whole slide's content high, centred or low: that needs the
-   full-height section, so it is deck-only. On a .columns row they line the
-   columns up vertically, which works in a doc too. */
-.reveal .slides section.top    { display: flex; flex-direction: column; justify-content: flex-start; }
-.reveal .slides section.middle { display: flex; flex-direction: column; justify-content: center; }
-.reveal .slides section.bottom { display: flex; flex-direction: column; justify-content: flex-end; }
-:is(.reveal,.preview) .columns.top    { align-items: flex-start; }
-:is(.reveal,.preview) .columns.middle { align-items: center; }
-:is(.reveal,.preview) .columns.bottom { align-items: flex-end; }
+/* VERTICAL align (the partner of left/center/right). On a slide, .align-top/
+   -middle/-bottom place the whole slide's content high, centred or low. Scoped to
+   the PRESENT slide and forced with !important because reveal sets each section's
+   `display` inline (block to show, none to hide); without the .present scope a
+   hidden aligned slide would be forced visible. Needs the full-height section, so
+   it is deck-only. On a .columns row the same names line the columns up (works in
+   a doc too). */
+.reveal .slides section.present.align-top    { display: flex !important; flex-direction: column; justify-content: flex-start; }
+.reveal .slides section.present.align-middle { display: flex !important; flex-direction: column; justify-content: center; }
+.reveal .slides section.present.align-bottom { display: flex !important; flex-direction: column; justify-content: flex-end; }
+:is(.reveal,.preview) .columns.align-top    { align-items: flex-start; }
+:is(.reveal,.preview) .columns.align-middle { align-items: center; }
+:is(.reveal,.preview) .columns.align-bottom { align-items: flex-end; }
 :is(.reveal,.preview) .fast    { --dur: 1.6s; }
 :is(.reveal,.preview) .slow    { --dur: 6s; }
 :is(.reveal,.preview) .instant { --dur: 0.01s; }
@@ -207,6 +210,10 @@
 .reveal .slides { text-align: left; }
 .reveal .slides section:not(.stack) { padding: 1.2em 1.8em !important; text-align: left; box-sizing: border-box; }
 .reveal section.center, .reveal section.center > * { text-align: center; }
+/* On a centred slide, a list centred as text leaves its bullets stranded to the
+   left. Centre the list as a block (inline-block) but keep its items left-aligned
+   so markers sit with the text. */
+.reveal section.center :is(ul, ol) { display: inline-block; text-align: left; }
 .reveal .slides section.hidden-slide { display: none !important; }
 .reveal section.no-title > :is(h1, h2, h3):first-of-type { display: none; }
 

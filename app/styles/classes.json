@@ -51,7 +51,7 @@
       "desc": "Alignment: horizontal (text) and vertical (a slide's content, or columns in a row).",
       "classes": {
         "left": "Align left", "center": "Centre", "right": "Align right",
-        "top": "Vertical: content at the top", "middle": "Vertical: content centred", "bottom": "Vertical: content at the bottom"
+        "align-top": "Vertical: content at the top", "align-middle": "Vertical: content centred", "align-bottom": "Vertical: content at the bottom"
       }
     },
     "place": {
