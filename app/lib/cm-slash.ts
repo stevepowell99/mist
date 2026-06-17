@@ -41,6 +41,18 @@ function classSnippet(template: string, info: Omit<Completion, "apply">): Comple
 }
 
 const SLASH_COMMANDS: Completion[] = [
+  // Opens the library gallery (drop in a standard slide or image) rather than
+  // inserting a snippet: removes the typed "/library" then fires the toggle event.
+  {
+    label: "/library",
+    detail: "insert a standard slide or image from the library",
+    type: "keyword",
+    boost: 100,
+    apply: (view, _completion, from, to) => {
+      view.dispatch({ changes: { from, to, insert: "" } });
+      if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("mist-toggle-library"));
+    },
+  },
   snippetCompletion(
     ':::: {.columns}\n\n::: {.column width="50%"}\n${left}\n:::\n\n::: {.column width="50%"}\n${right}\n:::\n\n::::\n\n${}',
     { label: "/columns", detail: "two columns (50/50)", type: "keyword", boost: 99 },

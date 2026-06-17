@@ -31,6 +31,7 @@ import NamePrompt from "~/components/NamePrompt";
 import FolderSidebar from "~/components/FolderSidebar";
 import OutlinePanel from "~/components/OutlinePanel";
 import HelpPanel from "~/components/HelpPanel";
+import LibraryGallery from "~/components/LibraryGallery";
 import GoogleSignIn from "~/components/GoogleSignIn";
 import SlidesView, { isSlideDeck } from "~/components/SlidesView";
 
@@ -716,6 +717,17 @@ function DocumentLayout({ id }: { id: string }) {
             </svg>
           </button>
         )}
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new CustomEvent("mist-toggle-library"))}
+          title="Insert a standard slide from the library (or type /library)"
+          aria-label="Open the library"
+          className="flex shrink-0 cursor-pointer items-center border-r border-border px-3 transition-colors hover:bg-border hover:text-ink"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" />
+          </svg>
+        </button>
         <div className="flex min-w-0 grow items-center gap-2 px-4">
           <span
             className="hidden shrink-0 rounded border border-border px-1.5 py-0.5 text-xs uppercase tracking-wider text-muted sm:inline-block"
@@ -999,6 +1011,7 @@ function DocumentLayout({ id }: { id: string }) {
       <MobilePanel className="lg:hidden" />
       <NamePrompt />
       <HelpPanel />
+      <LibraryGallery />
     </div>
   );
 }

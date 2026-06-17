@@ -8,6 +8,12 @@
 	"observability": {
 		"enabled": true
 	},
+	// Drive folder id of the reusable slide/image library (the parent of the
+	// `slides/` and `images/` subfolders). Set the real id here or in the
+	// dashboard; empty means the library gallery is off. Not secret.
+	"vars": {
+		"LIBRARY_FOLDER_ID": ""
+	},
 	"durable_objects": {
 		"bindings": [
 			{ "name": "DocumentAgent", "class_name": "DocumentAgent" }
