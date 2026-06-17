@@ -6,7 +6,7 @@ import { rewriteImages } from "~/lib/asset-urls";
 import { runMermaid } from "~/lib/mermaid";
 import { renderWikiLinks } from "~/lib/wikilinks";
 import { convertCitations, formatReferenceList } from "~/lib/citations";
-import { convertCallouts, convertSpans, convertImages, convertDivs, maskCode, restoreCode } from "~/lib/slides-build";
+import { convertCallouts, convertSpans, convertImages, convertDivs, convertBignums, maskCode, restoreCode } from "~/lib/slides-build";
 import { themeCss } from "~/lib/themes";
 import { stripFrontmatter } from "~/lib/thread-serialization";
 import { stripMistBanner } from "~/shared/mist-banner";
@@ -58,7 +58,7 @@ export default function Preview() {
     const masked = maskCode(resolved);
     const withLinks = restoreCode(
       stripPandocAttrs(
-        convertDivs(convertImages(convertSpans(convertCallouts(renderWikiLinks(masked.text))))),
+        convertDivs(convertImages(convertSpans(convertCallouts(renderWikiLinks(convertBignums(masked.text)))))),
       ),
       masked.tokens,
     );

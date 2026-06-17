@@ -181,10 +181,16 @@
    the figure in **bold**, which is enlarged onto its own line above the text. No
    nesting. e.g.  ::: {.bignums}  - **87%** of people said ...  :::  */
 :is(.reveal,.preview) .bignums ul, :is(.reveal,.preview) .bignums ol { list-style: none; margin: 0.4em 0; padding: 0; }
-:is(.reveal,.preview) .bignums li { margin: 0.5em 0; line-height: 1.35; }
-:is(.reveal,.preview) .bignums li > strong:first-child,
-:is(.reveal,.preview) .bignums li > p:first-child > strong:first-child {
-  display: block; font-size: 2.4em; font-weight: 800; line-height: 1; color: var(--bignum-fig, var(--teal-dark));
+:is(.reveal,.preview) .bignums li {
+  background: var(--bignum-box, #e6f7f6); border-radius: 10px; padding: 0.6em 0.9em; margin: 0.4em 0; color: var(--ink);
+}
+/* Each item lays out like the old .bignum: big figure left, text beside. The
+   flex is also put on a wrapping <p> so a loose list (items wrapped in <p>) works
+   too. The first word is wrapped in .fig by convertBignums, so no bold needed. */
+:is(.reveal,.preview) .bignums li, :is(.reveal,.preview) .bignums li > p { display: flex; align-items: center; gap: 0.8em; line-height: 1.35; }
+:is(.reveal,.preview) .bignums li > p { margin: 0; }
+:is(.reveal,.preview) .bignums .fig {
+  font-size: 2.6em; font-weight: 800; color: var(--bignum-fig, var(--teal-dark)); line-height: 1; white-space: nowrap;
 }
 
 /* COMPONENT: shapes (decoration). A solid red rectangle / circle by default;

@@ -67,9 +67,9 @@ const SLASH_COMMANDS: Completion[] = [
     type: "keyword",
     boost: 97,
   }),
-  classSnippet("::: {.${1}}\n\n${2}\n\n:::\n\n${}", {
+  classSnippet("::: {.bg .${1:teal}}\n\n${2}\n\n:::\n\n${}", {
     label: "/box",
-    detail: "a box with a style (fenced div)",
+    detail: "a tinted box (.bg + a colour); change or add styles",
     type: "keyword",
     boost: 96,
   }),
@@ -210,10 +210,13 @@ export const slashWrapSelection = EditorView.inputHandler.of((view, from, to, te
 
   if (startLine.number !== endLine.number) {
     const body = view.state.sliceDoc(startLine.from, endLine.to);
-    const insert = `::: {.}\n${body}\n:::`;
+    // Default to a visible tinted box (.bg + a colour), with "teal" selected so it
+    // is obvious what to change; the class picker opens on it.
+    const insert = `::: {.bg .teal}\n${body}\n:::`;
+    const tealAt = startLine.from + "::: {.bg .".length;
     view.dispatch({
       changes: { from: startLine.from, to: endLine.to, insert },
-      selection: { anchor: startLine.from + "::: {.".length }, // between "." and "}"
+      selection: { anchor: tealAt, head: tealAt + "teal".length }, // select "teal"
       userEvent: "input.wrap",
     });
     startCompletion(view);

@@ -251,6 +251,27 @@ export function convertSpans(md: string): string {
   });
 }
 
+/** Inside a `::: {.bignums}` block, wrap each list item's first word in
+ *  `[word]{.fig}` so the leading figure is enlarged automatically, with no need
+ *  to bold it. Runs BEFORE the span/div converters, so the inserted .fig becomes
+ *  a span and the fence becomes the bignums box. Items already starting with a
+ *  `[...]` span are left alone. */
+export function convertBignums(md: string): string {
+  const stack: boolean[] = []; // one entry per open fenced div; true if it is .bignums
+  return md
+    .split("\n")
+    .map((line) => {
+      if (/^\s*:{3,}\s*$/.test(line)) { stack.pop(); return line; } // bare closer
+      if (/^\s*:{3,}\s*\S/.test(line)) { stack.push(/\.bignums\b/.test(line)); return line; } // opener
+      if (stack.some(Boolean)) {
+        const m = line.match(/^(\s*[-*+]\s+)(?!\[)(\S+)(.*)$/);
+        if (m) return `${m[1]}[${m[2]}]{.fig}${m[3]}`;
+      }
+      return line;
+    })
+    .join("\n");
+}
+
 /** Mask fenced code blocks and inline `code` with placeholder tokens so the
  *  grammar converters never rewrite example syntax shown inside code. Restore
  *  with restoreCode AFTER the text conversions, before the markdown renderer
@@ -296,7 +317,7 @@ function buildSection(slideMd: string, ctx: AssetCtx): string {
   // into a real span; restore it before the markdown plugin renders the slide.
   const masked = maskCode(body);
   const inner = restoreCode(
-    convertDivs(convertImages(convertSpans(convertCallouts(masked.text)))),
+    convertDivs(convertImages(convertSpans(convertCallouts(convertBignums(masked.text))))),
     masked.tokens,
   ).replace(/<\/textarea>/gi, "&lt;/textarea&gt;");
   return `<section${classAttr} data-markdown><textarea data-template>\n${bgComment}${inner}\n</textarea></section>`;
