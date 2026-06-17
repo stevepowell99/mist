@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import * as Y from "yjs";
 import type { Awareness } from "y-protocols/awareness";
-import { EditorState, Prec } from "@codemirror/state";
+import { Compartment, EditorState, Prec } from "@codemirror/state";
 import {
   EditorView,
   keymap,
@@ -92,6 +92,7 @@ export default function CodeMirrorEditor({
   activeComment = null,
   bibLibrary = null,
   classList = null,
+  lang = "en-GB",
   onTextChange,
   onCursorChange,
   onViewReady,
@@ -107,6 +108,8 @@ export default function CodeMirrorEditor({
   bibLibrary?: BibLibrary | null;
   /** Pandoc class names from the deck CSS, for the `.`-class picker. */
   classList?: string[] | null;
+  /** Spellcheck language (BCP-47, e.g. "en-GB"); turns on browser spellcheck. */
+  lang?: string;
   onTextChange?: (text: string) => void;
   onCursorChange?: (offset: number) => void;
   onViewReady?: (view: EditorView | null) => void;
@@ -142,6 +145,13 @@ export default function CodeMirrorEditor({
   // never rebuilds when the deck CSS loads.
   const classRef = useRef<string[]>(classList ?? []);
   classRef.current = classList ?? [];
+  // Browser spellcheck, reconfigured (not rebuilt) when the language changes.
+  const langCompRef = useRef<Compartment | null>(null);
+  if (!langCompRef.current) langCompRef.current = new Compartment();
+  const langRef = useRef(lang);
+  langRef.current = lang;
+  const spellcheckExt = (l: string) =>
+    EditorView.contentAttributes.of({ spellcheck: "true", autocorrect: "off", autocapitalize: "off", lang: l });
 
   useEffect(() => {
     const parent = ref.current;
@@ -208,6 +218,7 @@ export default function CodeMirrorEditor({
         wrapKeymap,
         markdown(),
         EditorView.lineWrapping,
+        langCompRef.current!.of(spellcheckExt(langRef.current)),
         autocompletion({
           override: [
             slashSource(),
@@ -269,6 +280,14 @@ export default function CodeMirrorEditor({
     if (!view) return;
     view.dom.classList.toggle("clean-view", cleanView);
   }, [cleanView]);
+
+  // Apply a language change (frontmatter `lang:`) without rebuilding the editor.
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view || !langCompRef.current) return;
+    view.dispatch({ effects: langCompRef.current.reconfigure(spellcheckExt(lang)) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lang]);
 
   return <div ref={ref} className={className} />;
 }

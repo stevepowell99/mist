@@ -268,6 +268,13 @@ function DocumentLayout({ id }: { id: string }) {
   const title = fileTitle(drive, id);
   const deck = isSlideDeck(markdown, frontmatter);
   const slidesMode = showPreview && deck;
+  // Default split ratio (editor width) when no saved position applies: a slim
+  // editor for a deck so the slide preview dominates, a bit wider for a document.
+  const defaultEditorPct = deck ? 25 : 35;
+  // Spellcheck language: a top-level `lang:` (or `language:`) in the frontmatter,
+  // default British English. Drives the editor's browser spellcheck.
+  const lang =
+    frontmatter.match(/^\s*lang(?:uage)?:\s*(.+)$/m)?.[1].trim().replace(/^["']|["']$/g, "") || "en-GB";
 
   // Desktop-only draggable split: drag the gutter left to put the editor on the
   // left and a live preview on the right. editorPct is the editor's width; at
@@ -278,8 +285,15 @@ function DocumentLayout({ id }: { id: string }) {
     // Open in split if the URL asks for it (?view=split), so a reload or shared
     // link reopens the same layout. Preview-only is restored via initialPreview.
     if (typeof window === "undefined") return 100;
-    return new URL(window.location.href).searchParams.get("view") === "split" ? 50 : 100;
+    return new URL(window.location.href).searchParams.get("view") === "split" ? defaultEditorPct : 100;
   });
+  // Remember the last split ratio this session so re-entering split (the toggle,
+  // a nudge) restores where the divider was, not a fixed 50. Seeded from the
+  // saved/default value once settings load.
+  const lastSplitPct = useRef(defaultEditorPct);
+  useEffect(() => {
+    if (editorPct <= 95) lastSplitPct.current = editorPct;
+  }, [editorPct]);
   const contentRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLElement>(null);
   const splitOpen = isDesktop && editorPct <= 95;
@@ -299,13 +313,13 @@ function DocumentLayout({ id }: { id: string }) {
         setEditorPct(100);
       } else if (v === "split") {
         setPreview(false);
-        setEditorPct(50);
+        setEditorPct(lastSplitPct.current ?? defaultEditorPct);
       } else {
         setPreview(false);
         setEditorPct(100);
       }
     },
-    [setPreview],
+    [setPreview, defaultEditorPct],
   );
 
   // Nudge the split ratio by `delta` percent (editor width). Opens the split
@@ -315,9 +329,9 @@ function DocumentLayout({ id }: { id: string }) {
     (delta: number) => {
       if (!isDesktop) return;
       setPreview(false);
-      setEditorPct((p) => Math.min(95, Math.max(20, (p <= 95 ? p : 50) + delta)));
+      setEditorPct((p) => Math.min(95, Math.max(20, (p <= 95 ? p : (lastSplitPct.current ?? defaultEditorPct)) + delta)));
     },
-    [isDesktop, setPreview],
+    [isDesktop, setPreview, defaultEditorPct],
   );
 
   // Publish the header height so the sidebar/overlays can sit below it.
@@ -819,6 +833,7 @@ function DocumentLayout({ id }: { id: string }) {
                 activeComment={activeCommentRange}
                 bibLibrary={bibLib}
                 classList={cssClasses}
+                lang={lang}
                 onTextChange={setEditorText}
                 onCursorChange={setCursor}
                 onViewReady={handleViewReady}
