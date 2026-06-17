@@ -100,9 +100,12 @@ const server = createServer(async (req, res) => {
 server.listen(53682, () => {
   console.log("\nOpen this URL in your browser to authorise (also trying to open it for you):\n");
   console.log(authUrl + "\n");
-  // Best-effort browser open on Windows.
+  // Best-effort browser open on Windows. The URL MUST be quoted: cmd's `start`
+  // treats a bare `&` as a command separator and would chop the URL at the first
+  // query param (Google then rejects it: "response_type missing"). If the auto-
+  // open still misbehaves, just paste the URL printed above.
   try {
-    spawn("cmd", ["/c", "start", "", authUrl], { stdio: "ignore", detached: true }).unref();
+    spawn("cmd", ["/c", "start", "", `"${authUrl}"`], { stdio: "ignore", detached: true }).unref();
   } catch {
     /* just use the printed URL */
   }
