@@ -419,7 +419,7 @@ export async function driveFiles(
     includeItemsFromAllDrives: "true",
   });
   const res = await fetch(`${DRIVE}/files?${params.toString()}`, { headers: authHeaders(token) });
-  if (!res.ok) throw new Error(`Drive search failed (${res.status})`);
+  if (!res.ok) throw new Error(`Drive search failed (${res.status}): ${(await res.text()).slice(0, 200)}`);
   const body = (await res.json()) as {
     files: { id: string; name: string; mimeType: string; webViewLink?: string; parents?: string[] }[];
   };
