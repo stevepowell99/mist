@@ -216,6 +216,11 @@
 .reveal section.center :is(ul, ol) { display: inline-block; text-align: left; }
 .reveal .slides section.hidden-slide { display: none !important; }
 .reveal section.no-title > :is(h1, h2, h3):first-of-type { display: none; }
+/* .dark on a whole slide flips it to a dark background with light text. With a
+   colour class too (e.g. .navy .dark) it uses that hue's deep tone; otherwise a
+   neutral dark. */
+.reveal .slides section.dark { background: var(--hue-deep, #1a1a2e); color: #fff; }
+.reveal .slides section.dark :is(h1, h2, h3) { color: #fff; }
 
 /* Deck typography */
 .reveal h1, .reveal h2, .reveal h3 { color: var(--ink); font-weight: 700; letter-spacing: -0.01em; text-transform: none; text-align: left; }

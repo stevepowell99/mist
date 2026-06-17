@@ -22,13 +22,13 @@ export function stripFrontmatter(md: string): { frontmatter: string; body: strin
 
 /**
  * True when the document should render as slides. A deck is identified by its
- * frontmatter declaring the reveal.js format (format: revealjs), exactly as
- * Quarto does, independent of the file extension. So a `.md` deck is detected
- * and a `.qmd` that is a document or report is not misread as slides.
+ * frontmatter declaring the format: `format: revealjs` (Quarto's name) or the
+ * friendlier aliases `format: slide` / `format: slides`. Independent of the file
+ * extension, so a `.md` deck is detected and a `.qmd` document is not misread.
  */
 export function isSlideDeck(markdown: string, frontmatter = ""): boolean {
   const fm = frontmatter || stripFrontmatter(markdown).frontmatter;
-  return /revealjs/i.test(fm);
+  return /revealjs/i.test(fm) || /^\s*format:\s*['"]?slides?['"]?\s*$/im.test(fm);
 }
 
 function stripCritic(md: string): string {

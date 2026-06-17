@@ -66,10 +66,11 @@ const SLIDES: Shortcut[] = [
 // Deck/doc settings read from the YAML frontmatter (top-level or nested under
 // `format: revealjs:`). Documented in docs/author-grammar.md.
 const DECK_SETTINGS: { key: string; val: string }[] = [
+  { key: "format:", val: "slides (or slide / revealjs): turns the file into a deck" },
   { key: "theme:", val: "causal-map (default), qualia, brutalist, editorial" },
   { key: "footer:", val: "text shown on every slide" },
   { key: "slide-number:", val: "true, or a reveal format like c/t" },
-  { key: "navigation-mode:", val: "linear, grid or vertical" },
+  { key: "navigation-mode:", val: "the default is best; grid is 2D but confusing" },
   { key: "css:", val: "a Drive stylesheet, layered last (overrides the theme)" },
   { key: "bibliography:", val: "a .bib for @-citations and the reference list" },
 ];

@@ -98,10 +98,11 @@ own, so most other Quarto `format: revealjs:` keys are ignored.
 
 | Key | Effect |
 |---|---|
+| `format:` | Makes the file a deck: `slides`, `slide` or `revealjs` (all equivalent), or the nested `format:\n  revealjs:`. Without it the file is a flowing document. Detected by `isSlideDeck` in `app/lib/slides-build.ts`. |
 | `theme:` | gmist theme CSS: `causal-map` (default), `qualia`, `brutalist`, `editorial`. An unknown value (e.g. an old reveal theme like `serif`/`black`) falls back to causal-map. Themes are plain files in `app/styles/themes/*.css`, resolved in `app/lib/themes.ts`, injected after `deck-base.css` and before any `css:`. The same theme CSS drives the document Preview, so a doc reads like its deck. |
 | `footer:` | A global footer line shown on every slide (bottom-left). |
 | `slide-number:` | `true` (current/total) or a reveal format string like `c/t`. |
-| `navigation-mode:` | `linear` (default), `grid`, or `vertical`. |
+| `navigation-mode:` | The plain left-to-right default is recommended. `grid` makes it 2D (sections across, slides down) but is confusing, so it is discouraged; `vertical` also exists. |
 | `css:` | A Drive stylesheet, layered after the theme so it overrides it. |
 | `bibliography:` | A `.bib` for `@`-citations and the auto reference list. |
 
