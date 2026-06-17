@@ -24,7 +24,7 @@ export interface LibraryFolders {
  * LIBRARY_FOLDER_ID env var, if set, overrides it for a given deployment. Empty
  * in both means the library gallery is off.
  */
-const DEFAULT_LIBRARY_FOLDER_ID = "";
+const DEFAULT_LIBRARY_FOLDER_ID = "1Ud0p8nexzSB9DhfsIpD7xxUfPRqPEJz7"; // 19d
 
 /** The configured library root id, or "" when the library is off. */
 export function libraryRoot(env: LibraryEnv): string {
