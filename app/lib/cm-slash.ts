@@ -8,6 +8,7 @@ import {
   startCompletion,
 } from "@codemirror/autocomplete";
 import { EditorView } from "@codemirror/view";
+import { searchScore } from "~/lib/fuzzy";
 
 /**
  * Slash-command menu for the CodeMirror 6 / Y.Text core, ported from the slides
@@ -151,24 +152,24 @@ const SLASH_COMMANDS: Completion[] = [
     type: "keyword",
     boost: 47,
   }),
-  // Red outline shapes, inserted centred-ish at 75% so something visible appears;
-  // the cursor lands inside for an optional label (centred), move with .top-/.left-
-  // and resize with .scale-, recolour the outline with a colour class.
-  snippetCompletion("::: {.rectangle .place .top-40 .left-40 .scale-75}\n\n${1}\n\n:::\n\n${}", {
+  // Outline shapes: opens the colour picker for the outline (skip it for the
+  // default red), then the cursor lands inside for an optional centred label.
+  // Move with .top-/.left-, resize with .scale-.
+  classSnippet("::: {.rectangle .${1} .place .top-40 .left-40 .scale-75}\n\n${2}\n\n:::\n\n${}", {
     label: "/rectangle",
-    detail: "red outline rectangle (type a label inside, move/size with .top-/.left-/.scale-)",
+    detail: "outline rectangle: pick a colour, then type a label inside",
     type: "keyword",
     boost: 40,
   }),
-  snippetCompletion("::: {.circle .place .top-40 .left-40 .scale-75}\n\n${1}\n\n:::\n\n${}", {
+  classSnippet("::: {.circle .${1} .place .top-40 .left-40 .scale-75}\n\n${2}\n\n:::\n\n${}", {
     label: "/circle",
-    detail: "red outline circle (type a label inside, move/size with .top-/.left-/.scale-)",
+    detail: "outline circle: pick a colour, then type a label inside",
     type: "keyword",
     boost: 40,
   }),
-  snippetCompletion("::: {.oval .place .top-40 .left-40 .scale-75}\n\n${1}\n\n:::\n\n${}", {
+  classSnippet("::: {.oval .${1} .place .top-40 .left-40 .scale-75}\n\n${2}\n\n:::\n\n${}", {
     label: "/oval",
-    detail: "red outline oval (type a label inside, move/size with .top-/.left-/.scale-)",
+    detail: "outline oval: pick a colour, then type a label inside",
     type: "keyword",
     boost: 40,
   }),
@@ -198,7 +199,22 @@ export function slashSource(): CompletionSource {
       const opener = ctx.state.sliceDoc(Math.max(0, match.from - 3), match.from);
       if (!/\s/.test(prev) && opener !== "{++") return null;
     }
-    return { from: match.from, options: SLASH_COMMANDS, validFor: /^\/[\w-]*$/ };
+    // With no query, list everything in boost order. Once typing, search the
+    // command name AND its description, with a direct name hit weighted above a
+    // description-only hit (searchScore). filter:false so our order stands; no
+    // validFor so the source re-scores on each keystroke rather than letting
+    // CodeMirror re-filter on the label alone.
+    const q = match.text.slice(1).toLowerCase();
+    if (!q) return { from: match.from, options: SLASH_COMMANDS };
+    const scored: { score: number; boost: number; opt: Completion }[] = [];
+    for (const opt of SLASH_COMMANDS) {
+      const name = (opt.label ?? "").replace(/^\//, "");
+      const score = searchScore(q, name, opt.detail ?? "");
+      if (score == null) continue;
+      scored.push({ score, boost: opt.boost ?? 0, opt });
+    }
+    scored.sort((a, b) => b.score - a.score || b.boost - a.boost);
+    return { from: match.from, options: scored.map((s) => s.opt), filter: false };
   };
 }
 

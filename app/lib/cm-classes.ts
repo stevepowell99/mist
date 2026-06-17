@@ -5,6 +5,7 @@ import {
   type CompletionSource,
 } from "@codemirror/autocomplete";
 import CATALOGUE from "~/styles/classes.json";
+import { searchScore } from "~/lib/fuzzy";
 
 /** Per-class group + one-line description, derived from the framework manifest
  *  (classes.json), so the picker is self-explanatory and stays in step with the
@@ -120,23 +121,6 @@ const BUILTIN_CLASSES: Record<string, string> = {
   "callout-caution": "Caution callout (yellow)",
 };
 
-/** Subsequence fuzzy score for a class NAME: all of q's chars must appear in
- *  order (so `pnl` finds `panel`). Rewards contiguous runs and word-start hits,
- *  so the tightest match ranks first. Returns -1 when q is not a subsequence. */
-function fuzzyName(q: string, text: string): number {
-  text = text.toLowerCase();
-  let ti = 0, score = 0, run = 0;
-  for (const ch of q) {
-    const at = text.indexOf(ch, ti);
-    if (at === -1) return -1;
-    run = at === ti ? run + 1 : 0;
-    score += 1 + run;
-    if (at === 0 || /[\s.\-_]/.test(text[at - 1])) score += 3;
-    ti = at + 1;
-  }
-  return score - text.length * 0.05; // gently prefer shorter, tighter names
-}
-
 export function classSource(getClasses: () => string[]): CompletionSource {
   return (ctx: CompletionContext): CompletionResult | null => {
     const token = ctx.matchBefore(/\.[\w-]*/);
@@ -157,18 +141,15 @@ export function classSource(getClasses: () => string[]): CompletionSource {
     const q = token.text.slice(1).toLowerCase();
     // Fuzzy match the class name (subsequence) AND keyword-search the
     // description, so `.pnl` finds `.panel` and `.highlight` finds `.hl`/`.flare`
-    // by what they DO. Name hits rank above description-only hits.
+    // by what they DO. A direct name hit always outranks a description-only hit
+    // (searchScore). While querying we drop the section grouping so that weighting
+    // actually orders the list; with no query we keep sections for browsing.
     const scored: { score: number; opt: Completion }[] = [];
     for (const c of classes) {
       const info = CLASS_INFO[c];
       const detail = info?.detail || BUILTIN_CLASSES[c] || "";
-      let score = 0;
-      if (q) {
-        const nameScore = fuzzyName(q, c);
-        const inDesc = detail.toLowerCase().includes(q);
-        if (nameScore < 0 && !inDesc) continue;
-        score = (nameScore >= 0 ? nameScore + 20 : 0) + (inDesc ? 3 : 0);
-      }
+      const score = searchScore(q, c, detail);
+      if (score == null) continue;
       const sectionName = info?.section ?? (c in BUILTIN_CLASSES ? "Reveal/Quarto" : "Deck CSS");
       scored.push({
         score,
@@ -177,7 +158,7 @@ export function classSource(getClasses: () => string[]): CompletionSource {
           apply: `.${c}`,
           type: "class",
           detail: detail || undefined,
-          section: { name: sectionName, rank: SECTION_RANK[sectionName] ?? 99 },
+          section: q ? undefined : { name: sectionName, rank: SECTION_RANK[sectionName] ?? 99 },
         },
       });
     }
