@@ -9,3 +9,9 @@
 .reveal-viewport { background: var(--slide-bg); }
 .reveal { background: var(--slide-bg); color: var(--ink); }
 .reveal a { color: var(--theme-accent); }
+
+/* Page types: the title slide stays brand-dark (so it works even when the deck
+ * does not set its own background-color); section-divider h1 in the accent. */
+.reveal .title-page { background: var(--cm-dark, #1F1F36); color: #fff; }
+.reveal .title-page .eyebrow, .reveal .title-page .headline .teal { color: var(--cm-blue, #6DC4C8); }
+.reveal section > h1 { color: var(--theme-accent); }

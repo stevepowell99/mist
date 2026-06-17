@@ -36,3 +36,11 @@
 :is(.reveal,.preview) .hl, :is(.reveal,.preview) .flare { border-radius: 0; background: var(--bru-yellow); color: #000; }
 :is(.reveal,.preview) .bignum { border: 4px solid #000; border-radius: 0; background: var(--bru-yellow); }
 :is(.reveal,.preview) .bignum .fig { color: #000; }
+
+/* Page types: poster title slide, full-bleed section dividers. */
+.reveal .title-page { background: #fff; color: #000; }
+.reveal .title-page .eyebrow { display: inline-block; background: #000; color: var(--bru-yellow); padding: 0.2em 0.5em; letter-spacing: 0.12em; font-weight: 900; text-transform: uppercase; }
+.reveal .title-page .headline { color: #000; font-weight: 900; text-transform: uppercase; font-size: 2.8em; line-height: 0.9; }
+.reveal .title-page .headline .teal { color: var(--bru-red); }
+.reveal .title-page .subhead, .reveal .title-page .byline, .reveal .title-page .contact { color: #000; font-weight: 700; text-transform: uppercase; }
+.reveal section > h1 { color: #000; font-weight: 900; text-transform: uppercase; border-left: 12px solid var(--bru-yellow); padding-left: 0.3em; }

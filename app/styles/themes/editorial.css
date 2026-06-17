@@ -30,3 +30,12 @@
 :is(.reveal,.preview) .hl, :is(.reveal,.preview) .flare { border-radius: 0; background: #f0e2b8; color: var(--ink); }
 :is(.reveal,.preview) .bignum { background: #efe7d4; border: 1px solid var(--rule); border-radius: 0; }
 :is(.reveal,.preview) .bignum .fig { color: var(--accent); }
+
+/* Page types: cream title slide with a ruled italic masthead; ruled section h1. */
+.reveal .title-page { background: var(--slide-bg); color: var(--ink); }
+.reveal .title-page .eyebrow { font-variant: small-caps; letter-spacing: 0.15em; color: var(--accent); }
+.reveal .title-page .headline { color: var(--ink); font-style: italic; border-top: 2px solid var(--ink); border-bottom: 2px solid var(--ink); display: inline-block; padding: 0.1em 0.5em; }
+.reveal .title-page .headline .teal { color: var(--accent); }
+.reveal .title-page .subhead { font-style: italic; color: var(--muted); }
+.reveal .title-page .byline, .reveal .title-page .contact { font-variant: small-caps; letter-spacing: 0.1em; color: var(--muted); }
+.reveal section > h1 { color: var(--accent); font-style: italic; border-bottom: 1px solid var(--rule); padding-bottom: 0.2em; }
