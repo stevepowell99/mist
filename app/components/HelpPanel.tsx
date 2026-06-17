@@ -135,7 +135,7 @@ const TIPS = [
 
 function Kbd({ children }: { children: React.ReactNode }) {
   return (
-    <kbd className="rounded border border-border bg-border/40 px-1.5 py-0.5 font-mono text-xs text-ink shadow-sm">
+    <kbd className="rounded border border-border bg-border/40 px-1.5 py-0.5 font-mono text-sm text-ink shadow-sm">
       {children}
     </kbd>
   );
@@ -143,8 +143,8 @@ function Kbd({ children }: { children: React.ReactNode }) {
 
 function Row({ keys, label }: Shortcut) {
   return (
-    <div className="flex items-center justify-between gap-3 py-1">
-      <span className="text-sm text-ink">{label}</span>
+    <div className="flex items-center justify-between gap-3 py-2">
+      <span className="text-base text-ink">{label}</span>
       <span className="flex shrink-0 items-center gap-1">
         {keys.map((k, i) => (
           <Kbd key={i}>{k}</Kbd>
@@ -157,7 +157,7 @@ function Row({ keys, label }: Shortcut) {
 function Section({ title, items }: { title: string; items: Shortcut[] }) {
   return (
     <div>
-      <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted">{title}</h3>
+      <h3 className="mb-1 text-sm font-semibold uppercase tracking-wider text-ink/75">{title}</h3>
       <div className="divide-y divide-border/60">
         {items.map((s) => (
           <Row key={s.label} {...s} />
@@ -170,9 +170,9 @@ function Section({ title, items }: { title: string; items: Shortcut[] }) {
 /** A name + description row, for the Sharing and Files tabs. */
 function DefRow({ name, desc }: { name: string; desc: string }) {
   return (
-    <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1">
-      <span className="shrink-0 text-sm text-ink">{name}</span>
-      <span className="text-right text-xs text-muted">{desc}</span>
+    <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-2">
+      <span className="shrink-0 text-base text-ink">{name}</span>
+      <span className="text-right text-sm text-ink/75">{desc}</span>
     </div>
   );
 }
@@ -182,8 +182,8 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
     <button
       type="button"
       onClick={onClick}
-      className={`cursor-pointer rounded px-2.5 py-1 text-sm transition-colors ${
-        active ? "bg-border/60 font-medium text-ink" : "text-muted hover:text-ink"
+      className={`cursor-pointer rounded px-2.5 py-2 text-base transition-colors ${
+        active ? "bg-border/60 font-medium text-ink" : "text-ink/75 hover:text-ink"
       }`}
     >
       {children}
@@ -292,7 +292,7 @@ export default function HelpPanel() {
             aria-label="Keyboard shortcuts and tips"
             onClick={(e) => e.stopPropagation()}
             style={{ transformOrigin: "bottom right" }}
-            className={`max-h-[85vh] w-full max-w-3xl overflow-y-auto rounded-lg border border-border bg-paper shadow-2xl transition-all duration-500 ease-in ${
+            className={`max-h-[80vh] w-full max-w-[80vw] overflow-y-auto rounded-lg border border-border bg-paper leading-relaxed text-ink shadow-2xl transition-all duration-500 ease-in ${
               flyOut ? "translate-x-[38vw] translate-y-[42vh] scale-[0.15] opacity-0" : "translate-x-0 translate-y-0 scale-100 opacity-100"
             }`}
           >
@@ -316,7 +316,7 @@ export default function HelpPanel() {
                 type="button"
                 onClick={dismiss}
                 aria-label="Close"
-                className="cursor-pointer px-2 text-xl leading-none text-muted hover:text-ink"
+                className="cursor-pointer px-2 text-xl leading-none text-ink/75 hover:text-ink"
               >
                 &times;
               </button>
@@ -330,8 +330,8 @@ export default function HelpPanel() {
                 <div className="flex flex-col gap-6">
                   <Section title="Slides preview" items={SLIDES} />
                   <div>
-                    <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted">Tips</h3>
-                    <ul className="list-disc space-y-1 pl-4 text-sm text-muted">
+                    <h3 className="mb-1 text-sm font-semibold uppercase tracking-wider text-ink/75">Tips</h3>
+                    <ul className="list-disc space-y-1 pl-4 text-base text-ink/75">
                       {TIPS.map((t) => (
                         <li key={t}>{t}</li>
                       ))}
@@ -342,8 +342,8 @@ export default function HelpPanel() {
             )}
             {tab === "styling" && (
               <div className="px-5 py-4">
-                <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted">Deck &amp; doc settings (YAML)</h3>
-                <p className="mb-3 text-sm text-muted">
+                <h3 className="mb-1 text-sm font-semibold uppercase tracking-wider text-ink/75">Deck &amp; doc settings (YAML)</h3>
+                <p className="mb-3 text-base text-ink/75">
                   Put these at the top of the file, top-level or under{" "}
                   <span className="font-mono text-ink">format: revealjs:</span> (both are read). The slide size is
                   fixed at 1280&times;720, so <span className="font-mono text-ink">width</span>/
@@ -353,29 +353,29 @@ export default function HelpPanel() {
                 </p>
                 <div className="mb-6 grid gap-x-10 sm:grid-cols-2">
                   {DECK_SETTINGS.map((s) => (
-                    <div key={s.key} className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1">
-                      <span className="font-mono text-sm text-ink">{s.key}</span>
-                      <span className="text-right text-xs text-muted">{s.val}</span>
+                    <div key={s.key} className="flex items-baseline justify-between gap-3 border-b border-border/60 py-2">
+                      <span className="font-mono text-base text-ink">{s.key}</span>
+                      <span className="text-right text-sm text-ink/75">{s.val}</span>
                     </div>
                   ))}
                 </div>
 
-                <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted">Slash commands</h3>
-                <p className="mb-3 text-sm text-muted">
+                <h3 className="mb-1 text-sm font-semibold uppercase tracking-wider text-ink/75">Slash commands</h3>
+                <p className="mb-3 text-base text-ink/75">
                   Type <Kbd>/</Kbd> at the start of a line (or after a space) to insert a structure; with text
                   selected, <Kbd>/</Kbd> wraps it. In suggest mode the insert lands as one suggested block.
                 </p>
                 <div className="mb-6 grid gap-x-10 sm:grid-cols-2">
                   {SLASH_HELP.map((s) => (
-                    <div key={s.cmd} className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1">
-                      <span className="font-mono text-sm text-ink">{s.cmd}</span>
-                      <span className="text-right text-xs text-muted">{s.detail}</span>
+                    <div key={s.cmd} className="flex items-baseline justify-between gap-3 border-b border-border/60 py-2">
+                      <span className="font-mono text-base text-ink">{s.cmd}</span>
+                      <span className="text-right text-sm text-ink/75">{s.detail}</span>
                     </div>
                   ))}
                 </div>
 
-                <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted">Slide classes</h3>
-                <p className="mb-3 text-sm text-muted">
+                <h3 className="mb-1 text-sm font-semibold uppercase tracking-wider text-ink/75">Slide classes</h3>
+                <p className="mb-3 text-base text-ink/75">
                   Style an element by composing a <span className="text-ink">component</span> + a{" "}
                   <span className="text-ink">colour</span> + optional <span className="text-ink">modifiers</span>. Type{" "}
                   <Kbd>.</Kbd> inside <span className="font-mono text-ink">{"{ }"}</span> or after a{" "}
@@ -384,8 +384,8 @@ export default function HelpPanel() {
                 <div className="grid gap-x-10 gap-y-3 sm:grid-cols-2">
                   <div className="space-y-2">
                     {CLASS_GROUPS.map((g) => (
-                      <div key={g.title} className="text-sm">
-                        <span className="mr-2 inline-block w-24 shrink-0 text-xs uppercase tracking-wider text-muted">
+                      <div key={g.title} className="text-base">
+                        <span className="mr-2 inline-block w-24 shrink-0 text-sm uppercase tracking-wider text-ink/75">
                           {g.title}
                         </span>
                         <span className="font-mono text-ink">{g.items}</span>
@@ -395,10 +395,10 @@ export default function HelpPanel() {
                   <div className="space-y-2">
                     {CLASS_EXAMPLES.map((e) => (
                       <div key={e.code}>
-                        <pre className="overflow-x-auto rounded border border-border bg-border/30 px-2 py-1 font-mono text-xs text-ink">
+                        <pre className="overflow-x-auto rounded border border-border bg-border/30 px-2 py-2 font-mono text-sm text-ink">
                           {e.code}
                         </pre>
-                        <span className="text-xs text-muted">{e.note}</span>
+                        <span className="text-sm text-ink/75">{e.note}</span>
                       </div>
                     ))}
                   </div>
@@ -407,15 +407,15 @@ export default function HelpPanel() {
             )}
             {tab === "sharing" && (
               <div className="px-5 py-4">
-                <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted">Who can open it</h3>
-                <p className="mb-4 text-sm text-muted">
+                <h3 className="mb-1 text-sm font-semibold uppercase tracking-wider text-ink/75">Who can open it</h3>
+                <p className="mb-4 text-base text-ink/75">
                   The secret link is not enough on its own: a reader must be signed in with a Google account the file
                   is shared with in Drive. Drive sharing is the source of truth, and the effective role is the more
                   restrictive of the link and the file&apos;s own sharing. Collaborators need no gmist account.
                 </p>
 
-                <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted">Share menu</h3>
-                <p className="mb-3 text-sm text-muted">
+                <h3 className="mb-1 text-sm font-semibold uppercase tracking-wider text-ink/75">Share menu</h3>
+                <p className="mb-3 text-base text-ink/75">
                   From the <span className="text-ink">Share</span> button in the top bar.
                 </p>
                 <div className="mb-6 grid gap-x-10 sm:grid-cols-2">
@@ -424,8 +424,8 @@ export default function HelpPanel() {
                   ))}
                 </div>
 
-                <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted">Comments &amp; suggestions</h3>
-                <p className="mb-3 text-sm text-muted">
+                <h3 className="mb-1 text-sm font-semibold uppercase tracking-wider text-ink/75">Comments &amp; suggestions</h3>
+                <p className="mb-3 text-base text-ink/75">
                   Select text and press <Kbd>{MOD}</Kbd> <Kbd>Shift</Kbd> <Kbd>M</Kbd> to comment: it wraps the
                   selection as <span className="font-mono text-ink">{"{==text==}{>>note<<}"}</span>, or drops a point
                   note <span className="font-mono text-ink">{"{>>note<<}"}</span> at the cursor. In{" "}
@@ -444,8 +444,8 @@ export default function HelpPanel() {
             )}
             {tab === "files" && (
               <div className="px-5 py-4">
-                <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted">Drive files</h3>
-                <p className="mb-3 text-sm text-muted">
+                <h3 className="mb-1 text-sm font-semibold uppercase tracking-wider text-ink/75">Drive files</h3>
+                <p className="mb-3 text-base text-ink/75">
                   Every gmist document is a real Markdown file in Google Drive. It is the same file whether you open
                   it here, in Obsidian or on disk.
                 </p>
@@ -454,7 +454,7 @@ export default function HelpPanel() {
                     <DefRow key={f.name} name={f.name} desc={f.desc} />
                   ))}
                 </div>
-                <p className="text-sm text-muted">
+                <p className="text-base text-ink/75">
                   Live editing by several people at once is not a goal; gmist is for one writer at a time plus async
                   review. See the Sharing &amp; review tab for comments and suggestions.
                 </p>
