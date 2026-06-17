@@ -696,17 +696,20 @@ window.addEventListener("keydown", function(e){
     parent.postMessage({ type: "mist-key", chord: chord }, "*");
   }
 }, true);
-// In overview, let the mouse wheel page through slides. Reveal navigates the
+// In overview, let the mouse wheel scroll through slides. Reveal navigates the
 // overview grid by arrow keys only and the pane has no scrollbar, so a plain
-// wheel does nothing; throttle so one notch moves one slide.
-var wheelLock = false;
+// wheel does nothing. Accumulate scroll distance and step one slide per notch's
+// worth (~100px), so a fast scroll flies through many slides rather than crawling
+// one-per-throttle-tick. deltaMode 1 (lines) / 2 (pages) report small numbers, so
+// scale them up to the pixel threshold.
+var wheelAccum = 0;
 window.addEventListener("wheel", function(e){
   if (!(Reveal.isOverview && Reveal.isOverview())) return;
   e.preventDefault();
-  if (wheelLock) return;
-  wheelLock = true;
-  setTimeout(function(){ wheelLock = false; }, 180);
-  if (e.deltaY > 0) Reveal.next(); else if (e.deltaY < 0) Reveal.prev();
+  var d = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1);
+  wheelAccum += d;
+  while (wheelAccum >= 100) { Reveal.next(); wheelAccum -= 100; }
+  while (wheelAccum <= -100) { Reveal.prev(); wheelAccum += 100; }
 }, { passive: false });
 Reveal.initialize(REVEAL_CONFIG).then(async function(){
   // Rebuild slide backgrounds: the markdown plugin sets data-background-image
