@@ -22,9 +22,16 @@ export interface AssetCtx {
   driveToken: string;
 }
 
-/** Resolve one src; absolute, root-relative and data URLs pass through. */
+/** Resolve one src; absolute, root-relative and data URLs pass through. A
+ *  `drive:<fileId>` reference (a shared-library image) resolves by id, so it is
+ *  portable across decks regardless of folder; relative paths resolve against the
+ *  deck's own folder as before. */
 export function resolveAssetSrc(path: string, ctx: AssetCtx): string {
   if (/^https?:\/\//.test(path) || path.startsWith("/") || path.startsWith("data:")) return path;
+  const driveId = path.match(/^drive:(.+)$/);
+  if (driveId && ctx.driveToken) {
+    return `${ctx.origin}/drive/asset?id=${encodeURIComponent(driveId[1])}&token=${encodeURIComponent(ctx.driveToken)}`;
+  }
   if (ctx.drive && ctx.driveToken) return driveAssetUrl(ctx.drive, ctx.origin, path, ctx.driveToken);
   return path;
 }

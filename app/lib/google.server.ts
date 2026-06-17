@@ -302,7 +302,7 @@ export async function driveDownload(token: string, fileId: string): Promise<Arra
 }
 
 /** Coarse file kind for the quick-open type filter and icons. */
-export type DriveKind = "folder" | "markdown" | "doc" | "sheet" | "slides" | "pdf" | "other";
+export type DriveKind = "folder" | "markdown" | "doc" | "sheet" | "slides" | "pdf" | "image" | "other";
 
 const DOC_MIME = "application/vnd.google-apps.document";
 const SHEET_MIME = "application/vnd.google-apps.spreadsheet";
@@ -314,6 +314,7 @@ export function driveKind(mimeType: string, name: string): DriveKind {
   if (mimeType === SHEET_MIME) return "sheet";
   if (mimeType === SLIDES_MIME) return "slides";
   if (mimeType === "application/pdf") return "pdf";
+  if (mimeType.startsWith("image/")) return "image";
   if (/\.(md|qmd)$/i.test(name)) return "markdown";
   return "other";
 }
@@ -326,6 +327,7 @@ const KIND_CLAUSE: Partial<Record<DriveKind, string>> = {
   sheet: `mimeType = '${SHEET_MIME}'`,
   slides: `mimeType = '${SLIDES_MIME}'`,
   pdf: `mimeType = 'application/pdf'`,
+  image: `mimeType contains 'image/'`,
   markdown: `(name contains '.md' or name contains '.qmd')`,
 };
 

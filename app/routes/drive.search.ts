@@ -26,7 +26,7 @@ export interface SearchResult {
   webViewLink: string | null;
 }
 
-const FILTERABLE: DriveKind[] = ["folder", "markdown", "doc", "sheet", "slides", "pdf"];
+const FILTERABLE: DriveKind[] = ["folder", "markdown", "doc", "sheet", "slides", "pdf", "image"];
 
 function toResult(e: DriveSearchEntry): SearchResult {
   return {

@@ -8,6 +8,7 @@ import {
   driveDownload,
 } from "~/lib/google.server";
 import { driveAccess, canAccessFile, driveUnauthenticated, driveForbidden } from "~/lib/drive-access.server";
+import { isInLibrary, type LibraryEnv } from "~/lib/library.server";
 
 const MIME: Record<string, string> = {
   css: "text/css",
@@ -35,14 +36,37 @@ function mimeFor(path: string): string {
  */
 export async function loader({ request, context }: Route.LoaderArgs) {
   const url = new URL(request.url);
-  const deck = url.searchParams.get("deck");
-  const path = url.searchParams.get("path");
-  if (!deck || !path) return new Response("missing deck or path", { status: 400 });
-
-  const { env } = getCloudflare(context);
+  const { env } = getCloudflare(context) as { env: LibraryEnv };
   const access = await driveAccess(request, env);
   if (!access.ok) return driveUnauthenticated();
   if (!driveConfigured(env)) return new Response("Drive not configured", { status: 501 });
+
+  // id-mode: a shared-library image by Drive id, so the same image is reusable
+  // across decks. Two MANDATORY constraints keep this from being a read-any-file
+  // endpoint for any session/token holder: the file must be an image, and must
+  // live inside the configured library subtree.
+  const id = url.searchParams.get("id");
+  if (id) {
+    try {
+      const token = await getDriveAccessToken(env);
+      const meta = await driveGetMeta(token, id);
+      const mime = mimeFor(meta.name);
+      if (!mime.startsWith("image/")) return new Response("not a library image", { status: 403 });
+      if (!(await isInLibrary(token, env, id))) return driveForbidden();
+      const body = await driveDownload(token, id);
+      return new Response(body, {
+        headers: { "Content-Type": mime, "Cache-Control": "public, max-age=300" },
+      });
+    } catch (err) {
+      return new Response(err instanceof Error ? err.message : "asset failed", { status: 502 });
+    }
+  }
+
+  // path-mode: a deck-relative asset (CSS/image/font) resolved against the deck's
+  // own folder, gated by the viewer's access to that deck.
+  const deck = url.searchParams.get("deck");
+  const path = url.searchParams.get("path");
+  if (!deck || !path) return new Response("missing deck or path", { status: 400 });
   if (!(await canAccessFile(env, deck, access.email))) return driveForbidden();
 
   try {
