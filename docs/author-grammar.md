@@ -3,9 +3,11 @@
 This is the canonical contract for the markdown author syntax that **two**
 renderers turn into the same styled HTML:
 
-- **gmist** (TypeScript): `app/lib/slides-build.ts` converters
-  (`convertCallouts`, `convertDivs`, `convertSpans`, `convertImages`), used by
-  both the slide builder and the document `Preview`.
+- **gmist** (TypeScript): the `applyGrammar` pipeline in `app/lib/slides-build.ts`
+  (`convertBignums`, then `convertCallouts`, `convertSpans`, `convertImages`,
+  `convertDivs`, with code spans masked), the single entry shared by the slide
+  builder, the document `Preview` and the library thumbnails so the three cannot
+  drift.
 - **the Garden** (Python): `build_static_site.py` in the `19aCMgarden` project, a
   static site generator over an Obsidian vault.
 
