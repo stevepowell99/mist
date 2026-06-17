@@ -55,12 +55,12 @@ const SLASH_COMMANDS: Completion[] = [
     },
   },
   snippetCompletion(
-    ':::: {.columns}\n\n::: {.column width="50%"}\n${1}\n:::\n\n::: {.column width="50%"}\n${2}\n:::\n\n::::\n\n${}',
-    { label: "/columns", detail: "two columns (50/50)", type: "keyword", boost: 99 },
+    ':::: {.columns}\n\n::: {width="50%"}\n${1}\n:::\n\n::: {width="50%"}\n${2}\n:::\n\n::::\n\n${}',
+    { label: "/columns", detail: "two columns side by side (50/50)", type: "keyword", boost: 99 },
   ),
   snippetCompletion(
-    '::: {.column width="${1:50}%"}\n\n${2}\n\n:::\n\n${}',
-    { label: "/column", detail: "single column block", type: "keyword", boost: 98 },
+    '::: {width="${1:50}%"}\n\n${2}\n\n:::\n\n${}',
+    { label: "/column", detail: "one more column (put inside .columns; set its width)", type: "keyword", boost: 98 },
   ),
   classSnippet("[${2:text}]{.${1}}${}", {
     label: "/span",
@@ -122,8 +122,8 @@ const SLASH_COMMANDS: Completion[] = [
     boost: 93,
   }),
   snippetCompletion(
-    ':::: {.columns}\n\n::: {.column width="33%"}\n${1}\n:::\n\n::: {.column width="33%"}\n${2}\n:::\n\n::: {.column width="33%"}\n${3}\n:::\n\n::::\n\n${}',
-    { label: "/columns3", detail: "three columns (33% each)", type: "keyword", boost: 50 },
+    ':::: {.columns}\n\n::: {width="33%"}\n${1}\n:::\n\n::: {width="33%"}\n${2}\n:::\n\n::: {width="33%"}\n${3}\n:::\n\n::::\n\n${}',
+    { label: "/columns3", detail: "three columns side by side (33% each)", type: "keyword", boost: 50 },
   ),
   snippetCompletion("::: {.fragment}\n\n${1}\n\n:::\n\n${}", {
     label: "/fragment",

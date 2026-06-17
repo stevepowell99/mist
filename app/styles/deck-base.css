@@ -246,9 +246,11 @@
 :is(.reveal,.preview) .cards.cols-3 { grid-template-columns: repeat(3, 1fr); }
 :is(.reveal,.preview) .cards.cols-4 { grid-template-columns: repeat(4, 1fr); }
 
-/* COMPONENT: columns (side by side) */
+/* COMPONENT: columns (side by side). Every direct child IS a column (like .cards
+   styles its items), so a child needs no .column class; set width= on a child for
+   an uneven split. */
 :is(.reveal,.preview) .columns { display: flex; gap: min(4vw, 1.5em); align-items: flex-start; }
-:is(.reveal,.preview) .columns > .column { display: block; flex: 1 1 auto; min-width: 0; }
+:is(.reveal,.preview) .columns > * { flex: 1 1 auto; min-width: 0; }
 
 /* COMPONENT: big-number callout */
 :is(.reveal,.preview) .bignum {

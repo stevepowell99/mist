@@ -83,7 +83,7 @@
   },
   "external": {
     "_comment": "Reveal.js / Quarto authoring classes that are NOT in this framework CSS. gmist keeps these in cm-classes.ts BUILTIN_CLASSES so the picker still offers them; do not duplicate their appearance here.",
-    "classes": ["fragment", "fade-in", "fade-out", "fade-up", "fade-down", "columns", "column",
+    "classes": ["fragment", "fade-in", "fade-out", "fade-up", "fade-down", "columns",
       "incremental", "r-fit-text", "r-stretch", "callout-note", "callout-tip", "callout-warning"]
   }
 }

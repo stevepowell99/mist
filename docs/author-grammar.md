@@ -39,7 +39,7 @@ Background and the staged plan to converge the two are in
 | Citation | `[@key]` / bare `@key` + a `.bib` | inline APA + reference list | inline APA + reference list | yes |
 | Math | `$…$`, `$$…$$` | yes | yes (MathJax) | yes |
 | Mermaid | ` ```mermaid ` | yes | yes | yes |
-| Columns | see below | `::: {.columns}` / `::: {.column}` | `--- start-multi-column` | intentionally different |
+| Columns | see below | `::: {.columns}` wrapping child blocks (each child is a column) | `--- start-multi-column` | intentionally different |
 
 ## Callouts
 
@@ -85,7 +85,7 @@ ships (Phase 2).
 
 The two column syntaxes are intentionally different and both stay supported:
 
-- gmist: `::: {.columns}` wrapping `::: {.column}` blocks (CSS flex).
+- gmist: `::: {.columns}` wrapping child `:::` blocks (CSS flex). Each direct child is a column; set `width=` on a child for an uneven split. No `.column` class is needed.
 - Garden: the Obsidian multi-column plugin's `--- start-multi-column` fences,
   emitted as Bootstrap `.row` / `.col-md-*`.
 

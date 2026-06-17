@@ -113,8 +113,7 @@ const BUILTIN_CLASSES: Record<string, string> = {
   "highlight-current-green": "Fragment: green on its step",
   "highlight-current-blue": "Fragment: blue on its step",
   // quarto / reveal layout + text helpers
-  columns: "Quarto: flex row of columns",
-  column: "Quarto: one column (set width=)",
+  columns: "Row of side-by-side columns (each child is a column; set width= for an uneven split)",
   incremental: "Quarto: reveal items one by one",
   nonincremental: "Quarto: reveal all at once",
   smaller: "Quarto: smaller slide text",
