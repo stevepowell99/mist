@@ -212,15 +212,19 @@
   list-style: none; background: var(--fill, var(--hue, var(--grey-bg)));
   color: var(--text, var(--on, var(--ink))); border-radius: 6px; padding: 0.5em 0.7em; line-height: 1.3;
 }
-/* reveal makes .reveal ul/ol inline-block with no padding, so inside a card the
-   outside markers have no room and vanish. Force normal block lists with an
-   explicit indent so the bullets always show. */
+/* The .card list-style:none above is inherited by the nested list, so card
+   bullets vanished. Re-assert markers ON THE LI ITSELF (display:list-item +
+   inside position), which inheritance, reveal's text-align:center and any
+   clipping cannot defeat, and give the list a left text-align and indent. */
 :is(.reveal,.preview) .card ul, :is(.reveal,.preview) .cards li ul,
 :is(.reveal,.preview) .card ol, :is(.reveal,.preview) .cards li ol {
-  display: block; margin: 0.3em 0; padding-left: 1.2em; list-style-position: outside;
+  display: block; margin: 0.3em 0; padding-left: 0.4em; text-align: left;
 }
-:is(.reveal,.preview) .card ul, :is(.reveal,.preview) .cards li ul { list-style-type: disc; }
-:is(.reveal,.preview) .card ol, :is(.reveal,.preview) .cards li ol { list-style-type: decimal; }
+:is(.reveal,.preview) .card li, :is(.reveal,.preview) .cards li li {
+  display: list-item; list-style-position: inside;
+}
+:is(.reveal,.preview) .card ul > li, :is(.reveal,.preview) .cards li ul > li { list-style-type: disc; }
+:is(.reveal,.preview) .card ol > li, :is(.reveal,.preview) .cards li ol > li { list-style-type: decimal; }
 :is(.reveal,.preview) .card p { margin: 0; }
 :is(.reveal,.preview) .card p + p { margin-top: 0.4em; }
 :is(.reveal,.preview) .cards .cards { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
