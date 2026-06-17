@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 import { useDocument } from "~/lib/DocumentContext";
@@ -16,10 +17,52 @@ function thumbHtml(md: string): string {
   return DOMPurify.sanitize(marked.parse(converted, { async: false }) as string);
 }
 
+/** Hover-to-enlarge: tracks whether the pointer is over a thumbnail and where to
+ *  float the enlarged copy (offset from the cursor, clamped to the viewport). The
+ *  enlarged box assumes roughly w x h so it never spills off-screen. */
+function useHoverPreview(w: number, h: number) {
+  const [show, setShow] = useState(false);
+  const [pos, setPos] = useState({ x: 0, y: 0 });
+  const place = useCallback(
+    (e: React.MouseEvent) => {
+      const PAD = 12;
+      let x = e.clientX + 24;
+      let y = e.clientY + 24;
+      if (x + w + PAD > window.innerWidth) x = e.clientX - w - 24;
+      if (y + h + PAD > window.innerHeight) y = window.innerHeight - h - PAD;
+      setPos({ x: Math.max(PAD, x), y: Math.max(PAD, y) });
+    },
+    [w, h],
+  );
+  const handlers = {
+    onMouseEnter: (e: React.MouseEvent) => {
+      place(e);
+      setShow(true);
+    },
+    onMouseMove: place,
+    onMouseLeave: () => setShow(false),
+  };
+  return { show, pos, handlers };
+}
+
+/** The floating enlarged preview, portalled to <body> so the gallery's scroll
+ *  clipping and stacking context never cut it off. Never intercepts the pointer. */
+function ZoomPortal({ pos, children }: { pos: { x: number; y: number }; children: React.ReactNode }) {
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <div className="pointer-events-none fixed z-[90]" style={{ left: pos.x, top: pos.y }}>
+      {children}
+    </div>,
+    document.body,
+  );
+}
+
 /** A small live preview of a slide fragment, by id (fetched) or raw markdown
- *  (already in hand, for a picked deck's slides). Shrunk with zoom and clipped. */
+ *  (already in hand, for a picked deck's slides). Shrunk with zoom and clipped;
+ *  on hover, floats the whole slide at a larger zoom. */
 function SlideThumb({ id, markdown }: { id?: string; markdown?: string }) {
   const [html, setHtml] = useState<string | null>(null);
+  const { show, pos, handlers } = useHoverPreview(640, 360);
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -38,13 +81,39 @@ function SlideThumb({ id, markdown }: { id?: string; markdown?: string }) {
     };
   }, [id, markdown]);
   return (
-    <div className="h-28 w-full overflow-hidden rounded border border-border bg-white">
+    <div className="h-28 w-full overflow-hidden rounded border border-border bg-white" {...handlers}>
       {html == null ? (
         <div className="flex h-full items-center justify-center text-xs text-muted">…</div>
       ) : (
         <div className="preview origin-top-left px-2 py-1" style={{ zoom: 0.34 }} dangerouslySetInnerHTML={{ __html: html }} />
       )}
+      {show && html && (
+        <ZoomPortal pos={pos}>
+          <div className="overflow-hidden rounded-lg border border-border bg-white shadow-2xl" style={{ width: 640, height: 360 }}>
+            <div className="preview origin-top-left px-3 py-2" style={{ width: 1280, zoom: 0.5 }} dangerouslySetInnerHTML={{ __html: html }} />
+          </div>
+        </ZoomPortal>
+      )}
     </div>
+  );
+}
+
+/** An image thumbnail that floats a larger copy on hover. */
+function ImageThumb({ src, name }: { src: string; name: string }) {
+  const { show, pos, handlers } = useHoverPreview(560, 560);
+  return (
+    <>
+      <img src={src} alt={name} loading="lazy" className="h-24 w-full rounded object-contain" {...handlers} />
+      {show && (
+        <ZoomPortal pos={pos}>
+          <img
+            src={src}
+            alt={name}
+            className="block max-h-[80vh] max-w-[560px] rounded-lg border border-border bg-white object-contain shadow-2xl"
+          />
+        </ZoomPortal>
+      )}
+    </>
   );
 }
 
@@ -578,11 +647,9 @@ export default function LibraryGallery() {
                     title={`Insert ${it.name}`}
                     className="flex w-full cursor-pointer flex-col items-stretch gap-1 rounded border border-border p-2 transition-colors hover:border-ink disabled:opacity-50"
                   >
-                    <img
+                    <ImageThumb
                       src={`/drive/asset?id=${encodeURIComponent(it.id)}&token=${encodeURIComponent(assetToken ?? "")}`}
-                      alt={it.name}
-                      loading="lazy"
-                      className="h-24 w-full rounded object-contain"
+                      name={it.name}
                     />
                     <span className="truncate text-xs text-muted" title={it.name}>{it.name}</span>
                   </button>
