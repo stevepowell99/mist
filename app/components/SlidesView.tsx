@@ -210,7 +210,10 @@ export default function SlidesView() {
       ref={iframeRef}
       onLoad={onLoad}
       title="Slides preview"
-      sandbox="allow-scripts"
+      // allow-popups (+ escape-sandbox) so reveal's S key can open the speaker-
+      // notes window: it is a window.open() popup that a bare sandbox blocks, and
+      // it must escape the sandbox to run its own scripts or it opens blank.
+      sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
       // allow + allowFullScreen let reveal's F key take the deck fullscreen from
       // inside the sandboxed iframe; the menu/overview/notes shortcuts work once
       // the iframe has focus (click the slide).
