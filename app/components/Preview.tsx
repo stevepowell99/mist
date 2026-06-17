@@ -6,7 +6,7 @@ import { rewriteImages } from "~/lib/asset-urls";
 import { runMermaid } from "~/lib/mermaid";
 import { renderWikiLinks } from "~/lib/wikilinks";
 import { convertCitations, formatReferenceList } from "~/lib/citations";
-import { convertCallouts, convertSpans, convertImages, convertDivs } from "~/lib/slides-build";
+import { convertCallouts, convertSpans, convertImages, convertDivs, maskCode, restoreCode } from "~/lib/slides-build";
 import { themeCss } from "~/lib/themes";
 import { stripFrontmatter } from "~/lib/thread-serialization";
 import { stripMistBanner } from "~/shared/mist-banner";
@@ -53,9 +53,14 @@ export default function Preview() {
     const resolved = rewriteImages(stripFrontmatter(stripMistBanner(markdown)), ctx);
     // Parse the composable grammar (callouts -> spans -> fenced divs, nesting
     // supported) so panels, cards and callouts render in a doc, then clean any
-    // attrs left on heading lines.
-    const withLinks = stripPandocAttrs(
-      convertDivs(convertImages(convertSpans(convertCallouts(renderWikiLinks(resolved))))),
+    // attrs left on heading lines. Mask code first so example syntax shown in
+    // `backticks` or a fenced block is never rewritten; restore it at the end.
+    const masked = maskCode(resolved);
+    const withLinks = restoreCode(
+      stripPandocAttrs(
+        convertDivs(convertImages(convertSpans(convertCallouts(renderWikiLinks(masked.text))))),
+      ),
+      masked.tokens,
     );
     let body = withLinks;
     let references = "";

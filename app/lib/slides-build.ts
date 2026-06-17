@@ -237,6 +237,22 @@ export function convertSpans(md: string): string {
   });
 }
 
+/** Mask fenced code blocks and inline `code` with placeholder tokens so the
+ *  grammar converters never rewrite example syntax shown inside code. Restore
+ *  with restoreCode AFTER the text conversions, before the markdown renderer
+ *  sees it. The MISTCODE sentinel is plain ASCII that no converter regex matches
+ *  and that never appears in real content. */
+export function maskCode(md: string): { text: string; tokens: string[] } {
+  const tokens: string[] = [];
+  const stash = (m: string) => `MISTCODE${tokens.push(m) - 1}ENDCODE`;
+  let text = md.replace(/```[\s\S]*?```|~~~[\s\S]*?~~~/g, stash); // fenced blocks first
+  text = text.replace(/`[^`\n]*`/g, stash); // then inline code
+  return { text, tokens };
+}
+export function restoreCode(text: string, tokens: string[]): string {
+  return text.replace(/MISTCODE(\d+)ENDCODE/g, (_m, i: string) => tokens[Number(i)] ?? "");
+}
+
 function buildSection(slideMd: string, ctx: AssetCtx): string {
   const lines = slideMd.split("\n");
   // Skip any leading blank lines so the first slide's heading (which follows
@@ -262,7 +278,13 @@ function buildSection(slideMd: string, ctx: AssetCtx): string {
     if (parsed.bgAttr) bgComment = `<!-- .slide: ${parsed.bgAttr} -->\n`;
     body = [parsed.heading, ...lines.slice(h + 1)].join("\n");
   }
-  const inner = convertDivs(convertImages(convertSpans(convertCallouts(body)))).replace(/<\/textarea>/gi, "&lt;/textarea&gt;");
+  // Mask code so an example like `[x]{.y}` shown in backticks is not rewritten
+  // into a real span; restore it before the markdown plugin renders the slide.
+  const masked = maskCode(body);
+  const inner = restoreCode(
+    convertDivs(convertImages(convertSpans(convertCallouts(masked.text)))),
+    masked.tokens,
+  ).replace(/<\/textarea>/gi, "&lt;/textarea&gt;");
   return `<section${classAttr} data-markdown><textarea data-template>\n${bgComment}${inner}\n</textarea></section>`;
 }
 
