@@ -1,0 +1,11 @@
+/* Theme: causal-map (the default, the gmist house look).
+ * deck-base.css already carries the composable grammar and the deck typography
+ * (Inter, ink headings, teal h2 rule), so this theme only sets the canvas: a
+ * clean white slide on a brand-teal accent. It deliberately does NOT restyle the
+ * document .preview, so an un-themed document keeps its existing serif look in
+ * both light and dark app modes. Selecting another theme opts a doc into being
+ * restyled too. */
+:is(.reveal,.preview) { --slide-bg: #ffffff; --theme-accent: #2a8a86; }
+.reveal-viewport { background: var(--slide-bg); }
+.reveal { background: var(--slide-bg); color: var(--ink); }
+.reveal a { color: var(--theme-accent); }

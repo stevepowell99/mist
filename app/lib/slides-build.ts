@@ -11,6 +11,9 @@ import type { DriveMeta } from "~/shared/types";
 // any per-deck `css:`, so a deck anywhere renders correctly and a local file can
 // override it via the cascade. Edited as a plain CSS file, not a TS string.
 import DECK_BASE_CSS from "~/styles/deck-base.css?raw";
+// gmist's own themes (replacing reveal.js themes): the resolved theme CSS is
+// injected after deck-base and before any per-deck `css:`. See app/lib/themes.ts.
+import { themeCss } from "~/lib/themes";
 
 export function stripFrontmatter(md: string): { frontmatter: string; body: string } {
   const m = md.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
@@ -289,7 +292,10 @@ html,body{margin:0;height:100%}
    white; a slide with its own colour/image background keeps it (reveal sets that
    inline). Scoped to .mist-embedded so the print/PDF page stays plain white. */
 html.mist-embedded{background:#ececec !important}
-html.mist-embedded .reveal .backgrounds .slide-background{background-color:#fff}
+/* The slide canvas reads --slide-bg (set by the theme, default white), so a
+   theme's background shows in the embedded preview AND in fullscreen/PDF. The
+   grey above is only the letterbox around the 16:9 slide. */
+.reveal .backgrounds .slide-background{background-color:var(--slide-bg,#fff)}
 /* "Waiter" overlay: an opaque cover with a spinner that hides the deck until it
    has rendered AND jumped to the right slide, so the cover slide never flashes
    in the live preview. Shown only while embedded; removed by showDeck(). */
@@ -301,20 +307,6 @@ html.mist-embedded .reveal .backgrounds .slide-background{background-color:#fff}
    the moment the waiter lifts. */
 .no-anim .reveal .slides section,.no-anim .reveal .backgrounds .slide-background{transition:none !important}
 `;
-
-const REVEAL_THEMES = new Set([
-  "white", "black", "league", "beige", "night", "serif", "simple", "solarized", "blood", "moon", "dracula", "sky",
-]);
-
-function extractTheme(frontmatter: string): string {
-  const m = frontmatter.match(/^\s*theme:\s*(.+)$/m);
-  if (!m) return "white";
-  let t = m[1].trim();
-  if (t.startsWith("[")) t = t.replace(/[[\]]/g, "").split(",")[0]?.trim() ?? "white";
-  t = t.replace(/['"]/g, "");
-  if (t === "default") return "white";
-  return REVEAL_THEMES.has(t) ? t : "white";
-}
 
 /** Map the deck's `navigation-mode:` to a reveal navigationMode. Quarto's
  *  `vertical` is reveal's `default` (up/down walks the stack); `linear` and
@@ -454,7 +446,6 @@ export function buildSlidesHtml(md: string, opts: BuildSlidesOptions): string {
   const { styles: inlineStyles } = extractStyleBlocks(rawBody);
   const sections = buildSlideSections(md, opts);
 
-  const theme = extractTheme(frontmatter);
   const navigationMode = extractNavMode(frontmatter);
   const deckCss = extractCssPaths(frontmatter)
     .map((p) => cssUrl(p, drive, origin, driveToken))
@@ -465,9 +456,9 @@ export function buildSlidesHtml(md: string, opts: BuildSlidesOptions): string {
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/${theme}.css">
 <style>${PREVIEW_CSS}</style>
 <style id="deck-base">${DECK_BASE_CSS}</style>
+<style id="deck-theme">${themeCss(frontmatter)}</style>
 ${deckCss}
 ${inlineStyles}
 </head><body>

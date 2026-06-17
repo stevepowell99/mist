@@ -104,6 +104,7 @@ const SLASH: { cmd: string; label: string }[] = [
 ];
 
 const TIPS = [
+  "Set theme: causal-map | qualia | brutalist | editorial in the YAML to restyle the whole deck or doc; ::: {.brand} drops the theme's logo in the corner.",
   "Edits save to Drive automatically, on a short pause after you stop typing.",
   "Edit the file in Obsidian or Drive and it appears here on reload (Drive wins if both changed).",
   "Set navigation-mode: grid in a deck's YAML for 2D arrow transitions.",

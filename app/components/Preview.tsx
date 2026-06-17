@@ -7,6 +7,7 @@ import { runMermaid } from "~/lib/mermaid";
 import { renderWikiLinks } from "~/lib/wikilinks";
 import { convertCitations, formatReferenceList } from "~/lib/citations";
 import { convertCallouts, convertSpans, convertImages, convertDivs } from "~/lib/slides-build";
+import { themeCss } from "~/lib/themes";
 import { stripFrontmatter } from "~/lib/thread-serialization";
 import { stripMistBanner } from "~/shared/mist-banner";
 
@@ -27,8 +28,12 @@ function renderCriticMarkup(text: string): string {
 }
 
 export default function Preview() {
-  const { markdown, drive, bibLib, assetToken } = useDocument();
+  const { markdown, drive, bibLib, assetToken, frontmatter } = useDocument();
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // The same theme CSS the deck iframe injects, so a themed document reads the
+  // same as a deck. Scoped to :is(.reveal,.preview), so it only touches .preview.
+  const themeStyle = useMemo(() => themeCss(frontmatter ?? ""), [frontmatter]);
 
   // DOMPurify needs a DOM, which the Cloudflare Worker has none of, so the
   // markdown render only runs after hydration. With a Preview share link the
@@ -70,10 +75,13 @@ export default function Preview() {
   }, [html]);
 
   return (
-    <div
-      ref={containerRef}
-      className="preview font-serif"
-      dangerouslySetInnerHTML={{ __html: html }}
-    />
+    <>
+      <style>{themeStyle}</style>
+      <div
+        ref={containerRef}
+        className="preview font-serif"
+        dangerouslySetInnerHTML={{ __html: html }}
+      />
+    </>
   );
 }

@@ -1,0 +1,32 @@
+/* Theme: editorial. Cream paper, serif body, generous measure, magazine voice.
+ * Adapts the 19c-slides editorial demo onto the gmist grammar: quiet 1px rules,
+ * small-caps italic headings, a rust accent. The composable components are
+ * restyled to the calm print look. */
+:is(.reveal,.preview) {
+  --slide-bg: #f5efe2; --ink: #2a2722; --rule: #c8b48a; --accent: #7a2820; --muted: #6b6256;
+}
+.reveal-viewport { background: var(--slide-bg); }
+.reveal, .preview { background: var(--slide-bg); color: var(--ink); }
+.reveal, .preview { font-family: "Source Serif Pro", "Source Serif", "Cambria", "Georgia", serif; }
+
+:is(.reveal,.preview) h1, :is(.reveal,.preview) h2, :is(.reveal,.preview) h3 {
+  font-family: "Source Serif Pro", "Cambria", "Georgia", serif; color: var(--ink); font-weight: 700; text-transform: none; letter-spacing: 0;
+}
+.reveal h1 { font-style: italic; border-bottom: 1px solid var(--rule); padding-bottom: 0.3em; }
+.reveal h2 { font-variant: small-caps; letter-spacing: 0.04em; color: var(--accent); border-bottom: 1px solid var(--rule); }
+.reveal h3 { font-style: italic; color: var(--accent); border-bottom: 0; }
+:is(.reveal,.preview) a { color: var(--accent); }
+
+:is(.reveal,.preview) blockquote { border-left: 4px solid var(--rule); background: none; font-style: italic; color: var(--ink); box-shadow: none; width: auto; }
+:is(.reveal,.preview) code { background: rgba(122, 40, 32, 0.08); color: var(--accent); border-radius: 2px; }
+.reveal pre { background: #efe7d4; border: 1px solid var(--rule); border-radius: 0; }
+.reveal section img { border: 1px solid var(--rule); border-radius: 0; }
+
+/* gmist components, editorial: accent rules, no shadows, square corners. */
+:is(.reveal,.preview) .panel { border-left: 3px solid var(--accent); border-radius: 0; background: #efe7d4; color: var(--ink); }
+:is(.reveal,.preview) .card, :is(.reveal,.preview) .cards li { border: 1px solid var(--rule); border-radius: 0; background: #efe7d4; color: var(--ink); }
+:is(.reveal,.preview) .chip { border-radius: 0; background: var(--accent); color: #f5efe2; text-transform: none; }
+:is(.reveal,.preview) .callout { border-left: 3px solid var(--accent); border-radius: 0; background: #efe7d4; }
+:is(.reveal,.preview) .hl, :is(.reveal,.preview) .flare { border-radius: 0; background: #f0e2b8; color: var(--ink); }
+:is(.reveal,.preview) .bignum { background: #efe7d4; border: 1px solid var(--rule); border-radius: 0; }
+:is(.reveal,.preview) .bignum .fig { color: var(--accent); }

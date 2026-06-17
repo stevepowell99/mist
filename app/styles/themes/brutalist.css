@@ -1,0 +1,38 @@
+/* Theme: brutalist. Blocks of colour, no curves, no apologies. Adapts the
+ * 19c-slides brutalist demo onto the gmist grammar: heavy sans, ALL CAPS, square
+ * everything, hard offset shadows, black / yellow / red. The composable
+ * components (.panel, .card, .chip, .callout, .bignum, .hl) are restyled here so
+ * a deck written in the normal grammar comes out brutalist. */
+:is(.reveal,.preview) {
+  --slide-bg: #ffffff; --ink: #000000; --bru-yellow: #ffd400; --bru-red: #ff2f00;
+}
+.reveal-viewport { background: var(--slide-bg); }
+.reveal, .preview { background: var(--slide-bg); color: var(--ink); }
+.reveal, .preview { font-family: "Helvetica Neue", "Arial Black", Arial, sans-serif; }
+
+:is(.reveal,.preview) h1, :is(.reveal,.preview) h2, :is(.reveal,.preview) h3 {
+  font-weight: 900; text-transform: uppercase; letter-spacing: 0.01em; color: #000;
+}
+.reveal h1 { font-size: 2.6em; line-height: 0.95; }
+.reveal h2 { background: #000; color: var(--bru-yellow); display: inline-block; padding: 0.15em 0.5em; border-bottom: 0; }
+.reveal h3 { background: var(--bru-yellow); color: #000; display: inline-block; padding: 0.1em 0.45em; border-bottom: 0; width: fit-content; }
+:is(.reveal,.preview) p, :is(.reveal,.preview) li { font-weight: 700; text-transform: uppercase; }
+:is(.reveal,.preview) a { color: var(--bru-red); text-decoration: underline; text-decoration-thickness: 3px; }
+
+:is(.reveal,.preview) blockquote {
+  background: var(--bru-yellow); border: 6px solid #000; border-radius: 0;
+  font-weight: 900; text-transform: uppercase; font-style: normal;
+  box-shadow: 12px 12px 0 #000; color: #000; width: auto;
+}
+:is(.reveal,.preview) code { background: var(--bru-yellow); border: 2px solid #000; border-radius: 0; color: #000; font-weight: 700; }
+.reveal pre { background: #000; color: var(--bru-yellow); border: 6px solid var(--bru-yellow); border-radius: 0; box-shadow: 10px 10px 0 var(--bru-yellow); }
+.reveal section img { border: 6px solid #000; border-radius: 0; box-shadow: 14px 14px 0 #000; }
+
+/* gmist components, brutalised: square, thick-bordered, hard shadow. */
+:is(.reveal,.preview) .panel { border: 4px solid #000; border-radius: 0; background: #fff; box-shadow: 8px 8px 0 #000; color: #000; }
+:is(.reveal,.preview) .card, :is(.reveal,.preview) .cards li { border: 4px solid #000; border-radius: 0; background: #fff; color: #000; }
+:is(.reveal,.preview) .chip { border-radius: 0; border: 2px solid #000; background: var(--bru-yellow); color: #000; font-weight: 900; text-transform: uppercase; }
+:is(.reveal,.preview) .callout { border: 4px solid #000; border-radius: 0; background: #fff; }
+:is(.reveal,.preview) .hl, :is(.reveal,.preview) .flare { border-radius: 0; background: var(--bru-yellow); color: #000; }
+:is(.reveal,.preview) .bignum { border: 4px solid #000; border-radius: 0; background: var(--bru-yellow); }
+:is(.reveal,.preview) .bignum .fig { color: #000; }
