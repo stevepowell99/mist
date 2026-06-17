@@ -214,32 +214,25 @@ optional polish.
   insert a single chosen slide from any deck you can open, alongside the curated
   fragments.
 
-## Remaining / open items (as of 17 June 2026, before a compaction)
+## Remaining / open items (as of 17 June 2026)
 
-Library, not yet done:
-- **Multi-select in the gallery search results: checkboxes per result plus a
-  select-all/none toggle**, so several slides/images can be inserted at once.
-  NOT started. This is the next library task the user asked for.
-- **Upload an image to the library from inside the app** (Images tab): reuse
-  `drive.upload.ts`, target the resolved `images/` folder. Currently you add
-  images by dropping them into `19d/images` in Drive directly.
-- Phase 4 leftover: rewrite a picked deck slide's relative `![](rel)` images to
-  `drive:<id>` (resolve against the source deck's folder at pick time). Live
-  thumbnails (Phase 4B) are DONE.
+Library, all DONE 17 June 2026:
+- **Multi-select**: a checkbox per result, a select-all/none toggle, and an
+  "Insert N selected" action insert several slides/images at once (works on the
+  Slides, Images and a picked deck's slides; not the deck-search drill-down list).
+- **Upload an image to the library** from the Images tab (`/drive/library-upload`,
+  POSTs into the resolved `images/` folder, keeps the original filename).
+- **Deck-image rewrite**: picking a deck resolves its relative `![](rel)` images
+  to `drive:<id>` once (new `POST /drive/resolve`, gated by `canAccessFile`), so a
+  borrowed slide's pictures still resolve in the target deck. Live thumbnails
+  (Phase 4B) were already done.
+- A library image inserts as a `::: {.scale-75}` block so a beginner resizes it
+  by editing the number.
 
 Config/state:
 - `DEFAULT_LIBRARY_FOLDER_ID` in `app/lib/library.server.ts` = `1Ud0p8...` (the
-  19d folder). The `LIBRARY_FOLDER_ID` env var is an optional override (empty).
-  19d must hold `slides/` and `images/` subfolders, owned by / shared with the
-  relay `hello@causalmap.app`. The earlier "Drive search failed (403)" was the
-  orderBy+fullText bug (fixed in `driveFiles`), not a folder-access problem.
-
-Unrelated open bug (carry forward):
-- User reports `.scale-NN` does nothing on a slide heading (`## x{.scale-33}`) and
-  on a `.cards` grid, but works elsewhere. Could NOT reproduce: `zoom` applies in
-  every tested path including the real reveal markdown-plugin render. Need a
-  screenshot of the RENDERED (right-pane) result for those two cases after a hard
-  reload to chase it.
+  19d folder, with `slides/` and `images/` subfolders, shared with the relay
+  `hello@causalmap.app`). The `LIBRARY_FOLDER_ID` env var is an optional override.
 
 Note: the user is actively editing `19c-slides/gmist-examples-deck.qmd` (Drive);
 expect live changes there, do not clobber.
