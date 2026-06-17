@@ -1,13 +1,15 @@
 # Plan: reusable slide and image library (drop-in gallery)
 
-Status: Phases 1 (slides) and 2 (images) shipped 17 June 2026. Phase 3 (insert
-one slide from an existing deck) and Phase 4 (polish: live thumbnails, save-to-
-library, rewrite a picked deck slide's relative images) remain. To switch the
-library on, set the `LIBRARY_FOLDER_ID` worker var to a Drive folder holding
-`slides/` and `images/` subfolders. Files: `app/lib/library.server.ts`,
-`app/routes/drive.library.ts`, `app/routes/drive.fragment.ts`,
-`app/components/LibraryGallery.tsx`, plus id-mode in `drive.asset.ts` and the
-`drive:<id>` scheme in `asset-urls.ts`.
+Status (17 June 2026): Phases 1 (slides), 2 (images) and 3 (from a deck) shipped,
+plus a name+full-text search box and Phase 4's save-to-library. Remaining Phase 4
+polish: live (Phase B) thumbnails, and rewriting a picked deck slide's relative
+images to `drive:<id>`. To switch the library on, set the `LIBRARY_FOLDER_ID`
+worker var to a Drive folder holding `slides/` and `images/` subfolders. Files:
+`app/lib/library.server.ts`, `app/routes/drive.library.ts`,
+`app/routes/drive.library-save.ts`, `app/routes/drive.fragment.ts`,
+`app/components/LibraryGallery.tsx`, the `deckSlides()` splitter in
+`slides-build.ts`, id-mode in `drive.asset.ts`, the `drive:<id>` scheme in
+`asset-urls.ts`, and `fullText` search in `google.server.ts`/`drive.search.ts`.
 
 ## Goal
 
