@@ -11,6 +11,7 @@ export default [
   route("drive/upload", "routes/drive.upload.ts"),
   route("drive/search", "routes/drive.search.ts"),
   route("drive/library", "routes/drive.library.ts"),
+  route("drive/library-save", "routes/drive.library-save.ts"),
   route("drive/fragment", "routes/drive.fragment.ts"),
   route("drive/bib", "routes/drive.bib.ts"),
   route("drive/op", "routes/drive.op.ts"),

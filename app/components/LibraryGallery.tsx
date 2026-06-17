@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useDocument } from "~/lib/DocumentContext";
 import { deckSlides } from "~/lib/slides-build";
+import { slideIndexForOffset } from "~/lib/slide-cursor";
 import type { SearchResult } from "~/routes/drive.search";
 
 /**
@@ -18,9 +19,10 @@ import type { SearchResult } from "~/routes/drive.search";
 type Tab = "slides" | "images" | "deck";
 
 export default function LibraryGallery() {
-  const { view, assetToken } = useDocument();
+  const { view, assetToken, markdown, cursorOffset } = useDocument();
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>("slides");
+  const [refreshTick, setRefreshTick] = useState(0);
   const [query, setQuery] = useState("");
   const [debounced, setDebounced] = useState("");
   const [loading, setLoading] = useState(false);
@@ -106,9 +108,34 @@ export default function LibraryGallery() {
         setLoading(false);
       }
     })();
-  }, [open, configured, tab, debounced, folders, deckPick]);
+  }, [open, configured, tab, debounced, folders, deckPick, refreshTick]);
 
   const cleanName = (n: string) => n.replace(/\.(md|qmd)$/i, "");
+
+  // Save the slide the cursor is in into the library's slides/ folder, so the
+  // gallery grows from inside gmist.
+  const saveCurrentSlide = useCallback(async () => {
+    const slides = deckSlides(markdown);
+    if (!slides.length) return;
+    const idx = Math.min(Math.max(0, slideIndexForOffset(markdown, cursorOffset)), slides.length - 1);
+    const slide = slides[idx];
+    const suggested = (slide.title || "slide").replace(/[^\w \-]/g, "").trim().slice(0, 40) || "slide";
+    const name = typeof window !== "undefined" ? window.prompt("Save the current slide to the library as", suggested) : null;
+    if (!name) return;
+    setError(null);
+    try {
+      const res = await fetch("/drive/library-save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, markdown: slide.raw }),
+      });
+      const body = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok || !body.ok) throw new Error(body.error ?? "could not save");
+      setRefreshTick((n) => n + 1);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "could not save");
+    }
+  }, [markdown, cursorOffset]);
 
   const insertAt = useCallback(
     (text: string) => {
@@ -258,6 +285,16 @@ export default function LibraryGallery() {
 
           {tab === "deck" && !deckPick && !debounced && !loading && (
             <p className="text-sm text-muted">Type to find a deck, then pick one slide from it.</p>
+          )}
+
+          {tab === "slides" && configured === true && folders.slides && (
+            <button
+              type="button"
+              onClick={() => void saveCurrentSlide()}
+              className="mb-3 cursor-pointer rounded border border-border px-2 py-1 text-xs text-muted transition-colors hover:border-ink hover:text-ink"
+            >
+              + Save the current slide to the library
+            </button>
           )}
 
           {/* Slides tab + deck search results: text cards. */}
