@@ -71,6 +71,16 @@
 :is(.reveal,.preview) .left   { text-align: left; }
 :is(.reveal,.preview) .center { text-align: center; }
 :is(.reveal,.preview) .right  { text-align: right; }
+/* VERTICAL align (the partner of left/center/right). On a slide, .top/.middle/
+   .bottom place the whole slide's content high, centred or low: that needs the
+   full-height section, so it is deck-only. On a .columns row they line the
+   columns up vertically, which works in a doc too. */
+.reveal .slides section.top    { display: flex; flex-direction: column; justify-content: flex-start; }
+.reveal .slides section.middle { display: flex; flex-direction: column; justify-content: center; }
+.reveal .slides section.bottom { display: flex; flex-direction: column; justify-content: flex-end; }
+:is(.reveal,.preview) .columns.top    { align-items: flex-start; }
+:is(.reveal,.preview) .columns.middle { align-items: center; }
+:is(.reveal,.preview) .columns.bottom { align-items: flex-end; }
 :is(.reveal,.preview) .fast    { --dur: 1.6s; }
 :is(.reveal,.preview) .slow    { --dur: 6s; }
 :is(.reveal,.preview) .instant { --dur: 0.01s; }
