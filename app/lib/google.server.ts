@@ -396,11 +396,16 @@ async function resolveFolderPath(
  */
 export async function driveFiles(
   token: string,
-  opts: { nameQuery?: string; folderId?: string; types?: DriveKind[] },
+  opts: { nameQuery?: string; folderId?: string; types?: DriveKind[]; fullText?: boolean },
 ): Promise<DriveSearchEntry[]> {
   const clauses = ["trashed = false"];
   if (opts.folderId) clauses.push(`'${escapeQ(opts.folderId)}' in parents`);
-  if (opts.nameQuery) clauses.push(`name contains '${escapeQ(opts.nameQuery)}'`);
+  if (opts.nameQuery) {
+    const q = escapeQ(opts.nameQuery);
+    // fullText also matches a file's CONTENT, so a deck whose filename is generic
+    // (slides.qmd) still matches on its title/body text.
+    clauses.push(opts.fullText ? `(name contains '${q}' or fullText contains '${q}')` : `name contains '${q}'`);
+  }
   const typeParts = (opts.types ?? []).map((t) => KIND_CLAUSE[t]).filter(Boolean);
   if (typeParts.length) clauses.push(`(${typeParts.join(" or ")})`);
 

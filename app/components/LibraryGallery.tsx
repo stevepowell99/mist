@@ -1,27 +1,37 @@
 import { useCallback, useEffect, useState } from "react";
 import { useDocument } from "~/lib/DocumentContext";
+import { deckSlides } from "~/lib/slides-build";
 import type { SearchResult } from "~/routes/drive.search";
 
 /**
  * The reusable slide/image library gallery (plans/slide-image-library.md).
- * Slides tab: `.md` fragments from the library's `slides/` folder; clicking one
- * inserts its markdown at the cursor. Images tab: pictures from `images/`;
- * clicking one inserts `![](drive:<id>)`, a portable by-id reference resolved at
- * render time. Opened by the header button or the `/library` slash command.
+ *  - Slides: `.md` fragments from the library `slides/` folder; click inserts
+ *    the fragment markdown at the cursor.
+ *  - Images: pictures from `images/`; click inserts `![](drive:<id>)`, a portable
+ *    by-id reference resolved at render time.
+ *  - From a deck: search ANY deck you can open, pick one slide, insert its raw
+ *    markdown.
+ * The search box matches filename AND content (full-text), so a deck found by its
+ * title works even when its filename is generic. Opened by the header button or
+ * the `/library` slash command.
  */
-type Tab = "slides" | "images";
+type Tab = "slides" | "images" | "deck";
 
 export default function LibraryGallery() {
   const { view, assetToken } = useDocument();
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>("slides");
+  const [query, setQuery] = useState("");
+  const [debounced, setDebounced] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [configured, setConfigured] = useState<boolean | null>(null);
   const [folders, setFolders] = useState<{ slides: string | null; images: string | null }>({ slides: null, images: null });
-  const [slides, setSlides] = useState<SearchResult[]>([]);
-  const [images, setImages] = useState<SearchResult[]>([]);
+  const [items, setItems] = useState<SearchResult[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
+  // "From a deck": the deck whose slides are being shown, and its slides.
+  const [deckPick, setDeckPick] = useState<{ id: string; name: string } | null>(null);
+  const [deckSlideList, setDeckSlideList] = useState<{ index: number; raw: string; title: string }[]>([]);
 
   useEffect(() => {
     const toggle = () => setOpen((v) => !v);
@@ -36,18 +46,14 @@ export default function LibraryGallery() {
     };
   }, []);
 
-  const list = useCallback(async (folder: string, types: string): Promise<SearchResult[]> => {
-    const res = await fetch(`/drive/search?folder=${encodeURIComponent(folder)}&types=${types}`);
-    const body = (await res.json()) as { results?: SearchResult[]; error?: string };
-    if (!res.ok) throw new Error(body.error ?? "could not list the library");
-    return body.results ?? [];
-  }, []);
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(query.trim()), 250);
+    return () => clearTimeout(t);
+  }, [query]);
 
-  // Resolve the library and load both lists, once, on first open.
+  // Resolve the library once on first open.
   useEffect(() => {
     if (!open || configured !== null) return;
-    setLoading(true);
-    setError(null);
     void (async () => {
       try {
         const lib = (await (await fetch("/drive/library")).json()) as {
@@ -56,17 +62,51 @@ export default function LibraryGallery() {
           images?: string | null;
         };
         setConfigured(lib.configured);
-        if (!lib.configured) return;
         setFolders({ slides: lib.slides ?? null, images: lib.images ?? null });
-        if (lib.slides) setSlides(await list(lib.slides, "markdown"));
-        if (lib.images) setImages(await list(lib.images, "image"));
+      } catch {
+        setConfigured(false);
+      }
+    })();
+  }, [open, configured]);
+
+  // Fetch the active tab's list (re-runs on tab / query / folders change). The
+  // "deck" tab needs a query (it searches all of Drive); slides/images list their
+  // folder when the query is empty, and search within it (name + full-text) when
+  // it is not.
+  useEffect(() => {
+    if (!open || configured !== true) return;
+    if (deckPick) return; // showing a picked deck's slides, not a list
+    const folder = tab === "slides" ? folders.slides : tab === "images" ? folders.images : null;
+    if (tab !== "deck" && !folder) {
+      setItems([]);
+      return;
+    }
+    if (tab === "deck" && !debounced) {
+      setItems([]);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    const types = tab === "images" ? "image" : "markdown";
+    const p = new URLSearchParams({ types });
+    if (folder) p.set("folder", folder);
+    if (debounced) {
+      p.set("q", debounced);
+      p.set("full", "1");
+    }
+    void (async () => {
+      try {
+        const res = await fetch(`/drive/search?${p.toString()}`);
+        const body = (await res.json()) as { results?: SearchResult[]; error?: string };
+        if (!res.ok) throw new Error(body.error ?? "search failed");
+        setItems(body.results ?? []);
       } catch (e) {
-        setError(e instanceof Error ? e.message : "could not open the library");
+        setError(e instanceof Error ? e.message : "could not load");
       } finally {
         setLoading(false);
       }
     })();
-  }, [open, configured, list]);
+  }, [open, configured, tab, debounced, folders, deckPick]);
 
   const cleanName = (n: string) => n.replace(/\.(md|qmd)$/i, "");
 
@@ -81,27 +121,54 @@ export default function LibraryGallery() {
     [view],
   );
 
+  const fetchMarkdown = useCallback(async (id: string): Promise<string> => {
+    const res = await fetch(`/drive/fragment?id=${encodeURIComponent(id)}`);
+    const body = (await res.json()) as { markdown?: string; error?: string };
+    if (!res.ok || body.markdown == null) throw new Error(body.error ?? "could not read");
+    return body.markdown;
+  }, []);
+
   const insertSlide = useCallback(
     async (item: SearchResult) => {
       setBusyId(item.id);
       setError(null);
       try {
-        const res = await fetch(`/drive/fragment?id=${encodeURIComponent(item.id)}`);
-        const body = (await res.json()) as { markdown?: string; error?: string };
-        if (!res.ok || body.markdown == null) throw new Error(body.error ?? "could not read the slide");
-        insertAt(`\n\n${body.markdown.trim()}\n\n`);
+        insertAt(`\n\n${(await fetchMarkdown(item.id)).trim()}\n\n`);
       } catch (e) {
         setError(e instanceof Error ? e.message : "could not insert");
       } finally {
         setBusyId(null);
       }
     },
-    [insertAt],
+    [insertAt, fetchMarkdown],
+  );
+
+  const pickDeck = useCallback(
+    async (item: SearchResult) => {
+      setBusyId(item.id);
+      setError(null);
+      try {
+        const md = await fetchMarkdown(item.id);
+        setDeckSlideList(deckSlides(md));
+        setDeckPick({ id: item.id, name: item.name });
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "could not open the deck");
+      } finally {
+        setBusyId(null);
+      }
+    },
+    [fetchMarkdown],
   );
 
   if (!open) return null;
-  const folder = tab === "slides" ? folders.slides : folders.images;
-  const items = tab === "slides" ? slides : images;
+
+  const TABS: { id: Tab; label: string }[] = [
+    { id: "slides", label: "Slides" },
+    { id: "images", label: "Images" },
+    { id: "deck", label: "From a deck" },
+  ];
+  const searchHint = tab === "deck" ? "Search decks by title or name" : `Search ${tab} by title or name`;
+  const folderMissing = configured === true && tab !== "deck" && !(tab === "slides" ? folders.slides : folders.images);
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4" onClick={() => setOpen(false)}>
@@ -109,71 +176,117 @@ export default function LibraryGallery() {
         role="dialog"
         aria-label="Library"
         onClick={(e) => e.stopPropagation()}
-        className="max-h-[85vh] w-full max-w-3xl overflow-y-auto rounded-lg border border-border bg-paper shadow-2xl"
+        className="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-border bg-paper shadow-2xl"
       >
         <div className="flex items-center justify-between border-b border-border px-5 py-3">
           <div className="flex items-center gap-1">
             <h2 className="mr-3 font-medium text-ink">Library</h2>
-            {(["slides", "images"] as Tab[]).map((t) => (
+            {TABS.map((t) => (
               <button
-                key={t}
+                key={t.id}
                 type="button"
-                onClick={() => setTab(t)}
-                className={`cursor-pointer rounded px-2.5 py-1 text-sm capitalize transition-colors ${
-                  tab === t ? "bg-border/60 font-medium text-ink" : "text-muted hover:text-ink"
+                onClick={() => {
+                  setTab(t.id);
+                  setDeckPick(null);
+                }}
+                className={`cursor-pointer rounded px-2.5 py-1 text-sm transition-colors ${
+                  tab === t.id ? "bg-border/60 font-medium text-ink" : "text-muted hover:text-ink"
                 }`}
               >
-                {t}
+                {t.label}
               </button>
             ))}
           </div>
-          <button
-            type="button"
-            onClick={() => setOpen(false)}
-            aria-label="Close"
-            className="cursor-pointer px-2 text-xl leading-none text-muted hover:text-ink"
-          >
+          <button type="button" onClick={() => setOpen(false)} aria-label="Close" className="cursor-pointer px-2 text-xl leading-none text-muted hover:text-ink">
             &times;
           </button>
         </div>
-        <div className="px-5 py-4">
+
+        {configured === true && !deckPick && (
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={searchHint}
+            aria-label={searchHint}
+            className="border-b border-border bg-transparent px-5 py-2 text-sm outline-none"
+          />
+        )}
+
+        <div className="flex-1 overflow-y-auto px-5 py-4">
           {loading && <p className="text-sm opacity-70">Loading…</p>}
           {error && <p className="text-sm text-coral">{error}</p>}
-          {configured === false && !loading && (
+          {configured === false && (
             <p className="text-sm text-muted">
               No library is configured. Set <span className="font-mono text-ink">LIBRARY_FOLDER_ID</span> to a Drive
-              folder that holds <span className="font-mono text-ink">slides/</span> and{" "}
+              folder with <span className="font-mono text-ink">slides/</span> and{" "}
               <span className="font-mono text-ink">images/</span> subfolders.
             </p>
           )}
-          {configured && !loading && !folder && (
+          {folderMissing && (
             <p className="text-sm text-muted">
               The library has no <span className="font-mono text-ink">{tab}/</span> subfolder yet.
             </p>
           )}
-          {configured && folder && items.length === 0 && !loading && (
-            <p className="text-sm text-muted">Nothing in {tab} yet.</p>
+
+          {/* From a deck: a picked deck shows its slides; otherwise the search results. */}
+          {tab === "deck" && deckPick && (
+            <>
+              <button type="button" onClick={() => setDeckPick(null)} className="mb-3 cursor-pointer text-sm text-muted hover:text-ink">
+                &larr; back to decks
+              </button>
+              <p className="mb-2 text-sm text-muted">
+                Slides in <span className="text-ink">{cleanName(deckPick.name)}</span>:
+              </p>
+              <ul className="grid gap-2 sm:grid-cols-2">
+                {deckSlideList.map((s) => (
+                  <li key={s.index}>
+                    <button
+                      type="button"
+                      disabled={!view}
+                      onClick={() => insertAt(`\n\n${s.raw}\n\n`)}
+                      className="flex w-full cursor-pointer flex-col items-start gap-1 rounded border border-border p-3 text-left transition-colors hover:border-ink disabled:opacity-50"
+                    >
+                      <span className="font-medium text-ink">{s.title}</span>
+                      <span className="text-xs uppercase tracking-wider text-muted">Slide {s.index + 1} · insert at cursor</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </>
           )}
-          {configured && folder && items.length > 0 && tab === "slides" && (
-            <ul className="grid gap-2 sm:grid-cols-2">
+
+          {tab === "deck" && !deckPick && !debounced && !loading && (
+            <p className="text-sm text-muted">Type to find a deck, then pick one slide from it.</p>
+          )}
+
+          {/* Slides tab + deck search results: text cards. */}
+          {((tab === "slides") || (tab === "deck" && !deckPick && debounced)) && configured === true && !loading && (
+            <ul className="text-sm">
               {items.map((it) => (
                 <li key={it.id}>
                   <button
                     type="button"
-                    disabled={busyId !== null || !view}
-                    onClick={() => void insertSlide(it)}
-                    className="flex w-full cursor-pointer flex-col items-start gap-1 rounded border border-border p-3 text-left transition-colors hover:border-ink disabled:opacity-50"
+                    disabled={busyId !== null || (tab === "slides" && !view)}
+                    onClick={() => void (tab === "deck" ? pickDeck(it) : insertSlide(it))}
+                    className="flex w-full cursor-pointer items-baseline justify-between gap-3 border-b border-border/60 px-1 py-2 text-left hover:bg-black/5 disabled:opacity-50"
                   >
-                    <span className="font-medium text-ink">{cleanName(it.name)}</span>
-                    <span className="text-xs uppercase tracking-wider text-muted">
-                      {busyId === it.id ? "Inserting…" : "Insert at cursor"}
+                    <span className="min-w-0">
+                      <span className="block truncate font-medium text-ink">{cleanName(it.name)}</span>
+                      {tab === "deck" && it.path && <span className="block truncate text-xs text-muted">{it.path}</span>}
+                    </span>
+                    <span className="shrink-0 text-xs uppercase tracking-wider text-muted">
+                      {busyId === it.id ? "…" : tab === "deck" ? "open" : "insert"}
                     </span>
                   </button>
                 </li>
               ))}
+              {items.length === 0 && <li className="py-2 text-sm text-muted">Nothing found.</li>}
             </ul>
           )}
-          {configured && folder && items.length > 0 && tab === "images" && (
+
+          {/* Images tab: thumbnails. */}
+          {tab === "images" && configured === true && !loading && !folderMissing && (
             <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               {items.map((it) => (
                 <li key={it.id}>
@@ -194,6 +307,7 @@ export default function LibraryGallery() {
                   </button>
                 </li>
               ))}
+              {items.length === 0 && <li className="py-2 text-sm text-muted">Nothing found.</li>}
             </ul>
           )}
         </div>

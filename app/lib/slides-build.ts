@@ -74,6 +74,20 @@ function headingLevel(slideMd: string): number {
   return m ? m[1].length : 0;
 }
 
+/** Split a whole deck into its per-slide RAW markdown (frontmatter dropped), with
+ *  each slide's title (its first heading, else its first line). The library's
+ *  "from a deck" tab uses this to offer one slide out of an existing deck; the
+ *  raw markdown is inserted as-is so the slide keeps its real source. */
+export function deckSlides(md: string): { index: number; raw: string; title: string }[] {
+  const { body } = stripFrontmatter(md);
+  return splitSlides(body).map((raw, index) => {
+    const heading = raw.split("\n").find((l) => /^#{1,6}\s/.test(l.trim()));
+    const fromHeading = heading?.replace(/^\s*#{1,6}\s*/, "").replace(/\s*\{[^}]*\}\s*$/, "").trim();
+    const firstLine = raw.trim().split("\n")[0]?.trim().slice(0, 60);
+    return { index, raw: raw.trim(), title: fromHeading || firstLine || `Slide ${index + 1}` };
+  });
+}
+
 /**
  * Group the flat slide list into reveal vertical stacks, Quarto-style
  * (slide-level 2): a level-1 `#` starts a section that following deeper slides

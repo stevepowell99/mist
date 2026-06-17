@@ -72,7 +72,8 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     const types = requested.length ? requested : (["markdown", "folder"] as DriveKind[]);
 
     const token = await getDriveAccessToken(env);
-    const entries = await driveFiles(token, { nameQuery: q || undefined, folderId: folder, types });
+    const fullText = url.searchParams.get("full") === "1";
+    const entries = await driveFiles(token, { nameQuery: q || undefined, folderId: folder, types, fullText });
     // When browsing a folder, also return its trail (top -> current) so the
     // panel can show a clickable breadcrumb and walk up.
     let folderInfo: { trail: { id: string; name: string }[] } | null = null;

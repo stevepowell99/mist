@@ -1,14 +1,15 @@
 import type { Route } from "./+types/drive.fragment";
 import { getCloudflare } from "~/lib/cloudflare.server";
 import { driveConfigured, getDriveAccessToken, driveDownload } from "~/lib/google.server";
-import { driveAccess, driveUnauthenticated, driveForbidden } from "~/lib/drive-access.server";
+import { driveAccess, canAccessFile, driveUnauthenticated, driveForbidden } from "~/lib/drive-access.server";
 import { isInLibrary, type LibraryEnv } from "~/lib/library.server";
 import { stripMistBanner } from "~/shared/mist-banner";
 
 /**
- * Return a library slide fragment's raw markdown by id, for the gallery to insert
- * at the cursor. Gated by a signed-in session AND by the file living inside the
- * library subtree, so this never becomes a read-any-markdown endpoint.
+ * Return a slide source's raw markdown by id, for the gallery to insert at the
+ * cursor. Two allowed sources: a fragment in the library subtree (curated), or
+ * any deck the signed-in user can open in Drive (the "from a deck" tab). Gated so
+ * it never becomes a read-any-markdown endpoint.
  */
 export async function loader({ request, context }: Route.LoaderArgs) {
   const id = new URL(request.url).searchParams.get("id");
@@ -21,7 +22,8 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 
   try {
     const token = await getDriveAccessToken(env);
-    if (!(await isInLibrary(token, env, id))) return driveForbidden();
+    const allowed = (await isInLibrary(token, env, id)) || (await canAccessFile(env, id, access.email));
+    if (!allowed) return driveForbidden();
     const text = new TextDecoder().decode(await driveDownload(token, id));
     return Response.json({ markdown: stripMistBanner(text) });
   } catch (err) {
