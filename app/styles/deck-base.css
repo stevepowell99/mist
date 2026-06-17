@@ -179,15 +179,15 @@
 
 /* AXIS: SCALE (zoom; reflows). .scale-50 = half, .scale-300 = triple. */
 :is(.reveal,.preview) .scale     { zoom: var(--scale, 1); }
-:is(.reveal,.preview) .scale-25  { zoom: 0.25; } :is(.reveal,.preview) .scale-33  { zoom: 0.33; }
-:is(.reveal,.preview) .scale-40  { zoom: 0.4; }  :is(.reveal,.preview) .scale-50  { zoom: 0.5; }
-:is(.reveal,.preview) .scale-60  { zoom: 0.6; }  :is(.reveal,.preview) .scale-75  { zoom: 0.75; }
-:is(.reveal,.preview) .scale-80  { zoom: 0.8; }  :is(.reveal,.preview) .scale-90  { zoom: 0.9; }
-:is(.reveal,.preview) .scale-100 { zoom: 1; }    :is(.reveal,.preview) .scale-110 { zoom: 1.1; }
-:is(.reveal,.preview) .scale-125 { zoom: 1.25; } :is(.reveal,.preview) .scale-150 { zoom: 1.5; }
-:is(.reveal,.preview) .scale-175 { zoom: 1.75; } :is(.reveal,.preview) .scale-200 { zoom: 2; }
-:is(.reveal,.preview) .scale-250 { zoom: 2.5; }  :is(.reveal,.preview) .scale-300 { zoom: 3; }
-:is(.reveal,.preview) .scale-400 { zoom: 4; }    :is(.reveal,.preview) .scale-500 { zoom: 5; }
+:is(.reveal,.preview) .scale-25  { zoom: 0.25; --scale: 0.25; } :is(.reveal,.preview) .scale-33  { zoom: 0.33; --scale: 0.33; }
+:is(.reveal,.preview) .scale-40  { zoom: 0.4; --scale: 0.4; }  :is(.reveal,.preview) .scale-50  { zoom: 0.5; --scale: 0.5; }
+:is(.reveal,.preview) .scale-60  { zoom: 0.6; --scale: 0.6; }  :is(.reveal,.preview) .scale-75  { zoom: 0.75; --scale: 0.75; }
+:is(.reveal,.preview) .scale-80  { zoom: 0.8; --scale: 0.8; }  :is(.reveal,.preview) .scale-90  { zoom: 0.9; --scale: 0.9; }
+:is(.reveal,.preview) .scale-100 { zoom: 1; --scale: 1; }    :is(.reveal,.preview) .scale-110 { zoom: 1.1; --scale: 1.1; }
+:is(.reveal,.preview) .scale-125 { zoom: 1.25; --scale: 1.25; } :is(.reveal,.preview) .scale-150 { zoom: 1.5; --scale: 1.5; }
+:is(.reveal,.preview) .scale-175 { zoom: 1.75; --scale: 1.75; } :is(.reveal,.preview) .scale-200 { zoom: 2; --scale: 2; }
+:is(.reveal,.preview) .scale-250 { zoom: 2.5; --scale: 2.5; }  :is(.reveal,.preview) .scale-300 { zoom: 3; --scale: 3; }
+:is(.reveal,.preview) .scale-400 { zoom: 4; --scale: 4; }    :is(.reveal,.preview) .scale-500 { zoom: 5; --scale: 5; }
 
 /* ============================================================ *
  * CHROME: deck-only (.reveal). No meaning in a flowing doc.    *
@@ -267,5 +267,8 @@
 /* Global footer (from `footer:` in the frontmatter), shown on every slide.
    Bottom-left so it clears the slide number / breadcrumb on the right. A
    translucent pill keeps it readable on any theme background. */
-.reveal .deck-footer { position: fixed; bottom: 8px; left: 8px; z-index: 31; font-size: 13px; font-weight: 600; color: #1b1b3a; background: rgba(255,255,255,0.7); padding: 3px 8px; border-radius: 4px; max-width: 60vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; }
+/* left lines up with the slide content: the section's 1.8em horizontal padding
+   at the 1280-wide stage is ~4.8% of the width when the slide is width-fitted;
+   the -8px cancels the pill's own left padding so the footer TEXT aligns. */
+.reveal .deck-footer { position: fixed; bottom: 8px; left: calc(4.8% - 8px); z-index: 31; font-size: 13px; font-weight: 600; color: #1b1b3a; background: rgba(255,255,255,0.7); padding: 3px 8px; border-radius: 4px; max-width: 60vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; }
 .reveal .references-slide { text-align: left; }
