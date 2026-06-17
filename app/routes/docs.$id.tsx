@@ -1,5 +1,5 @@
 import { data, Link } from "react-router";
-import { useRef, useCallback, useEffect, useLayoutEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from "react";
+import { useRef, useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import type { Route } from "./+types/docs.$id";
 import { getAgentByName } from "agents";
 import { APP_NAME, isValidDocumentId } from "~/shared/constants";
@@ -7,7 +7,8 @@ import type { DocRole, DriveMeta } from "~/shared/types";
 import { getCloudflare } from "~/lib/cloudflare.server";
 import { mintAssetToken, mintAssetTokenForDoc, authorizeDoc, type DriveSessionEnv } from "~/lib/drive-access.server";
 import { EditorView } from "@codemirror/view";
-import { modAltChord } from "~/lib/chord";
+import { useChordListener } from "~/lib/useChordListener";
+import { useSplitDrag } from "~/lib/useSplitDrag";
 import { offsetForSlideIndex, slideIndexForOffset } from "~/lib/slide-cursor";
 import { docFileKey, loadDocSettings, saveDocSettings } from "~/lib/doc-settings";
 import { usePresence } from "~/lib/usePresence";
@@ -253,7 +254,6 @@ function DocumentLayout({ id }: { id: string }) {
     frontmatter,
     setPreview,
     threads,
-    docKey,
     uploadImage,
     cssClasses,
     saveNow,
@@ -502,59 +502,9 @@ function DocumentLayout({ id }: { id: string }) {
     return () => window.removeEventListener("mist-rebuild-deck", onSave);
   }, [saveNow]);
 
-  useEffect(() => {
-    // Bubble phase: the editor handles its own keydown first and stops
-    // propagation, so this only runs when focus is elsewhere (toolbar, body),
-    // avoiding a double-toggle.
-    const onKey = (e: KeyboardEvent) => {
-      const c = modAltChord(e);
-      if (c && runChord(c)) e.preventDefault();
-    };
-    window.addEventListener("keydown", onKey);
-    // The slides iframe can't share our window, so it posts chords to us.
-    const onMsg = (e: MessageEvent) => {
-      const d = e.data as { type?: string; chord?: string };
-      if (d?.type === "mist-key" && typeof d.chord === "string") runChord(d.chord);
-    };
-    window.addEventListener("message", onMsg);
-    return () => {
-      window.removeEventListener("keydown", onKey, true);
-      window.removeEventListener("message", onMsg);
-    };
-  }, [runChord]);
+  useChordListener(runChord);
 
-  const startDrag = useCallback((e: ReactMouseEvent) => {
-    e.preventDefault();
-    const el = contentRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    // rAF-throttle: each mousemove reflows the iframe-heavy layout, so coalesce
-    // to one resize per frame to keep the drag smooth.
-    let raf = 0;
-    let pendingX = 0;
-    const apply = () => {
-      raf = 0;
-      const pct = ((pendingX - rect.left) / rect.width) * 100;
-      setEditorPct(Math.min(100, Math.max(20, pct)));
-    };
-    const onMove = (ev: MouseEvent) => {
-      pendingX = ev.clientX;
-      if (!raf) raf = requestAnimationFrame(apply);
-    };
-    const onUp = () => {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-      document.body.style.userSelect = "";
-      // mist-dragging lets the mouse pass through the iframe so the drag never
-      // stalls when the cursor is over the preview pane.
-      document.body.classList.remove("mist-dragging");
-      if (raf) cancelAnimationFrame(raf);
-    };
-    document.body.style.userSelect = "none";
-    document.body.classList.add("mist-dragging");
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-  }, []);
+  const startDrag = useSplitDrag(contentRef, setEditorPct);
 
   // The editor and Preview share this scroll container, so swapping between
   // them would otherwise jump to the top. Track the scroll fraction and restore
