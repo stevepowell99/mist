@@ -418,12 +418,18 @@ class DocumentAgent extends Agent {
     }
 
     if (noLocalEdits) {
-      // Drive differs but nothing is unsaved here. This is either a genuine
-      // async handoff (edited elsewhere) or a stale re-upload, and we cannot
-      // tell them apart. Never auto-overwrite: prompt the user to load the Drive
-      // version with one click. Our last save is already in Drive's version
-      // history, so nothing is at risk while it waits.
-      this.broadcast(JSON.stringify({ type: "upstream-changed" }));
+      // Drive differs and nothing is unsaved here. Treat Drive as authoritative
+      // and pull it in: Google Drive sync is always-on and the doc was last left
+      // saved, so after a gap (reopening a doc edited in Obsidian or on another
+      // device) Drive is the live truth and our stored copy is the stale one.
+      // This is safe to do without asking because our current content is itself a
+      // Drive revision (every save is one), so Drive's own version history is the
+      // backstop if this turn out to be a stale re-upload, with no sibling clutter.
+      // (The genuine-conflict case, below, still forks a sibling and never
+      // discards unsaved edits.)
+      this.replaceBodyFromText(text);
+      setBaseline();
+      this.broadcast(JSON.stringify({ type: "reloaded", hash: quickHash(text) }));
       return;
     }
 

@@ -3,12 +3,14 @@ import { useDocument } from "~/lib/DocumentContext";
 
 /**
  * Header indicator for backend-bound documents (Drive). Saving is live: edits
- * flush to Drive on a short debounce, so this shows "Saving…" while edits are
- * in flight and "Saved" once the relay confirms the write. A click flushes
- * immediately. If the file changed upstream (edited in Obsidian/Drive) the relay
- * refuses to clobber and this shows a Conflict badge and pauses auto-save, so
- * neither side is lost; reconciling the two versions is the cloud-bridge merge
- * (#9), not yet built. Also warns before closing with unsaved edits.
+ * flush to Drive on a short debounce, so this shows "Saving…" while edits are in
+ * flight and the steady state "Synced" (this copy matches Drive) once the relay
+ * confirms the write. A click flushes immediately. When the file was changed
+ * elsewhere and nothing is unsaved here, the relay now adopts the Drive version
+ * automatically (Drive is the live truth), so the "Load Drive version" prompt is
+ * only a fallback. Only a genuine clash (unsaved edits here AND a diverged Drive
+ * file) forks a recovery copy ("Kept a copy") and pauses auto-save. Also warns
+ * before closing with unsaved edits.
  */
 export default function SaveStatus() {
   const { backed, unsaved, conflict, upstreamChanged, reloadFromDrive, saveNow, forkedNotice, clearForkedNotice } = useDocument();
@@ -80,8 +82,8 @@ export default function SaveStatus() {
       className={`flex h-full cursor-pointer items-center gap-2 px-3 text-sm uppercase tracking-wider transition-colors ${
         unsaved ? "text-coral hover:bg-coral/10" : "text-muted hover:bg-border"
       }`}
-      title={unsaved ? "Saving to Drive. Click to save now." : "All changes saved"}
-      aria-label={unsaved ? "Saving" : "Saved"}
+      title={unsaved ? "Saving to Drive. Click to save now." : "In sync with Drive (this copy matches the file in Drive)"}
+      aria-label={unsaved ? "Saving" : "In sync with Drive"}
     >
       {unsaved ? (
         <>
@@ -93,7 +95,7 @@ export default function SaveStatus() {
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="20 6 9 17 4 12" />
           </svg>
-          Saved
+          Synced
         </>
       )}
     </button>
