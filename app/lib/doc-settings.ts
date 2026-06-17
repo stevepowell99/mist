@@ -16,6 +16,8 @@ export interface DocSettings {
   showPreview?: boolean;
   /** Slide preview follows the editor cursor (decks). */
   followCursor?: boolean;
+  /** Editor cursor follows the deck's slide when you navigate it (decks). */
+  followSlide?: boolean;
   /** CriticMarkup delimiters hidden in the editor. */
   cleanView?: boolean;
   /** Comments panel collapsed. */

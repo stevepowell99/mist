@@ -364,6 +364,9 @@ function DocumentLayout({ id }: { id: string }) {
   // file to the most-recently-used layout. Keyed by the stable file id so it
   // survives re-imports. Theme and the autosave safety toggle stay global.
   const fileKey = docFileKey(drive, id);
+  // Reverse sync: the editor cursor follows the deck's slide as you navigate it.
+  // On by default; the RHS settings toggle turns it off.
+  const [followSlide, setFollowSlide] = useState(true);
   const settingsLoaded = useRef(false);
   useEffect(() => {
     settingsLoaded.current = false;
@@ -376,6 +379,7 @@ function DocumentLayout({ id }: { id: string }) {
       if (typeof s.editorPct === "number") setEditorPct(s.editorPct);
     }
     if (typeof s.followCursor === "boolean") setFollowCursor(s.followCursor);
+    if (typeof s.followSlide === "boolean") setFollowSlide(s.followSlide);
     if (typeof s.cleanView === "boolean") setCleanView(s.cleanView);
     if (typeof s.asideCollapsed === "boolean") setAsideCollapsed(s.asideCollapsed);
     settingsLoaded.current = true;
@@ -386,10 +390,10 @@ function DocumentLayout({ id }: { id: string }) {
     // Debounced so a divider drag (editorPct changes per frame) writes once, on
     // settle. previewToggled, not showPreview, so a hover-peek is not persisted.
     const t = setTimeout(() => {
-      saveDocSettings(fileKey, { editorPct, showPreview: previewToggled, followCursor, cleanView, asideCollapsed });
+      saveDocSettings(fileKey, { editorPct, showPreview: previewToggled, followCursor, followSlide, cleanView, asideCollapsed });
     }, 200);
     return () => clearTimeout(t);
-  }, [fileKey, editorPct, previewToggled, followCursor, cleanView, asideCollapsed]);
+  }, [fileKey, editorPct, previewToggled, followCursor, followSlide, cleanView, asideCollapsed]);
 
   // Collaborative presence: broadcast the slide this user is on (the deck's
   // current slide when its preview is visible, otherwise the editor cursor's
@@ -499,7 +503,7 @@ function DocumentLayout({ id }: { id: string }) {
   // Ref so the once-registered message listener reads the current markdown/editor.
   const followDeckInEditorRef = useRef<(idx: number) => void>(() => {});
   followDeckInEditorRef.current = (idx: number) => {
-    if (!editorView || editorView.hasFocus) return;
+    if (!editorView || editorView.hasFocus || !followSlide) return;
     moveCursorToSlide(idx, false);
   };
 
@@ -1005,6 +1009,19 @@ function DocumentLayout({ id }: { id: string }) {
                       type="checkbox"
                       checked={followCursor}
                       onChange={(e) => setFollowCursor(e.target.checked)}
+                      className="h-4 w-4 cursor-pointer accent-coral"
+                    />
+                  </label>
+                )}
+                {deck && (
+                  <label className="flex cursor-pointer items-center justify-between gap-2 px-3 py-2 text-sm text-muted hover:text-ink">
+                    <span title="When on, navigating the slide preview (its arrow keys, clicking a slide) moves the editor cursor to that slide. Skipped while you are typing, so the editor always wins.">
+                      Follow slide in editor
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={followSlide}
+                      onChange={(e) => setFollowSlide(e.target.checked)}
                       className="h-4 w-4 cursor-pointer accent-coral"
                     />
                   </label>
