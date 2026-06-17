@@ -68,9 +68,12 @@ const SLASH_COMMANDS: Completion[] = [
     type: "keyword",
     boost: 97,
   }),
-  classSnippet("::: {.bg .${1:teal}}\n\n${2}\n\n:::\n\n${}", {
+  // Inserts the fill prefix `.bg-` then reopens the picker filtered to the
+  // `.bg-<colour>` fills, so the box fills with a colour but the text stays
+  // readable (ink on a pale tint; add .solid for a strong fill).
+  classSnippet("::: {.bg-${1}}\n\n${2}\n\n:::\n\n${}", {
     label: "/box",
-    detail: "a tinted box (.bg + a colour; or .bg-<colour> to set the fill alone)",
+    detail: "a tinted box: pick a fill colour (add .solid for a strong fill)",
     type: "keyword",
     boost: 96,
   }),
@@ -240,13 +243,14 @@ export const slashWrapSelection = EditorView.inputHandler.of((view, from, to, te
 
   if (startLine.number !== endLine.number) {
     const body = view.state.sliceDoc(startLine.from, endLine.to);
-    // Default to a visible tinted box (.bg + a colour), with "teal" selected so it
-    // is obvious what to change; the class picker opens on it.
-    const insert = `::: {.bg .teal}\n${body}\n:::`;
-    const tealAt = startLine.from + "::: {.bg .".length;
+    // Wrap in a fenced div with the fill prefix `.bg-`, cursor right after it, so
+    // the class picker opens filtered to the `.bg-<colour>` fills (readable text
+    // on a tint). Picking one completes the class.
+    const insert = `::: {.bg-}\n${body}\n:::`;
+    const caret = startLine.from + "::: {.bg-".length;
     view.dispatch({
       changes: { from: startLine.from, to: endLine.to, insert },
-      selection: { anchor: tealAt, head: tealAt + "teal".length }, // select "teal"
+      selection: { anchor: caret },
       userEvent: "input.wrap",
     });
     startCompletion(view);
