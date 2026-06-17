@@ -110,6 +110,41 @@ function RowAction({ title, disabled, onClick, children }: { title: string; disa
   );
 }
 
+/** A file's parent-folder path, shown above its name. Clickable to browse into
+ *  that folder when the parent id is known (search results and freshly-opened
+ *  recents); older recents saved without an id fall back to plain text. Shared by
+ *  the search list and the Recently-opened list so both read and behave the same. */
+function PathCrumb({ path, parentId, onGo }: { path?: string; parentId?: string | null; onGo: (id: string) => void }) {
+  if (!path) return null;
+  if (!parentId) return <span className="block truncate text-xs opacity-50">{path}</span>;
+  return (
+    <span
+      role="button"
+      tabIndex={0}
+      onClick={(ev) => {
+        ev.stopPropagation();
+        onGo(parentId);
+      }}
+      onKeyDown={(ev) => {
+        if (ev.key === "Enter") {
+          ev.stopPropagation();
+          onGo(parentId);
+        }
+      }}
+      title="Go to this folder"
+      className="block cursor-pointer truncate text-xs opacity-50 hover:underline hover:opacity-100"
+    >
+      {path}
+    </span>
+  );
+}
+
+/** In-memory cache of folder listings (NOT searches), keyed by folder + types, so
+ *  reopening the browser or moving between docs shows the last contents at once
+ *  instead of a Loading flash, then refreshes silently. Lives for the page session. */
+const listingCache = new Map<string, Listing>();
+const cacheKey = (folder: string | null, types: DriveKind[]) => `${folder ?? "recent"}|${[...types].sort().join(",")}`;
+
 export default function DriveBrowser({
   startFolderId = null,
   currentFileId = null,
@@ -123,7 +158,10 @@ export default function DriveBrowser({
   const [query, setQuery] = useState("");
   const [types, setTypes] = useState<DriveKind[]>(["markdown", "folder"]);
   const [folderRef, setFolderRef] = useState<string | null>(startFolderId);
-  const [data, setData] = useState<Listing | null>(null);
+  // Seed from the cache so a remount (e.g. opening another doc's sidebar at the
+  // same folder) paints the last contents immediately. Default types match the
+  // `types` initial state below.
+  const [data, setData] = useState<Listing | null>(() => listingCache.get(cacheKey(startFolderId, ["markdown", "folder"])) ?? null);
   const [recent, setRecent] = useState<RecentItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -174,12 +212,18 @@ export default function DriveBrowser({
 
   const refresh = useCallback(async () => {
     const mine = ++reqId.current;
-    setLoading(true);
+    const q = query.trim();
+    // Folder listings are cached by folder+types: show the cached copy at once
+    // and refresh silently (no spinner), so reopening never flashes Loading.
+    // Searches are volatile, so they always show the spinner and are not cached.
+    const key = q ? null : cacheKey(folderRef, types);
+    const cached = key ? listingCache.get(key) : undefined;
+    if (cached) setData(cached);
     setError(null);
+    setLoading(!cached);
     try {
       const p = new URLSearchParams();
       if (types.length) p.set("types", types.join(","));
-      const q = query.trim();
       if (q) p.set("q", q);
       else if (folderRef) p.set("folder", folderRef);
       const res = await fetch(`/drive/search?${p.toString()}`);
@@ -192,7 +236,9 @@ export default function DriveBrowser({
       if (mine !== reqId.current) return; // a newer request superseded this one
       if (!res.ok) throw new Error(body.error ?? "load failed");
       const items: Item[] = (body.results ?? []).map((r) => ({ ...r, isFolder: r.kind === "folder" }));
-      setData({ items, trail: q ? [] : body.folder?.trail ?? [], isSearch: !!q });
+      const listing: Listing = { items, trail: q ? [] : body.folder?.trail ?? [], isSearch: !!q };
+      setData(listing);
+      if (key) listingCache.set(key, listing);
     } catch (e) {
       if (mine === reqId.current) setError(e instanceof Error ? e.message : "could not load");
     } finally {
@@ -231,7 +277,7 @@ export default function DriveBrowser({
         if (res.status === 401) throw new Error(SIGN_IN_MSG);
         const body = (await readJson(res)) as { url?: string; error?: string };
         if (body.url) {
-          addRecentOpened({ id: item.id, name: item.name, path: item.path });
+          addRecentOpened({ id: item.id, name: item.name, path: item.path, parentId: item.parentId });
           // Carry the current View (editor/split/preview) onto the new doc so
           // the layout is preserved when opening from the sidebar.
           const view = typeof window !== "undefined"
@@ -255,7 +301,7 @@ export default function DriveBrowser({
   const onPick = useCallback(
     (item: Item) => {
       if (item.isFolder) browseFolder(item.id);
-      else if (item.openInMist) void openFile({ id: item.id, name: item.name, path: item.path });
+      else if (item.openInMist) void openFile({ id: item.id, name: item.name, path: item.path, parentId: item.parentId });
       else if (item.webViewLink) window.open(item.webViewLink, "_blank", "noopener,noreferrer");
     },
     [browseFolder, openFile],
@@ -444,26 +490,7 @@ export default function DriveBrowser({
                       <KindIcon kind={e.kind} />
                     </span>
                     <span className="min-w-0 flex-1">
-                      {data.isSearch && e.path && (
-                        <span
-                          role="button"
-                          tabIndex={0}
-                          onClick={(ev) => {
-                            ev.stopPropagation();
-                            if (e.parentId) browseFolder(e.parentId);
-                          }}
-                          onKeyDown={(ev) => {
-                            if (ev.key === "Enter" && e.parentId) {
-                              ev.stopPropagation();
-                              browseFolder(e.parentId);
-                            }
-                          }}
-                          title="Go to this folder"
-                          className="block cursor-pointer truncate text-xs opacity-50 hover:underline hover:opacity-100"
-                        >
-                          {e.path}
-                        </span>
-                      )}
+                      {data.isSearch && <PathCrumb path={e.path} parentId={e.parentId} onGo={browseFolder} />}
                       <span className="block truncate">{e.name}</span>
                     </span>
                     {!e.openInMist && !e.isFolder && (
@@ -516,7 +543,7 @@ export default function DriveBrowser({
                     <KindIcon kind="markdown" />
                   </span>
                   <span className="min-w-0 flex-1">
-                    {r.path && <span className="block truncate text-xs opacity-50">{r.path}</span>}
+                    <PathCrumb path={r.path} parentId={r.parentId} onGo={browseFolder} />
                     <span className="block truncate">{r.name}</span>
                   </span>
                 </button>
