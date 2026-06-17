@@ -33,7 +33,7 @@ const PANELS: Shortcut[] = [
   { keys: [MOD, "Alt", "F"], label: "Drive / files sidebar" },
   { keys: [MOD, "Alt", "D"], label: "Outline / slide list" },
   { keys: [MOD, "Alt", "C"], label: "Comments panel" },
-  { keys: [MOD, "Alt", "G"], label: "Editor to current slide (decks)" },
+  { keys: [MOD, "Alt", "G"], label: "Editor to the shown slide (or the divider arrow)" },
   { keys: [MOD, "Alt", "/"], label: "This help" },
 ];
 
@@ -95,25 +95,28 @@ const CLASS_EXAMPLES: { code: string; note: string }[] = [
 // Slash-command menu, mirroring cm-slash.ts. Type "/" to insert one of these
 // Quarto/Pandoc structures; the class snippets then open the `.`-class picker.
 const SLASH: { cmd: string; label: string }[] = [
+  { cmd: "/library", label: "insert a standard slide or image from the library" },
   { cmd: "/columns", label: "two columns (50/50)" },
   { cmd: "/column", label: "single column block" },
   { cmd: "/columns3", label: "three columns (33%)" },
-  { cmd: "/place", label: "float a block (top/left %)" },
   { cmd: "/box", label: "a box with a style" },
   { cmd: "/panel", label: "panel box, then pick a colour" },
   { cmd: "/card", label: "one card" },
   { cmd: "/cards", label: "grid of cards (one per item)" },
   { cmd: "/callout", label: "callout box (note/tip/warning)" },
-  { cmd: "/bignum", label: "big headline figure + note" },
-  { cmd: "/footer", label: "small dimmed footer line" },
-  { cmd: "/span", label: "inline [text]{.class}" },
+  { cmd: "/bignums", label: "list of big figures (bold the figure)" },
   { cmd: "/highlight", label: "static highlight, pick a colour" },
   { cmd: "/flare", label: "animated highlight, pick a colour" },
+  { cmd: "/span", label: "inline [text]{.class}" },
+  { cmd: "/footer", label: "small dimmed footer line" },
+  { cmd: "/place", label: "float a block (top/left %)" },
+  { cmd: "/rect", label: "red rectangle (place + scale it)" },
+  { cmd: "/circle", label: "red circle (place + scale it)" },
   { cmd: "/fragment", label: "reveal one step at a time" },
   { cmd: "/incremental", label: "reveal list items one by one" },
   { cmd: "/notes", label: "speaker notes" },
   { cmd: "/image", label: "insert an image by path" },
-  { cmd: "/unwrap", label: "remove the surrounding div" },
+  { cmd: "/unwrap", label: "remove the surrounding box" },
 ];
 
 const TIPS = [
