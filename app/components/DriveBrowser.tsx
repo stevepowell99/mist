@@ -160,10 +160,13 @@ export default function DriveBrowser({
   startFolderId = null,
   currentFileId = null,
   className = "",
+  active = false,
 }: {
   startFolderId?: string | null;
   currentFileId?: string | null;
   className?: string;
+  /** True while the containing panel is open: focus the search box on each open. */
+  active?: boolean;
 }) {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
@@ -186,7 +189,15 @@ export default function DriveBrowser({
     return Number.isFinite(v) && v >= 40 ? v : 180;
   });
   const rootRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const reqId = useRef(0); // guards against out-of-order responses racing
+
+  // Focus the search box whenever the containing panel opens, so the viewer can
+  // type straight away. The panel stays mounted between opens (so it can show
+  // cached contents instantly), hence keying on `active` rather than mount.
+  useEffect(() => {
+    if (active) inputRef.current?.focus();
+  }, [active]);
 
   // Drag the divider above the recent list to resize it against the list above;
   // store the final height on release.
@@ -417,6 +428,7 @@ export default function DriveBrowser({
         </div>
       )}
       <input
+        ref={inputRef}
         type="text"
         value={query}
         onChange={(e) => setQuery(e.target.value)}

@@ -106,7 +106,7 @@ export default function FolderSidebar() {
             </button>
           </div>
           {drive ? (
-            <DriveBrowser startFolderId={drive.folderId ?? null} currentFileId={drive.fileId} className="flex-1" />
+            <DriveBrowser startFolderId={drive.folderId ?? null} currentFileId={drive.fileId} active={open} className="flex-1" />
           ) : null}
         </div>
       )}
