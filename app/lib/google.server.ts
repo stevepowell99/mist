@@ -338,6 +338,9 @@ export interface DriveSearchEntry {
   path: string;
   /** Parent folder id, so a search result's path is clickable to browse there. */
   parentId: string | null;
+  /** Ancestor folders top -> immediate parent, so each path segment is its own
+   *  clickable breadcrumb (not just the whole path to the immediate parent). */
+  trail: { id: string; name: string }[];
 }
 
 function escapeQ(s: string): string {
@@ -363,9 +366,9 @@ async function resolveFolderPath(
   token: string,
   parents: string[] | undefined,
   cache: Map<string, { name: string; parent?: string }>,
-): Promise<string> {
+): Promise<{ path: string; trail: { id: string; name: string }[] }> {
   let id = parents?.[0];
-  const parts: string[] = [];
+  const trail: { id: string; name: string }[] = [];
   let guard = 0;
   while (id && guard++ < 5) {
     let info = cache.get(id);
@@ -378,10 +381,10 @@ async function resolveFolderPath(
       }
       cache.set(id, info);
     }
-    if (info.name && info.name !== "My Drive") parts.unshift(info.name);
+    if (info.name && info.name !== "My Drive") trail.unshift({ id, name: info.name });
     id = info.parent;
   }
-  return parts.join(" / ");
+  return { path: trail.map((t) => t.name).join(" / "), trail };
 }
 
 /**
@@ -422,9 +425,9 @@ export async function driveFiles(
   for (const f of body.files) {
     const kind = driveKind(f.mimeType, f.name);
     if (wanted && !wanted.has(kind)) continue;
-    const path = await resolveFolderPath(token, f.parents, cache);
+    const { path, trail } = await resolveFolderPath(token, f.parents, cache);
     if (isSludge(f.name, path)) continue; // drop generated/build directories
-    entries.push({ id: f.id, name: f.name, kind, webViewLink: f.webViewLink ?? null, path, parentId: f.parents?.[0] ?? null });
+    entries.push({ id: f.id, name: f.name, kind, webViewLink: f.webViewLink ?? null, path, parentId: f.parents?.[0] ?? null, trail });
   }
   return entries;
 }

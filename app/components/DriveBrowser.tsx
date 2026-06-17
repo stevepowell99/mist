@@ -35,6 +35,7 @@ interface Item {
   kind: DriveKind;
   path?: string;
   parentId?: string | null;
+  trail?: { id: string; name: string }[];
 }
 
 interface Crumb {
@@ -110,33 +111,43 @@ function RowAction({ title, disabled, onClick, children }: { title: string; disa
   );
 }
 
-/** A file's parent-folder path, shown above its name. Clickable to browse into
- *  that folder when the parent id is known (search results and freshly-opened
- *  recents); older recents saved without an id fall back to plain text. Shared by
- *  the search list and the Recently-opened list so both read and behave the same. */
-function PathCrumb({ path, parentId, onGo }: { path?: string; parentId?: string | null; onGo: (id: string) => void }) {
-  if (!path) return null;
-  if (!parentId) return <span className="block truncate text-xs opacity-50">{path}</span>;
-  return (
-    <span
-      role="button"
-      tabIndex={0}
-      onClick={(ev) => {
-        ev.stopPropagation();
-        onGo(parentId);
-      }}
-      onKeyDown={(ev) => {
-        if (ev.key === "Enter") {
-          ev.stopPropagation();
-          onGo(parentId);
-        }
-      }}
-      title="Go to this folder"
-      className="block cursor-pointer truncate text-xs opacity-50 hover:underline hover:opacity-100"
-    >
-      {path}
-    </span>
-  );
+/** A file's parent-folder path, shown above its name. Each folder segment is its
+ *  own link that browses into THAT folder (like the browse trail), so you can jump
+ *  to any ancestor, not just the immediate parent. Older recents saved before the
+ *  trail existed fall back to plain text. Shared by the search list and the
+ *  Recently-opened list so both read and behave the same. */
+function PathCrumb({ trail, path, onGo }: { trail?: { id: string; name: string }[]; path?: string; onGo: (id: string) => void }) {
+  if (trail && trail.length) {
+    return (
+      <span className="block truncate text-xs">
+        {trail.map((c, i) => (
+          <span key={c.id}>
+            {i > 0 && <span className="opacity-40"> / </span>}
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={(ev) => {
+                ev.stopPropagation();
+                onGo(c.id);
+              }}
+              onKeyDown={(ev) => {
+                if (ev.key === "Enter") {
+                  ev.stopPropagation();
+                  onGo(c.id);
+                }
+              }}
+              title={`Go to ${c.name}`}
+              className="cursor-pointer opacity-50 hover:underline hover:opacity-100"
+            >
+              {c.name}
+            </span>
+          </span>
+        ))}
+      </span>
+    );
+  }
+  if (path) return <span className="block truncate text-xs opacity-50">{path}</span>;
+  return null;
 }
 
 /** In-memory cache of folder listings (NOT searches), keyed by folder + types, so
@@ -277,7 +288,7 @@ export default function DriveBrowser({
         if (res.status === 401) throw new Error(SIGN_IN_MSG);
         const body = (await readJson(res)) as { url?: string; error?: string };
         if (body.url) {
-          addRecentOpened({ id: item.id, name: item.name, path: item.path, parentId: item.parentId });
+          addRecentOpened({ id: item.id, name: item.name, path: item.path, parentId: item.parentId, trail: item.trail });
           // Carry the current View (editor/split/preview) onto the new doc so
           // the layout is preserved when opening from the sidebar.
           const view = typeof window !== "undefined"
@@ -301,7 +312,7 @@ export default function DriveBrowser({
   const onPick = useCallback(
     (item: Item) => {
       if (item.isFolder) browseFolder(item.id);
-      else if (item.openInMist) void openFile({ id: item.id, name: item.name, path: item.path, parentId: item.parentId });
+      else if (item.openInMist) void openFile({ id: item.id, name: item.name, path: item.path, parentId: item.parentId, trail: item.trail });
       else if (item.webViewLink) window.open(item.webViewLink, "_blank", "noopener,noreferrer");
     },
     [browseFolder, openFile],
@@ -490,7 +501,7 @@ export default function DriveBrowser({
                       <KindIcon kind={e.kind} />
                     </span>
                     <span className="min-w-0 flex-1">
-                      {data.isSearch && <PathCrumb path={e.path} parentId={e.parentId} onGo={browseFolder} />}
+                      {data.isSearch && <PathCrumb trail={e.trail} path={e.path} onGo={browseFolder} />}
                       <span className="block truncate">{e.name}</span>
                     </span>
                     {!e.openInMist && !e.isFolder && (
@@ -543,7 +554,7 @@ export default function DriveBrowser({
                     <KindIcon kind="markdown" />
                   </span>
                   <span className="min-w-0 flex-1">
-                    <PathCrumb path={r.path} parentId={r.parentId} onGo={browseFolder} />
+                    <PathCrumb trail={r.trail} path={r.path} onGo={browseFolder} />
                     <span className="block truncate">{r.name}</span>
                   </span>
                 </button>

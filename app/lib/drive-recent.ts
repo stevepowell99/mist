@@ -9,6 +9,8 @@ export interface RecentItem {
   path?: string;
   /** Parent folder id, so the recent row's breadcrumb is clickable like search. */
   parentId?: string | null;
+  /** Ancestor folders top -> immediate parent, each a clickable breadcrumb. */
+  trail?: { id: string; name: string }[];
 }
 
 const STORE_KEY = "mistDriveRecentOpened";

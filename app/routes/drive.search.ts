@@ -18,6 +18,8 @@ export interface SearchResult {
   path: string;
   /** Parent folder id, so the path navigates into that folder. */
   parentId: string | null;
+  /** Ancestor folders top -> immediate parent, each a clickable breadcrumb. */
+  trail: { id: string; name: string }[];
   /** A markdown file mist can open in the editor. */
   openInMist: boolean;
   /** Drive web link for opening anything else in a new tab. */
@@ -33,6 +35,7 @@ function toResult(e: DriveSearchEntry): SearchResult {
     kind: e.kind,
     path: e.path,
     parentId: e.parentId,
+    trail: e.trail,
     openInMist: e.kind === "markdown",
     webViewLink: e.webViewLink,
   };
