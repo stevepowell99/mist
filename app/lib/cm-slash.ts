@@ -70,7 +70,7 @@ const SLASH_COMMANDS: Completion[] = [
   }),
   classSnippet("::: {.bg .${1:teal}}\n\n${2}\n\n:::\n\n${}", {
     label: "/box",
-    detail: "a tinted box (.bg + a colour); change or add styles",
+    detail: "a tinted box (.bg + a colour; or .bg-<colour> to set the fill alone)",
     type: "keyword",
     boost: 96,
   }),

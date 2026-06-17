@@ -80,7 +80,8 @@ const DECK_SETTINGS: { key: string; val: string }[] = [
 // `:::` to autocomplete from the deck's own CSS.
 const CLASS_GROUPS: { title: string; items: string }[] = [
   { title: "Components", items: ".flare .hl .panel .bg .chip .card .cards .bignums .columns .column .callout .lead .footer .rectangle .circle .oval" },
-  { title: "Colours", items: ".blue .cyan .teal .green .mint .yellow .pink .mag .navy .grey" },
+  { title: "Colours (text)", items: ".blue .cyan .teal .green .mint .yellow .pink .mag .navy .grey" },
+  { title: "Fill / border", items: ".bg-<colour> (pale; + .solid) overrides only the background · .border-<colour> overrides only the border" },
   { title: "Modifiers", items: ".light .dark .fast .slow .cascade-2…5 .scale-* .width-* .height-* .left .center .right .align-top .align-middle .align-bottom" },
   { title: "Callouts", items: "> [!note] / [!tip] / [!warning] / [!important]" },
   { title: "Slide", items: ".place .top-* .left-* .title-page .no-title .shot-cap .brand" },
@@ -89,6 +90,8 @@ const CLASS_GROUPS: { title: string; items: string }[] = [
 const CLASS_EXAMPLES: { code: string; note: string }[] = [
   { code: "[big idea]{.flare .yellow}", note: "highlight a phrase" },
   { code: "::: {.panel .teal}\n  body\n:::", note: "a tinted panel" },
+  { code: "[note]{.teal .bg-pink}", note: "teal text, pink fill" },
+  { code: "::: {.circle .border-teal}\n  ok\n:::", note: "teal-outlined shape" },
   { code: "# Section {.center .no-title}", note: "section divider" },
 ];
 

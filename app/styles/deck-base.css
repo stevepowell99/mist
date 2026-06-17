@@ -20,9 +20,16 @@
  * / timing classes only SET them, so a semantic name is an alias, never a look):
  *   COMPONENT .flare .hl .panel .bg .chip .card/.cards .bignum .callout .lead
  *   COLOUR    .blue .cyan .teal .green .mint .yellow .pink .mag .navy .grey .white .black
+ *   FILL      .bg-<colour>     overrides only the background (pale; + .solid for a strong fill)
+ *   BORDER    .border-<colour> overrides only the border (panels, callouts, shapes)
  *   SCALE .scale-25..500   SHADE .light/.dark   ORDER .cascade-2..5
  *   TIMING .fast/.slow/.instant (or --dur/--ease)   ALIGN .left/.center/.right
  *   PLACE (deck only) .place + .top-25 .left-50 ... (5% steps) or top=/left= attrs
+ *
+ * Colour, fill and border are three INDEPENDENT targets, so one element can carry
+ * all three: [teal text]{.teal .bg-pink} is teal text on a pale-pink background;
+ * ::: {.circle .border-teal} is a teal-outlined shape. A bare colour still tints
+ * the text and provides a matching pale tint to any box on the same element.
  *
  * Examples: [x]{.flare .yellow}   ::: {.panel .teal} ... :::   [x]{.chip .mint}
  * Obsidian callouts (`> [!note] Title`) are converted to ::: {.callout .callout-note}.
@@ -35,6 +42,22 @@
   /* Semantic aliases used across the decks */
   --bg: var(--cm-dark); --teal: var(--cm-blue); --teal-dark: #2a8a86;
   --muted: #e8edf2; --grey-bg: #f4f6f9; --ink: #1a1a2e;
+  /* PALETTE TOKENS: the one source for the 12 colours. The colour classes and the
+     .bg-* / .border-* families all read these, so a recolour happens in one place.
+     Each colour has -pale (soft tint), -deep (dark), -bright (vivid), -on (text on
+     a solid fill). Values match what the colour classes used to inline. */
+  --c-blue:#2b6cb0;   --c-blue-pale:#eaf2fb;   --c-blue-deep:#16314f;   --c-blue-bright:#76F7FF; --c-blue-on:#fff;
+  --c-green:#217a52;  --c-green-pale:#e8f3ec;  --c-green-deep:#123f2b;  --c-green-bright:#00FFAF; --c-green-on:#fff;
+  --c-teal:#2a8a86;   --c-teal-pale:#e6f7f6;   --c-teal-deep:#14403e;   --c-teal-bright:#76F7FF; --c-teal-on:#fff;
+  --c-grey:#6b7280;   --c-grey-pale:#f4f6f9;   --c-grey-deep:#3a3f44;   --c-grey-bright:#cbd5e1; --c-grey-on:#fff;
+  --c-yellow:#e8b84b; --c-yellow-pale:#fdf6e3; --c-yellow-deep:#8a7d1a; --c-yellow-bright:#F7ED73; --c-yellow-on:var(--ink);
+  --c-pink:#d6336c;   --c-pink-pale:#fdeef3;   --c-pink-deep:#a83a64;   --c-pink-bright:#FF8FB8; --c-pink-on:#fff;
+  --c-cyan:#0a9bc4;   --c-cyan-pale:#e6fdff;   --c-cyan-deep:#0a6f7a;   --c-cyan-bright:#76F7FF; --c-cyan-on:#fff;
+  --c-mint:#0aa06a;   --c-mint-pale:#e6fff6;   --c-mint-deep:#0a6e4c;   --c-mint-bright:#00FFAF; --c-mint-on:#fff;
+  --c-navy:#1F1F36;   --c-navy-pale:#e6e6ec;   --c-navy-deep:#0e0e1c;   --c-navy-bright:#6DC4C8; --c-navy-on:#fff;
+  --c-mag:#DC378C;    --c-mag-pale:#fbe3ef;    --c-mag-deep:#8a1f56;    --c-mag-bright:#FF8FB8; --c-mag-on:#fff;
+  --c-white:#ffffff;  --c-white-pale:#ffffff;  --c-white-deep:#d9d9d9;  --c-white-bright:#ffffff; --c-white-on:var(--ink);
+  --c-black:#1a1a1a;  --c-black-pale:#ececec;  --c-black-deep:#000000;  --c-black-bright:#3a3a3a; --c-black-on:#fff;
   /* Global timing knobs (the TIMING axis sets these) */
   --dur: 3.8s; --ease: ease-out;
 }
@@ -46,24 +69,54 @@
 /* AXIS: COLOUR (variable-only). Sets --hue (solid), --hue-bright (vivid fill),
    --hue-pale (soft tint), --hue-deep (dark), --on (text on a solid fill).
    RECOLOUR a deck by overriding these in its own CSS, never the components. */
-:is(.reveal,.preview) .blue   { --hue: #2b6cb0; --hue-bright: #76F7FF; --hue-pale: #eaf2fb; --hue-deep: #16314f; --on: #fff; }
-:is(.reveal,.preview) .green  { --hue: #217a52; --hue-bright: #00FFAF; --hue-pale: #e8f3ec; --hue-deep: #123f2b; --on: #fff; }
-:is(.reveal,.preview) .teal   { --hue: #2a8a86; --hue-bright: #76F7FF; --hue-pale: #e6f7f6; --hue-deep: #14403e; --on: #fff; }
-:is(.reveal,.preview) .grey   { --hue: #6b7280; --hue-bright: #cbd5e1; --hue-pale: #f4f6f9; --hue-deep: #3a3f44; --on: #fff; }
-:is(.reveal,.preview) .yellow { --hue: #e8b84b; --hue-bright: #F7ED73; --hue-pale: #fdf6e3; --hue-deep: #8a7d1a; --on: var(--ink); }
-:is(.reveal,.preview) .pink   { --hue: #d6336c; --hue-bright: #FF8FB8; --hue-pale: #fdeef3; --hue-deep: #a83a64; --on: #fff; }
-:is(.reveal,.preview) .cyan   { --hue: #0a9bc4; --hue-bright: #76F7FF; --hue-pale: #e6fdff; --hue-deep: #0a6f7a; --on: #fff; }
-:is(.reveal,.preview) .mint   { --hue: #0aa06a; --hue-bright: #00FFAF; --hue-pale: #e6fff6; --hue-deep: #0a6e4c; --on: #fff; }
-:is(.reveal,.preview) .navy   { --hue: #1F1F36; --hue-bright: #6DC4C8; --hue-pale: #e6e6ec; --hue-deep: #0e0e1c; --on: #fff; }
-:is(.reveal,.preview) .mag    { --hue: #DC378C; --hue-bright: #FF8FB8; --hue-pale: #fbe3ef; --hue-deep: #8a1f56; --on: #fff; }
-:is(.reveal,.preview) .white  { --hue: #ffffff; --hue-bright: #ffffff; --hue-pale: #ffffff; --hue-deep: #d9d9d9; --on: var(--ink); }
-:is(.reveal,.preview) .black  { --hue: #1a1a1a; --hue-bright: #3a3a3a; --hue-pale: #ececec; --hue-deep: #000000; --on: #fff; }
+:is(.reveal,.preview) .blue   { --hue: var(--c-blue);   --hue-bright: var(--c-blue-bright);   --hue-pale: var(--c-blue-pale);   --hue-deep: var(--c-blue-deep);   --on: var(--c-blue-on); }
+:is(.reveal,.preview) .green  { --hue: var(--c-green);  --hue-bright: var(--c-green-bright);  --hue-pale: var(--c-green-pale);  --hue-deep: var(--c-green-deep);  --on: var(--c-green-on); }
+:is(.reveal,.preview) .teal   { --hue: var(--c-teal);   --hue-bright: var(--c-teal-bright);   --hue-pale: var(--c-teal-pale);   --hue-deep: var(--c-teal-deep);   --on: var(--c-teal-on); }
+:is(.reveal,.preview) .grey   { --hue: var(--c-grey);   --hue-bright: var(--c-grey-bright);   --hue-pale: var(--c-grey-pale);   --hue-deep: var(--c-grey-deep);   --on: var(--c-grey-on); }
+:is(.reveal,.preview) .yellow { --hue: var(--c-yellow); --hue-bright: var(--c-yellow-bright); --hue-pale: var(--c-yellow-pale); --hue-deep: var(--c-yellow-deep); --on: var(--c-yellow-on); }
+:is(.reveal,.preview) .pink   { --hue: var(--c-pink);   --hue-bright: var(--c-pink-bright);   --hue-pale: var(--c-pink-pale);   --hue-deep: var(--c-pink-deep);   --on: var(--c-pink-on); }
+:is(.reveal,.preview) .cyan   { --hue: var(--c-cyan);   --hue-bright: var(--c-cyan-bright);   --hue-pale: var(--c-cyan-pale);   --hue-deep: var(--c-cyan-deep);   --on: var(--c-cyan-on); }
+:is(.reveal,.preview) .mint   { --hue: var(--c-mint);   --hue-bright: var(--c-mint-bright);   --hue-pale: var(--c-mint-pale);   --hue-deep: var(--c-mint-deep);   --on: var(--c-mint-on); }
+:is(.reveal,.preview) .navy   { --hue: var(--c-navy);   --hue-bright: var(--c-navy-bright);   --hue-pale: var(--c-navy-pale);   --hue-deep: var(--c-navy-deep);   --on: var(--c-navy-on); }
+:is(.reveal,.preview) .mag    { --hue: var(--c-mag);    --hue-bright: var(--c-mag-bright);    --hue-pale: var(--c-mag-pale);    --hue-deep: var(--c-mag-deep);    --on: var(--c-mag-on); }
+:is(.reveal,.preview) .white  { --hue: var(--c-white);  --hue-bright: var(--c-white-bright);  --hue-pale: var(--c-white-pale);  --hue-deep: var(--c-white-deep);  --on: var(--c-white-on); }
+:is(.reveal,.preview) .black  { --hue: var(--c-black);  --hue-bright: var(--c-black-bright);  --hue-pale: var(--c-black-pale);  --hue-deep: var(--c-black-deep);  --on: var(--c-black-on); }
 /* A colour on its own (no component) tints the text. It also resets --fill, so a
    coloured component nested in a shaded one (a .pink chip inside a .light panel)
    fills with ITS hue, not the parent's inherited --fill. A shade class on the
    same element sets --fill again after this (source order), so colour+shade still
    works. */
 :is(.reveal,.preview) :is(.blue,.green,.teal,.grey,.yellow,.pink,.cyan,.mint,.navy,.mag,.white,.black) { color: var(--hue); --fill: initial; }
+
+/* AXIS: FILL (.bg-<colour>). Overrides ONLY the background, independent of the
+   text colour, so `.teal .bg-pink` is teal text on a pale-pink box. Paints the
+   tint directly (so it works on a bare element too) AND sets --fill, so a box
+   component on the same element and any nested component stay in step. Add
+   .solid for the strong hue fill (text then defaults to the colour's --on). Each
+   also sets --text so a box component reading it (a .card) keeps a readable text
+   colour against the override: ink on a pale fill, the colour's --on on a solid. */
+:is(.reveal,.preview) .bg-blue   { background: var(--c-blue-pale);   --fill: var(--c-blue-pale);   --text: var(--ink); }   :is(.reveal,.preview) .bg-blue.solid   { background: var(--c-blue);   --fill: var(--c-blue);   color: var(--c-blue-on);   --text: var(--c-blue-on); }
+:is(.reveal,.preview) .bg-green  { background: var(--c-green-pale);  --fill: var(--c-green-pale);  --text: var(--ink); }  :is(.reveal,.preview) .bg-green.solid  { background: var(--c-green);  --fill: var(--c-green);  color: var(--c-green-on);  --text: var(--c-green-on); }
+:is(.reveal,.preview) .bg-teal   { background: var(--c-teal-pale);   --fill: var(--c-teal-pale);   --text: var(--ink); }   :is(.reveal,.preview) .bg-teal.solid   { background: var(--c-teal);   --fill: var(--c-teal);   color: var(--c-teal-on);   --text: var(--c-teal-on); }
+:is(.reveal,.preview) .bg-grey   { background: var(--c-grey-pale);   --fill: var(--c-grey-pale);   --text: var(--ink); }   :is(.reveal,.preview) .bg-grey.solid   { background: var(--c-grey);   --fill: var(--c-grey);   color: var(--c-grey-on);   --text: var(--c-grey-on); }
+:is(.reveal,.preview) .bg-yellow { background: var(--c-yellow-pale); --fill: var(--c-yellow-pale); --text: var(--ink); } :is(.reveal,.preview) .bg-yellow.solid { background: var(--c-yellow); --fill: var(--c-yellow); color: var(--c-yellow-on); --text: var(--c-yellow-on); }
+:is(.reveal,.preview) .bg-pink   { background: var(--c-pink-pale);   --fill: var(--c-pink-pale);   --text: var(--ink); }   :is(.reveal,.preview) .bg-pink.solid   { background: var(--c-pink);   --fill: var(--c-pink);   color: var(--c-pink-on);   --text: var(--c-pink-on); }
+:is(.reveal,.preview) .bg-cyan   { background: var(--c-cyan-pale);   --fill: var(--c-cyan-pale);   --text: var(--ink); }   :is(.reveal,.preview) .bg-cyan.solid   { background: var(--c-cyan);   --fill: var(--c-cyan);   color: var(--c-cyan-on);   --text: var(--c-cyan-on); }
+:is(.reveal,.preview) .bg-mint   { background: var(--c-mint-pale);   --fill: var(--c-mint-pale);   --text: var(--ink); }   :is(.reveal,.preview) .bg-mint.solid   { background: var(--c-mint);   --fill: var(--c-mint);   color: var(--c-mint-on);   --text: var(--c-mint-on); }
+:is(.reveal,.preview) .bg-navy   { background: var(--c-navy-pale);   --fill: var(--c-navy-pale);   --text: var(--ink); }   :is(.reveal,.preview) .bg-navy.solid   { background: var(--c-navy);   --fill: var(--c-navy);   color: var(--c-navy-on);   --text: var(--c-navy-on); }
+:is(.reveal,.preview) .bg-mag    { background: var(--c-mag-pale);    --fill: var(--c-mag-pale);    --text: var(--ink); }    :is(.reveal,.preview) .bg-mag.solid    { background: var(--c-mag);    --fill: var(--c-mag);    color: var(--c-mag-on);    --text: var(--c-mag-on); }
+:is(.reveal,.preview) .bg-white  { background: var(--c-white-pale);  --fill: var(--c-white-pale);  --text: var(--ink); }  :is(.reveal,.preview) .bg-white.solid  { background: var(--c-white);  --fill: var(--c-white);  color: var(--c-white-on);  --text: var(--c-white-on); }
+:is(.reveal,.preview) .bg-black  { background: var(--c-black-pale);  --fill: var(--c-black-pale);  --text: var(--ink); }  :is(.reveal,.preview) .bg-black.solid  { background: var(--c-black);  --fill: var(--c-black);  color: var(--c-black-on);  --text: var(--c-black-on); }
+
+/* AXIS: BORDER (.border-<colour>). Sets the --border slot only; components that
+   draw a border (.panel, .callout, the shapes) read it, so `.circle .border-teal`
+   is a teal outline. Shows nothing alone (a setter, like a colour class). */
+:is(.reveal,.preview) .border-blue   { --border: var(--c-blue); }   :is(.reveal,.preview) .border-green { --border: var(--c-green); }
+:is(.reveal,.preview) .border-teal   { --border: var(--c-teal); }   :is(.reveal,.preview) .border-grey  { --border: var(--c-grey); }
+:is(.reveal,.preview) .border-yellow { --border: var(--c-yellow); } :is(.reveal,.preview) .border-pink  { --border: var(--c-pink); }
+:is(.reveal,.preview) .border-cyan   { --border: var(--c-cyan); }   :is(.reveal,.preview) .border-mint  { --border: var(--c-mint); }
+:is(.reveal,.preview) .border-navy   { --border: var(--c-navy); }   :is(.reveal,.preview) .border-mag   { --border: var(--c-mag); }
+:is(.reveal,.preview) .border-white  { --border: var(--c-white); }  :is(.reveal,.preview) .border-black { --border: var(--c-black); }
 
 /* AXIS: SHADE / ALIGN / TIMING */
 :is(.reveal,.preview) .light { --fill: var(--hue-pale); --text: var(--ink); }
@@ -121,7 +174,7 @@
 /* COMPONENT: panel (padded box with accent left border) */
 :is(.reveal,.preview) .panel {
   background: var(--fill, var(--hue-pale, transparent));
-  border-left: 4px solid var(--hue, transparent); color: var(--text, var(--ink));
+  border-left: 4px solid var(--border, var(--hue, transparent)); color: var(--text, var(--ink));
   border-radius: 6px; padding: 0.7em 1em 0.7em 1.3em; margin: 0.4em 0; line-height: 1.35;
 }
 :is(.reveal,.preview) .panel > p:first-child strong:first-child,
@@ -197,7 +250,7 @@
    body; type text inside and it centres in both axes. Recolour the outline with a
    colour class, move with .place + .top-/.left-, size with .scale-. */
 :is(.reveal,.preview) :is(.rectangle, .circle, .oval) {
-  border: 3px solid var(--hue, #ff2f00);
+  border: 3px solid var(--border, var(--hue, #ff2f00));
   background: transparent;
   display: flex; align-items: center; justify-content: center;
   text-align: center; padding: 0.4em 0.6em; box-sizing: border-box;
@@ -210,7 +263,7 @@
 /* COMPONENT: callout. The Obsidian/Quartz `> [!type] Title` syntax is converted
    to ::: {.callout .callout-type}. Each type is an alias setting the colour knobs. */
 :is(.reveal,.preview) .callout {
-  border-left: 4px solid var(--hue, #6b7280); background: var(--hue-pale, #f4f6f9);
+  border-left: 4px solid var(--border, var(--hue, #6b7280)); background: var(--fill, var(--hue-pale, #f4f6f9));
   border-radius: 6px; padding: 0.6em 0.9em; margin: 0.5em 0;
 }
 :is(.reveal,.preview) .callout-title { display: block; font-weight: 700; color: var(--hue, inherit); margin-bottom: 0.2em; }

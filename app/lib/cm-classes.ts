@@ -13,13 +13,13 @@ import { searchScore } from "~/lib/fuzzy";
  *  manifest's step/values definitions. */
 type ClassInfo = { section: string; detail: string };
 const SECTION_LABEL: Record<string, string> = {
-  component: "Component", colour: "Colour", shade: "Shade", scale: "Scale",
-  order: "Order", timing: "Timing", align: "Align", place: "Place",
-  width: "Size", height: "Size",
+  component: "Component", colour: "Colour", fill: "Fill", border: "Border",
+  shade: "Shade", scale: "Scale", order: "Order", timing: "Timing",
+  align: "Align", place: "Place", width: "Size", height: "Size",
 };
 const SECTION_RANK: Record<string, number> = {
-  Component: 1, Colour: 2, Scale: 3, Size: 3.5, Shade: 4, Timing: 5, Align: 6, Order: 7,
-  Place: 8, "Reveal/Quarto": 9, "Deck CSS": 10,
+  Component: 1, Colour: 2, Fill: 2.3, Border: 2.6, Scale: 3, Size: 3.5, Shade: 4,
+  Timing: 5, Align: 6, Order: 7, Place: 8, "Reveal/Quarto": 9, "Deck CSS": 10,
 };
 
 const CLASS_INFO: Record<string, ClassInfo> = (() => {
@@ -37,12 +37,21 @@ const CLASS_INFO: Record<string, ClassInfo> = (() => {
       }
     }
     const g = axis.generated as
-      | { prefix?: string | string[]; unit?: string; values?: number[]; step?: number; from?: number; to?: number }
+      | { prefix?: string | string[]; unit?: string; values?: number[]; step?: number; from?: number; to?: number; suffixesFrom?: string; detail?: string }
       | undefined;
     if (g) {
       const prefixes = Array.isArray(g.prefix) ? g.prefix : [g.prefix ?? ""];
       const unit = g.unit && g.unit !== "ratio" ? g.unit : "";
-      if (g.values) {
+      if (g.suffixesFrom) {
+        // String-suffix cross product, e.g. .bg-<colour> / .border-<colour>: pull
+        // the suffix list from another axis (the colour names) so it stays DRY.
+        const suffixes = Object.keys(cat.axes?.[g.suffixesFrom]?.classes ?? {});
+        const tmpl = g.detail ?? "$suffix";
+        for (const p of prefixes) for (const s of suffixes) {
+          const label = s.charAt(0).toUpperCase() + s.slice(1);
+          m[`${p}-${s}`] = { section, detail: tmpl.replace("$suffix", label) };
+        }
+      } else if (g.values) {
         for (const p of prefixes) for (const v of g.values) {
           m[`${p}-${v}`] = { section, detail: g.unit === "ratio" ? `${v}% size` : `${p}: ${v}${unit}` };
         }

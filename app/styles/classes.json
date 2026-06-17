@@ -26,13 +26,21 @@
       }
     },
     "colour": {
-      "desc": "Variable-only: sets --hue, --hue-bright, --hue-pale, --hue-deep, --on. Shows nothing alone; recolour a deck by overriding these in its own CSS.",
+      "desc": "The element's text/accent hue (and the matching pale tint any box on the same element fills with). Use .bg-<colour> and .border-<colour> to override fill and border independently. Sets --hue, --hue-bright, --hue-pale, --hue-deep, --on.",
       "classes": {
         "blue": "Blue", "cyan": "Cyan", "teal": "Teal (brand)", "green": "Green",
         "mint": "Mint (brand)", "yellow": "Yellow (brand)", "pink": "Pink (brand)",
         "mag": "Magenta", "navy": "Navy (brand)", "grey": "Grey",
         "white": "White", "black": "Black"
       }
+    },
+    "fill": {
+      "desc": "Override only the background, independent of the text colour: .teal .bg-pink is teal text on a pale-pink box. Pale by default; add .solid for a strong fill.",
+      "generated": { "prefix": "bg", "suffixesFrom": "colour", "detail": "$suffix background" }
+    },
+    "border": {
+      "desc": "Override only the border colour (panels, callouts and the outline shapes read it): .circle .border-teal is a teal outline.",
+      "generated": { "prefix": "border", "suffixesFrom": "colour", "detail": "$suffix border" }
     },
     "shade": {
       "desc": "Which version of the hue a component fills with.",

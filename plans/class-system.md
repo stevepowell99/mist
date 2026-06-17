@@ -53,12 +53,18 @@ colour/scale/shade/timing classes only set them. That is what makes the system
 multidimensional and what makes aliases possible.
 
 - **Knobs (custom properties):** colour (`--hue`, `--hue-bright`, `--hue-pale`,
-  `--hue-deep`, `--on`, and derived `--bg`/`--fg`), size (`--scale`), timing
-  (`--dur`, `--delay`, `--ease`), position (`--x`, `--y`).
+  `--hue-deep`, `--on`), fill override (`--fill`), border override (`--border`),
+  size (`--scale`), timing (`--dur`, `--delay`, `--ease`), position (`--x`, `--y`).
 - **Component** (reads knobs, shows something): `.flare`/`.hl`, `.panel`, `.bg`,
   `.chip`, `.card`/`.cards`, `.bignum`, `.callout`.
-- **Colour** (sets knobs only, shows nothing alone): `.blue .cyan .teal .green
-  .mint .yellow .pink .mag .navy .grey .white .black`.
+- **Colour** (the text/accent hue; sets the knobs, shows text + a matching pale
+  tint to a box on the same element): `.blue .cyan .teal .green .mint .yellow
+  .pink .mag .navy .grey .white .black`.
+- **Fill** `.bg-<colour>` and **Border** `.border-<colour>` (overriders): set
+  only `--fill` (the background, pale or `.solid`) or only `--border`, so text,
+  fill and border are three independent targets on one element. The 12 colours
+  live once as `--c-<name>*` tokens in `:root`; the colour classes and both
+  families read them. `[teal text]{.teal .bg-pink}`, `::: {.circle .border-teal}`.
 - **Scale:** `.scale-25 … .scale-500`, or `.scale` with `--scale`.
 - **Shade:** `.light`, `.dark`.
 - **Order:** `.cascade-2 … .cascade-5`.
