@@ -279,7 +279,10 @@ html,body{margin:0;height:100%}
    slide) the spare space below shows content that overflows the slide height,
    making an overstuffed slide look fine here yet get cut off in fullscreen. This
    also pins a .shot-cap caption to the slide edge (it needs the full height). */
-.reveal .slides section:not(.stack){height:100%;overflow:hidden}
+/* Excluded in overview (:not(.overview)): there reveal lays the slides out as a
+   transformed grid, and forcing height/overflow on each section pulls the slide
+   content out of its overview cell, so the selection outline stops lining up. */
+.reveal:not(.overview) .slides section:not(.stack){height:100%;overflow:hidden}
 /* In the embedded preview, tint the letterbox (the area above/below or beside
    the 16:9 slide) light grey so it is clear where the slide ends, while keeping
    the slide itself white. Only the default (transparent) slide background gets
@@ -678,6 +681,18 @@ window.addEventListener("keydown", function(e){
     parent.postMessage({ type: "mist-key", chord: chord }, "*");
   }
 }, true);
+// In overview, let the mouse wheel page through slides. Reveal navigates the
+// overview grid by arrow keys only and the pane has no scrollbar, so a plain
+// wheel does nothing; throttle so one notch moves one slide.
+var wheelLock = false;
+window.addEventListener("wheel", function(e){
+  if (!(Reveal.isOverview && Reveal.isOverview())) return;
+  e.preventDefault();
+  if (wheelLock) return;
+  wheelLock = true;
+  setTimeout(function(){ wheelLock = false; }, 180);
+  if (e.deltaY > 0) Reveal.next(); else if (e.deltaY < 0) Reveal.prev();
+}, { passive: false });
 Reveal.initialize(REVEAL_CONFIG).then(async function(){
   // Rebuild slide backgrounds: the markdown plugin sets data-background-image
   // (from the <!-- .slide: --> comment) during init, after reveal first built
