@@ -7,7 +7,7 @@
         "flare": "Animated inline highlight (flares in, resolves to its colour)",
         "hl": "Static inline highlight (same look, no animation)",
         "panel": "Padded box with an accent left border",
-        "bg": "Flat background tint (no border or padding)",
+        "bg": "Padded box filled with the element's colour (pair with a colour, e.g. .bg .teal)",
         "chip": "Small inline pill",
         "card": "A single card (use inside .cards)",
         "cards": "Responsive grid of cards/panels (+ .cols-2/3/4)",

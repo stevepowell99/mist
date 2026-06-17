@@ -62,6 +62,9 @@
   --c-black:#1a1a1a;  --c-black-pale:#ececec;  --c-black-deep:#000000;  --c-black-bright:#3a3a3a; --c-black-on:#fff;
   /* Global timing knobs (the TIMING axis sets these) */
   --dur: 3.8s; --ease: ease-out;
+  /* One padding for every box component (.panel, .bg, .card) and any bare
+     fill/border box, so they are all the same size. */
+  --box-pad: 0.5em 0.75em;
 }
 
 /* ============================================================ *
@@ -126,9 +129,18 @@
 :is(.reveal,.preview) .border-navy   { border: 2px solid var(--c-navy);   --border: var(--c-navy); }   :is(.reveal,.preview) .border-mag   { border: 2px solid var(--c-mag);   --border: var(--c-mag); }
 :is(.reveal,.preview) .border-white  { border: 2px solid var(--c-white);  --border: var(--c-white); }  :is(.reveal,.preview) .border-black { border: 2px solid var(--c-black); --border: var(--c-black); }
 
+/* A bare fill or border colour on a fenced div is a self-contained padded box,
+   so `::: {.bg-teal}` or `::: {.border-navy}` on their own look like a box. Zero
+   specificity (:where) so the .panel/.bg/.card components keep their own padding
+   when combined; inline `[text]{.bg-pink}` spans (not divs) stay untouched. */
+:where(.reveal,.preview) div:where([class*="bg-"], [class*="border-"]) { padding: var(--box-pad); }
+
 /* AXIS: SHADE / ALIGN / TIMING */
-:is(.reveal,.preview) .light { --fill: var(--hue-pale); --text: var(--ink); }
-:is(.reveal,.preview) .dark  { --fill: var(--hue-deep); --text: #fff; }
+/* Shade also sets the text colour directly (readable on the fill), so a box
+   component never has to force its own colour and a plain `.teal` keeps tinting
+   the text. */
+:is(.reveal,.preview) .light { --fill: var(--hue-pale); --text: var(--ink); color: var(--ink); }
+:is(.reveal,.preview) .dark  { --fill: var(--hue-deep); --text: #fff; color: #fff; }
 :is(.reveal,.preview) .left   { text-align: left; }
 :is(.reveal,.preview) .center { text-align: center; }
 :is(.reveal,.preview) .right  { text-align: right; }
@@ -182,8 +194,8 @@
 /* COMPONENT: panel (padded box with accent left border) */
 :is(.reveal,.preview) .panel {
   background: var(--fill, var(--hue-pale, transparent));
-  border: 0; border-left: 4px solid var(--border, var(--hue, transparent)); color: var(--text, var(--ink));
-  border-radius: 6px; padding: 0.7em 1em 0.7em 1.3em; margin: 0.4em 0; line-height: 1.35;
+  border: 0; border-left: 4px solid var(--border, var(--hue, transparent));
+  border-radius: 6px; padding: var(--box-pad); margin: 0.4em 0; line-height: 1.35;
 }
 :is(.reveal,.preview) .panel > p:first-child strong:first-child,
 :is(.reveal,.preview) .panel > strong:first-child { color: var(--hue, inherit); }
@@ -193,7 +205,7 @@
 :is(.reveal,.preview) .panel.dark > strong:first-child { color: var(--text, #fff); }
 
 /* COMPONENT: flat tint / chip */
-:is(.reveal,.preview) .bg { background: var(--fill, var(--hue-pale, transparent)); padding: 0.5em 0.7em; }
+:is(.reveal,.preview) .bg { background: var(--fill, var(--hue-pale, transparent)); padding: var(--box-pad); }
 :is(.reveal,.preview) .chip {
   display: inline-block; padding: 0.12em 0.6em; border-radius: 999px;
   font-size: 0.8em; font-weight: 700; line-height: 1.3; letter-spacing: 0.02em;
@@ -209,8 +221,8 @@
 :is(.reveal,.preview) .cards > .panel, :is(.reveal,.preview) .cards > .card,
 :is(.reveal,.preview) .cards li { margin: 0; line-height: 1.3; }
 :is(.reveal,.preview) .card, :is(.reveal,.preview) .cards li {
-  list-style: none; background: var(--fill, var(--hue, var(--grey-bg)));
-  color: var(--text, var(--on, var(--ink))); border-radius: 6px; padding: 0.5em 0.7em; line-height: 1.3;
+  list-style: none; background: var(--fill, var(--hue-pale, var(--grey-bg)));
+  border-radius: 6px; padding: var(--box-pad); line-height: 1.3;
 }
 /* The .card list-style:none above is inherited by the nested list, so card
    bullets vanished. Re-assert markers ON THE LI ITSELF (display:list-item +
