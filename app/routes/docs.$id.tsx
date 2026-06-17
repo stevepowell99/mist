@@ -342,6 +342,33 @@ function DocumentLayout({ id }: { id: string }) {
     return () => mq.removeEventListener("change", update);
   }, []);
 
+  // The parent folder's name for the navbar breadcrumb. The folder id is on the
+  // DriveMeta; its name is the last entry of the folder trail, which the search
+  // endpoint already returns, so no new route or schema field is needed.
+  const [folderName, setFolderName] = useState<string | null>(null);
+  useEffect(() => {
+    const fid = drive?.folderId;
+    if (!fid) {
+      setFolderName(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(`/drive/search?folder=${encodeURIComponent(fid)}`);
+        if (!res.ok) return;
+        const body = (await res.json()) as { folder?: { trail?: { id: string; name: string }[] } | null };
+        const trail = body.folder?.trail ?? [];
+        if (!cancelled) setFolderName(trail.length ? trail[trail.length - 1].name : null);
+      } catch {
+        // the navbar folder label is best-effort; a failure just hides it
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [drive?.folderId]);
+
   // Mirror the per-viewer View into the URL so a reload or a copied link
   // restores the same layout. replaceState keeps it out of the back-stack.
   // Editor is the default, so it carries no param. Mode (edit/suggest) is shared
@@ -629,17 +656,34 @@ function DocumentLayout({ id }: { id: string }) {
         )}
         <div className="flex min-w-0 grow items-center gap-2 px-4">
           <span
-            className="shrink-0 rounded border border-border px-1.5 py-0.5 text-xs uppercase tracking-wider text-muted"
+            className="hidden shrink-0 rounded border border-border px-1.5 py-0.5 text-xs uppercase tracking-wider text-muted sm:inline-block"
             title={deck ? "Slide deck (format: revealjs)" : "Document"}
           >
             {deck ? "Deck" : "Doc"}
           </span>
+          {/* Parent folder, paler and clickable: opens the Drive sidebar (which
+              starts at this folder). Hidden on the narrowest screens for room. */}
+          {folderName && (
+            <span className="hidden min-w-0 shrink items-center gap-2 sm:flex">
+              <button
+                type="button"
+                onClick={() => window.dispatchEvent(new CustomEvent("mist-toggle-folder"))}
+                title={`Open folder: ${folderName}`}
+                className="max-w-[12rem] cursor-pointer truncate text-muted opacity-70 hover:underline hover:opacity-100"
+              >
+                {folderName}
+              </button>
+              <span className="text-muted opacity-50">/</span>
+            </span>
+          )}
           <span className="truncate font-medium" title={title}>{title}</span>
         </div>
         {/* Two separate radio pills so the grouping reads at a glance: Mode
             (Editing vs Suggesting, shared doc state, only an edit-link user can
-            switch) and View (Editor / Split / Preview, per-viewer). */}
-        <div className="hidden shrink-0 items-center gap-2 border-l border-border pl-3 pr-1 lg:flex">
+            switch) and View (Editor / Split / Preview, per-viewer). Shown at
+            every width: these are the single mode/view control, on mobile too
+            (Split is desktop-only and drops out below lg). */}
+        <div className="flex shrink-0 items-center gap-2 border-l border-border pl-3 pr-1">
           <div className="flex divide-x divide-border overflow-hidden rounded-md border border-border">
             <ToolbarToggle
               active={mode === "edit"}
@@ -751,7 +795,7 @@ function DocumentLayout({ id }: { id: string }) {
                 ? "hidden"
                 : splitOpen
                   ? "shrink-0 overflow-y-auto"
-                  : "flex-1 overflow-y-auto pb-[33vh] lg:pb-0"
+                  : "flex-1 overflow-y-auto pb-20 lg:pb-0"
             }`}
             style={splitOpen ? { width: `${editorPct}%` } : undefined}
           >
@@ -856,7 +900,9 @@ function DocumentLayout({ id }: { id: string }) {
               <ThreadList />
             </div>
             {(backed || deck) && (
-              <div className="shrink-0 border-t border-border">
+              // pb-14 lifts the toggles clear of the floating ? help button,
+              // which is fixed over the bottom-right corner (this aside's foot).
+              <div className="shrink-0 border-t border-border pb-14">
                 {backed && (
                   <label className="flex cursor-pointer items-center justify-between gap-2 px-3 py-2 text-sm text-muted hover:text-ink">
                     <span title="When off, edits do not write to Drive automatically. Manual save (Ctrl/Cmd+S or the Saving badge) still works.">
