@@ -2,16 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 import { useDocument } from "~/lib/DocumentContext";
-import {
-  deckSlides,
-  stripFrontmatter,
-  maskCode,
-  restoreCode,
-  convertCallouts,
-  convertSpans,
-  convertImages,
-  convertDivs,
-} from "~/lib/slides-build";
+import { deckSlides, stripFrontmatter, applyGrammar } from "~/lib/slides-build";
 import { slideIndexForOffset } from "~/lib/slide-cursor";
 import type { SearchResult } from "~/routes/drive.search";
 
@@ -19,12 +10,9 @@ import type { SearchResult } from "~/routes/drive.search";
  *  way the document Preview does (the house grammar is global CSS, so a `.preview`
  *  box renders panels/cards/colours without a reveal iframe). */
 function thumbHtml(md: string): string {
-  const body = stripFrontmatter(md).body;
-  const masked = maskCode(body);
-  const converted = restoreCode(
-    convertDivs(convertImages(convertSpans(convertCallouts(masked.text)))),
-    masked.tokens,
-  );
+  // The same shared grammar pipeline the deck and Preview use, so a thumbnail
+  // matches the rendered slide (this previously omitted bignums and wikilinks).
+  const converted = applyGrammar(stripFrontmatter(md).body);
   return DOMPurify.sanitize(marked.parse(converted, { async: false }) as string);
 }
 

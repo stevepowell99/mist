@@ -4,9 +4,8 @@ import DOMPurify from "dompurify";
 import { useDocument } from "~/lib/DocumentContext";
 import { rewriteImages } from "~/lib/asset-urls";
 import { runMermaid } from "~/lib/mermaid";
-import { renderWikiLinks } from "~/lib/wikilinks";
 import { convertCitations, formatReferenceList } from "~/lib/citations";
-import { convertCallouts, convertSpans, convertImages, convertDivs, convertBignums, maskCode, restoreCode } from "~/lib/slides-build";
+import { applyGrammar } from "~/lib/slides-build";
 import { themeCss } from "~/lib/themes";
 import { stripFrontmatter } from "~/lib/thread-serialization";
 import { stripMistBanner } from "~/shared/mist-banner";
@@ -51,17 +50,10 @@ export default function Preview() {
     // The editor body now carries the document's YAML frontmatter (so it is
     // visible and editable), but it is metadata, so strip it from the preview.
     const resolved = rewriteImages(stripFrontmatter(stripMistBanner(markdown)), ctx);
-    // Parse the composable grammar (callouts -> spans -> fenced divs, nesting
-    // supported) so panels, cards and callouts render in a doc, then clean any
-    // attrs left on heading lines. Mask code first so example syntax shown in
-    // `backticks` or a fenced block is never rewritten; restore it at the end.
-    const masked = maskCode(resolved);
-    const withLinks = restoreCode(
-      stripPandocAttrs(
-        convertDivs(convertImages(convertSpans(convertCallouts(renderWikiLinks(convertBignums(masked.text)))))),
-      ),
-      masked.tokens,
-    );
+    // The shared composable-grammar pipeline (callouts/spans/divs/bignums, code
+    // masked) plus wikilinks and a heading-attr strip, so a doc reads exactly like
+    // a deck slide and the three call sites cannot drift.
+    const withLinks = applyGrammar(resolved, { wikilinks: true, afterConvert: stripPandocAttrs });
     let body = withLinks;
     let references = "";
     if (bibLib) {
