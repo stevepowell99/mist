@@ -66,7 +66,7 @@ export default function SaveStatus() {
     return (
       <span
         className="flex h-full items-center gap-2 bg-amber-500/15 px-3 text-sm uppercase tracking-wider text-amber-600"
-        title="This file was also changed in Obsidian/Drive. mist will not overwrite it, and your edits are kept in this session. Auto-save is paused until the two versions are reconciled (auto-merge is not built yet)."
+        title="This file was also changed in Obsidian/Drive. gmist will not overwrite it, and your edits are kept in this session. Auto-save is paused until the two versions are reconciled (auto-merge is not built yet)."
       >
         <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-amber-500" />
         Conflict

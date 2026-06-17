@@ -507,7 +507,7 @@ export default function DriveBrowser({
                     disabled={busy}
                     onClick={() => onPick(e)}
                     className={`flex min-w-0 flex-1 items-start gap-2 px-3 py-1.5 text-left disabled:opacity-50 ${cursor} ${isCurrent ? "font-semibold" : ""}`}
-                    title={e.isFolder ? "Open folder" : e.openInMist ? "Open in mist" : "Open in Drive (new tab)"}
+                    title={e.isFolder ? "Open folder" : e.openInMist ? "Open in gmist" : "Open in Drive (new tab)"}
                   >
                     <span className="mt-0.5 shrink-0">
                       <KindIcon kind={e.kind} />
@@ -560,7 +560,7 @@ export default function DriveBrowser({
                   disabled={busy}
                   onClick={() => void openFile(r)}
                   className="flex w-full cursor-pointer items-start gap-2 px-3 py-1 text-left hover:bg-black/5 disabled:opacity-50"
-                  title="Open in mist"
+                  title="Open in gmist"
                 >
                   <span className="mt-0.5 shrink-0">
                     <KindIcon kind="markdown" />

@@ -7,8 +7,8 @@ const START = "<!-- mist:banner:start -->";
 const END = "<!-- mist:banner:end -->";
 
 const BANNER_BODY =
-  "> [!warning] Open for collaborative review on mist\n" +
-  "> This note is being edited on mist. Avoid editing it here in Obsidian until the review is finished, or your local changes may be overwritten.";
+  "> [!warning] Open for collaborative review on gmist\n" +
+  "> This note is being edited on gmist. Avoid editing it here in Obsidian until the review is finished, or your local changes may be overwritten.";
 
 /** Remove a previously injected mist banner block, wherever it sits. */
 export function stripMistBanner(md: string): string {

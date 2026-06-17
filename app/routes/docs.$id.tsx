@@ -2,7 +2,7 @@ import { data, Link } from "react-router";
 import { useRef, useCallback, useEffect, useLayoutEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from "react";
 import type { Route } from "./+types/docs.$id";
 import { getAgentByName } from "agents";
-import { isValidDocumentId } from "~/shared/constants";
+import { APP_NAME, isValidDocumentId } from "~/shared/constants";
 import type { DocRole, DriveMeta } from "~/shared/types";
 import { getCloudflare } from "~/lib/cloudflare.server";
 import { mintAssetToken, mintAssetTokenForDoc, authorizeDoc, type DriveSessionEnv } from "~/lib/drive-access.server";
@@ -49,8 +49,8 @@ function fileTitle(drive: DriveMeta | null, fallback: string): string {
 
 export function meta({ data }: Route.MetaArgs) {
   const drive = data && "drive" in data ? data.drive : null;
-  const title = drive ? fileTitle(drive, "mist") : "mist";
-  return [{ title: title || "mist" }];
+  const title = drive ? fileTitle(drive, APP_NAME) : APP_NAME;
+  return [{ title: title || APP_NAME }];
 }
 
 export async function loader({ params, request, context }: Route.LoaderArgs) {
@@ -172,7 +172,7 @@ function DocGate({ kind }: { kind: "needsAuth" | "forbidden" }) {
   return (
     <div className="flex h-screen flex-col items-center justify-center gap-5 bg-paper p-6 text-center">
       <Link to="/" className="rounded bg-ink px-3 py-1.5 font-medium text-paper hover:bg-chartreuse hover:text-[#1a1a1a]">
-        mist
+        {APP_NAME}
       </Link>
       {kind === "needsAuth" ? (
         <>
@@ -688,7 +688,7 @@ function DocumentLayout({ id }: { id: string }) {
           to="/"
           className="flex shrink-0 items-center bg-ink px-4 py-2 font-medium text-paper transition-colors hover:bg-chartreuse hover:text-[#1a1a1a]"
         >
-          mist
+          {APP_NAME}
         </Link>
         <FolderSidebar />
         <button

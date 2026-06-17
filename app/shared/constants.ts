@@ -1,4 +1,6 @@
-export const APP_NAME = "mist";
+// User-facing product name. The structural identifiers (worker name, the `mist:`
+// frontmatter key, DOM events) stay `mist` on purpose; see CLAUDE.md "Naming".
+export const APP_NAME = "gmist";
 
 export function isValidDocumentId(id: string): boolean {
   if (id.length !== 8) return false;
