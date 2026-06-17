@@ -6,7 +6,7 @@ import {
 
 describe("scaffolding", () => {
   it("exports app name", () => {
-    expect(APP_NAME).toBe("mist");
+    expect(APP_NAME).toBe("gmist");
   });
 });
 

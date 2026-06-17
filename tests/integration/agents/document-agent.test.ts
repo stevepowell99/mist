@@ -168,6 +168,12 @@ function seedKeys() {
   storeText("suggestKey", TEST_SUGGEST_KEY);
 }
 
+/** onConnect is async (it sends the initial sync step + full state after an
+ *  await), so a newly connected client only has the agent's existing state once
+ *  the microtask/timer queue drains. Tests that read server-seeded or prior state
+ *  await this after connecting. */
+const flush = () => new Promise<void>((r) => setTimeout(r, 0));
+
 /** Connection context carrying a valid edit key in the request URL. */
 function ctxWithKey(key = TEST_EDIT_KEY) {
   return { request: { url: `https://do/?k=${key}` } } as never;
@@ -307,6 +313,7 @@ describe("DocumentAgent", () => {
       await agent.onRequest(new Request("https://do/", { method: "POST" }));
 
       const client = connectYjsClient();
+      await flush();
       expect(client.doc.getMap<number>("meta").get("version")).toBe(
         DOC_FORMAT_VERSION,
       );
@@ -319,7 +326,9 @@ describe("DocumentAgent", () => {
       expect(mockSetAlarm).not.toHaveBeenCalled();
     });
 
-    it("imports plain text content", async () => {
+    // The Y.Text core (#13) seeds the raw markdown verbatim into getText("body"),
+    // an identity (no paragraph/marks model, CriticMarkup stays literal text).
+    it("seeds plain text content into the Y.Text body", async () => {
       await agent.onRequest(
         new Request("https://do/", {
           method: "POST",
@@ -329,14 +338,12 @@ describe("DocumentAgent", () => {
       );
 
       const client = connectYjsClient();
-      const frag = client.doc.getXmlFragment("default");
-      expect(frag.length).toBe(1);
-      const para = frag.get(0) as Y.XmlElement;
-      expect((para.get(0) as Y.XmlText).toString()).toBe("hello world");
+      await flush();
+      expect(client.doc.getText("body").toString()).toBe("hello world");
       cleanup(client);
     });
 
-    it("imports content with CriticMarkup marks", async () => {
+    it("seeds CriticMarkup as literal text in the body", async () => {
       await agent.onRequest(
         new Request("https://do/", {
           method: "POST",
@@ -346,17 +353,12 @@ describe("DocumentAgent", () => {
       );
 
       const client = connectYjsClient();
-      const para = client.doc.getXmlFragment("default").get(0) as Y.XmlElement;
-      const ytext = para.get(0) as Y.XmlText;
-      // XmlText.toString() includes formatting as XML tags, so check delta
-      expect(ytext.toDelta()).toEqual([
-        { insert: "hello " },
-        { insert: "world", attributes: { criticAddition: {} } },
-      ]);
+      await flush();
+      expect(client.doc.getText("body").toString()).toBe("hello {++world++}");
       cleanup(client);
     });
 
-    it("imports multiline content as separate paragraphs", async () => {
+    it("seeds multiline content verbatim (no paragraph model)", async () => {
       await agent.onRequest(
         new Request("https://do/", {
           method: "POST",
@@ -366,7 +368,8 @@ describe("DocumentAgent", () => {
       );
 
       const client = connectYjsClient();
-      expect(client.doc.getXmlFragment("default").length).toBe(3);
+      await flush();
+      expect(client.doc.getText("body").toString()).toBe("line one\nline two\nline three");
       cleanup(client);
     });
 
@@ -381,6 +384,7 @@ describe("DocumentAgent", () => {
       );
 
       const client = connectYjsClient();
+      await flush();
       const stored = JSON.parse(
         client.doc.getMap<string>("threads").get("t-1")!,
       );
@@ -388,7 +392,9 @@ describe("DocumentAgent", () => {
       cleanup(client);
     });
 
-    it("returns 400 for unsupported CriticMarkup (substitution)", async () => {
+    // The Y.Text core stores raw markdown verbatim, so the POST no longer parses
+    // or rejects any CriticMarkup variant: a substitution is kept as literal text.
+    it("stores raw CriticMarkup verbatim without validation", async () => {
       const res = await agent.onRequest(
         new Request("https://do/", {
           method: "POST",
@@ -396,10 +402,13 @@ describe("DocumentAgent", () => {
           body: JSON.stringify({ content: "hello {~~old~>new~~}" }),
         }),
       );
-      expect(res.status).toBe(400);
-      const body = (await res.json()) as { ok: boolean; error: string };
-      expect(body.ok).toBe(false);
-      expect(body.error).toContain("Unsupported CriticMarkup");
+      expect(res.status).toBe(200);
+      expect(((await res.json()) as { ok: boolean }).ok).toBe(true);
+
+      const client = connectYjsClient();
+      await flush();
+      expect(client.doc.getText("body").toString()).toBe("hello {~~old~>new~~}");
+      cleanup(client);
     });
 
     it("still creates doc even with malformed JSON body", async () => {
@@ -494,11 +503,12 @@ describe("DocumentAgent", () => {
   /* ================================================================ */
 
   describe("Yjs sync", () => {
-    it("syncs content from client A to client B", () => {
+    it("syncs content from client A to client B", async () => {
       const a = connectYjsClient();
       a.doc.getText("default").insert(0, "hello from A");
 
       const b = connectYjsClient();
+      await flush();
       expect(b.doc.getText("default").toString()).toBe("hello from A");
       cleanup(a, b);
     });
@@ -515,7 +525,7 @@ describe("DocumentAgent", () => {
       cleanup(a, b);
     });
 
-    it("persists state in SQL and restores on new agent instance", () => {
+    it("persists state in SQL and restores on new agent instance", async () => {
       const a = connectYjsClient();
       a.doc.getText("default").insert(0, "persisted data");
       cleanup(a);
@@ -524,6 +534,7 @@ describe("DocumentAgent", () => {
       // Simulate DO restart: new agent instance, same SQL store
       const agent2 = new DocumentAgent({} as never, {} as never);
       const b = connectYjsClient(agent2);
+      await flush();
       expect(b.doc.getText("default").toString()).toBe("persisted data");
       cleanup(b);
     });
@@ -542,7 +553,7 @@ describe("DocumentAgent", () => {
       cleanup(a, b);
     });
 
-    it("new client receives content after first client disconnects", () => {
+    it("new client receives content after first client disconnects", async () => {
       const a = connectYjsClient();
       a.doc.getText("default").insert(0, "before disconnect");
       a.provider.destroy();
@@ -551,6 +562,7 @@ describe("DocumentAgent", () => {
       a.doc.destroy();
 
       const b = connectYjsClient();
+      await flush();
       expect(b.doc.getText("default").toString()).toBe("before disconnect");
       cleanup(b);
     });
