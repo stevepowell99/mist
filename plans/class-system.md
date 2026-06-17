@@ -60,11 +60,12 @@ multidimensional and what makes aliases possible.
 - **Colour** (the text/accent hue; sets the knobs, shows text + a matching pale
   tint to a box on the same element): `.blue .cyan .teal .green .mint .yellow
   .pink .mag .navy .grey .white .black`.
-- **Fill** `.bg-<colour>` and **Border** `.border-<colour>` (overriders): set
-  only `--fill` (the background, pale or `.solid`) or only `--border`, so text,
-  fill and border are three independent targets on one element. The 12 colours
-  live once as `--c-<name>*` tokens in `:root`; the colour classes and both
-  families read them. `[teal text]{.teal .bg-pink}`, `::: {.circle .border-teal}`.
+- **Fill** `.bg-<colour>` sets only the background (pale, or solid with `.solid`);
+  **Border** `.border-<colour>` draws a border in that colour (a panel keeps its
+  left accent and a shape its outline, both reading the `--border` slot). So text,
+  fill and border are three independent targets on one element. The 13 colours
+  (incl. orange) live once as `--c-<name>*` tokens in `:root`; the colour classes
+  and both families read them. `[teal text]{.teal .bg-pink}`, `::: {.circle .border-teal}`.
 - **Scale:** `.scale-25 … .scale-500`, or `.scale` with `--scale`.
 - **Shade:** `.light`, `.dark`.
 - **Order:** `.cascade-2 … .cascade-5`.

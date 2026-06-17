@@ -80,8 +80,8 @@ const DECK_SETTINGS: { key: string; val: string }[] = [
 // `:::` to autocomplete from the deck's own CSS.
 const CLASS_GROUPS: { title: string; items: string }[] = [
   { title: "Components", items: ".flare .hl .panel .bg .chip .card .cards .bignums .columns .column .callout .lead .footer .rectangle .circle .oval" },
-  { title: "Colours (text)", items: ".blue .cyan .teal .green .mint .yellow .pink .mag .navy .grey" },
-  { title: "Fill / border", items: ".bg-<colour> (pale; + .solid) overrides only the background · .border-<colour> overrides only the border" },
+  { title: "Colours (text)", items: ".blue .cyan .teal .green .mint .yellow .orange .pink .mag .navy .grey" },
+  { title: "Fill / border", items: ".bg-<colour> (pale; + .solid) sets the background · .border-<colour> draws a border in that colour" },
   { title: "Modifiers", items: ".light .dark .fast .slow .cascade-2…5 .scale-* .width-* .height-* .left .center .right .align-top .align-middle .align-bottom" },
   { title: "Callouts", items: "> [!note] / [!tip] / [!warning] / [!important]" },
   { title: "Slide", items: ".place .top-* .left-* .title-page .no-title .shot-cap .brand" },

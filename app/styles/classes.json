@@ -29,8 +29,8 @@
       "desc": "The element's text/accent hue (and the matching pale tint any box on the same element fills with). Use .bg-<colour> and .border-<colour> to override fill and border independently. Sets --hue, --hue-bright, --hue-pale, --hue-deep, --on.",
       "classes": {
         "blue": "Blue", "cyan": "Cyan", "teal": "Teal (brand)", "green": "Green",
-        "mint": "Mint (brand)", "yellow": "Yellow (brand)", "pink": "Pink (brand)",
-        "mag": "Magenta", "navy": "Navy (brand)", "grey": "Grey",
+        "mint": "Mint (brand)", "yellow": "Yellow (brand)", "orange": "Orange",
+        "pink": "Pink (brand)", "mag": "Magenta", "navy": "Navy (brand)", "grey": "Grey",
         "white": "White", "black": "Black"
       }
     },
@@ -39,7 +39,7 @@
       "generated": { "prefix": "bg", "suffixesFrom": "colour", "detail": "$suffix background" }
     },
     "border": {
-      "desc": "Override only the border colour (panels, callouts and the outline shapes read it): .circle .border-teal is a teal outline.",
+      "desc": "Draw a border in that colour: .border-teal on any box gives a teal edge. A panel keeps its left accent and a shape its outline, just taking the colour.",
       "generated": { "prefix": "border", "suffixesFrom": "colour", "detail": "$suffix border" }
     },
     "shade": {
