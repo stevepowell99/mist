@@ -1,8 +1,64 @@
 import { useCallback, useEffect, useState } from "react";
+import { marked } from "marked";
+import DOMPurify from "dompurify";
 import { useDocument } from "~/lib/DocumentContext";
-import { deckSlides } from "~/lib/slides-build";
+import {
+  deckSlides,
+  stripFrontmatter,
+  maskCode,
+  restoreCode,
+  convertCallouts,
+  convertSpans,
+  convertImages,
+  convertDivs,
+} from "~/lib/slides-build";
 import { slideIndexForOffset } from "~/lib/slide-cursor";
 import type { SearchResult } from "~/routes/drive.search";
+
+/** Convert a slide fragment's markdown to styled HTML for a thumbnail, the same
+ *  way the document Preview does (the house grammar is global CSS, so a `.preview`
+ *  box renders panels/cards/colours without a reveal iframe). */
+function thumbHtml(md: string): string {
+  const body = stripFrontmatter(md).body;
+  const masked = maskCode(body);
+  const converted = restoreCode(
+    convertDivs(convertImages(convertSpans(convertCallouts(masked.text)))),
+    masked.tokens,
+  );
+  return DOMPurify.sanitize(marked.parse(converted, { async: false }) as string);
+}
+
+/** A small live preview of a slide fragment, by id (fetched) or raw markdown
+ *  (already in hand, for a picked deck's slides). Shrunk with zoom and clipped. */
+function SlideThumb({ id, markdown }: { id?: string; markdown?: string }) {
+  const [html, setHtml] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      let md = markdown;
+      if (md == null && id != null) {
+        try {
+          md = ((await (await fetch(`/drive/fragment?id=${encodeURIComponent(id)}`)).json()) as { markdown?: string }).markdown;
+        } catch {
+          /* leave the placeholder */
+        }
+      }
+      if (md != null && !cancelled) setHtml(thumbHtml(md));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [id, markdown]);
+  return (
+    <div className="h-28 w-full overflow-hidden rounded border border-border bg-white">
+      {html == null ? (
+        <div className="flex h-full items-center justify-center text-xs text-muted">…</div>
+      ) : (
+        <div className="preview origin-top-left px-2 py-1" style={{ zoom: 0.34 }} dangerouslySetInnerHTML={{ __html: html }} />
+      )}
+    </div>
+  );
+}
 
 /**
  * The reusable slide/image library gallery (plans/slide-image-library.md).
@@ -265,17 +321,18 @@ export default function LibraryGallery() {
               <p className="mb-2 text-sm text-muted">
                 Slides in <span className="text-ink">{cleanName(deckPick.name)}</span>:
               </p>
-              <ul className="grid gap-2 sm:grid-cols-2">
+              <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                 {deckSlideList.map((s) => (
                   <li key={s.index}>
                     <button
                       type="button"
                       disabled={!view}
                       onClick={() => insertAt(`\n\n${s.raw}\n\n`)}
-                      className="flex w-full cursor-pointer flex-col items-start gap-1 rounded border border-border p-3 text-left transition-colors hover:border-ink disabled:opacity-50"
+                      title={s.title}
+                      className="flex w-full cursor-pointer flex-col gap-1 rounded border border-transparent p-1 text-left transition-colors hover:border-ink disabled:opacity-50"
                     >
-                      <span className="font-medium text-ink">{s.title}</span>
-                      <span className="text-xs uppercase tracking-wider text-muted">Slide {s.index + 1} · insert at cursor</span>
+                      <SlideThumb markdown={s.raw} />
+                      <span className="truncate text-xs text-ink">{s.title}</span>
                     </button>
                   </li>
                 ))}
@@ -297,24 +354,45 @@ export default function LibraryGallery() {
             </button>
           )}
 
-          {/* Slides tab + deck search results: text cards. */}
-          {((tab === "slides") || (tab === "deck" && !deckPick && debounced)) && configured === true && !loading && (
+          {/* Slides tab: a grid of live thumbnails. */}
+          {tab === "slides" && configured === true && !loading && !folderMissing && (
+            <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {items.map((it) => (
+                <li key={it.id}>
+                  <button
+                    type="button"
+                    disabled={busyId !== null || !view}
+                    onClick={() => void insertSlide(it)}
+                    title={`Insert ${it.name}`}
+                    className="flex w-full cursor-pointer flex-col gap-1 rounded border border-transparent p-1 text-left transition-colors hover:border-ink disabled:opacity-50"
+                  >
+                    <SlideThumb id={it.id} />
+                    <span className="truncate text-xs text-ink" title={it.name}>
+                      {busyId === it.id ? "Inserting…" : cleanName(it.name)}
+                    </span>
+                  </button>
+                </li>
+              ))}
+              {items.length === 0 && <li className="text-sm text-muted">Nothing found.</li>}
+            </ul>
+          )}
+
+          {/* Deck search results: a list (pick a deck to see its slides). */}
+          {tab === "deck" && !deckPick && debounced && configured === true && !loading && (
             <ul className="text-sm">
               {items.map((it) => (
                 <li key={it.id}>
                   <button
                     type="button"
-                    disabled={busyId !== null || (tab === "slides" && !view)}
-                    onClick={() => void (tab === "deck" ? pickDeck(it) : insertSlide(it))}
+                    disabled={busyId !== null}
+                    onClick={() => void pickDeck(it)}
                     className="flex w-full cursor-pointer items-baseline justify-between gap-3 border-b border-border/60 px-1 py-2 text-left hover:bg-black/5 disabled:opacity-50"
                   >
                     <span className="min-w-0">
                       <span className="block truncate font-medium text-ink">{cleanName(it.name)}</span>
-                      {tab === "deck" && it.path && <span className="block truncate text-xs text-muted">{it.path}</span>}
+                      {it.path && <span className="block truncate text-xs text-muted">{it.path}</span>}
                     </span>
-                    <span className="shrink-0 text-xs uppercase tracking-wider text-muted">
-                      {busyId === it.id ? "…" : tab === "deck" ? "open" : "insert"}
-                    </span>
+                    <span className="shrink-0 text-xs uppercase tracking-wider text-muted">{busyId === it.id ? "…" : "open"}</span>
                   </button>
                 </li>
               ))}
