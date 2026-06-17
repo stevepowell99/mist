@@ -123,6 +123,32 @@ const SLASH: { cmd: string; label: string }[] = [
   { cmd: "/unwrap", label: "remove the surrounding box" },
 ];
 
+// Sharing & review: the Share menu, who can open, and how comments/suggestions
+// work. Mirrors ShareButton, CommentInput (Ctrl/Cmd+Shift+M) and SuggestionActions.
+const SHARE_MENU: { name: string; desc: string }[] = [
+  { name: "Copy edit link", desc: "Full edit access; the holder can also switch to Suggest." },
+  { name: "Copy suggest link", desc: "Locked to Suggest: the holder proposes CriticMarkup changes, never edits directly." },
+  { name: "Open link as preview", desc: "Tick first and the link opens in the read-only preview view." },
+  { name: "Download", desc: "Save the current text, with its comments, as a .md file." },
+  { name: "Print to PDF", desc: "Decks only: opens a print view, then Ctrl/Cmd+P to save as PDF." },
+];
+
+const REVIEW: Shortcut[] = [
+  { keys: [MOD, "Shift", "M"], label: "Comment on the selection (or a point note)" },
+  { keys: [MOD, "Alt", "S"], label: "Turn Suggest mode on or off" },
+  { keys: [MOD, "Alt", "C"], label: "Open the comments panel" },
+];
+
+// Drive / files behaviour. Mirrors the Drive sidebar, autosave toggle, the
+// conflict-safe round-trip (CLAUDE.md 16 June note) and the @-citation picker.
+const FILES: { name: string; desc: string }[] = [
+  { name: "Open from Drive", desc: "Ctrl/Cmd+Alt+F opens the Drive sidebar; click a .md or .qmd to open it here." },
+  { name: "Autosave to Drive", desc: "On by default; edits save on a short pause. Turn it off (right-hand settings) for manual save with Ctrl/Cmd+S." },
+  { name: "Same file elsewhere", desc: "Edit it in Obsidian or Drive too; on reload gmist shows the latest (Drive wins if both changed). Avoid editing in two places while Drive for Desktop is syncing." },
+  { name: "Citations", desc: "With a bibliography: .bib in the frontmatter, type @ to pick a reference; a reference list renders at the end." },
+  { name: "Library", desc: "The header gallery button (or /library) inserts reusable slides and images from the shared library folder." },
+];
+
 const TIPS = [
   "Set theme: causal-map | qualia | brutalist | editorial in the YAML to restyle the whole deck or doc; ::: {.brand} drops the theme's logo in the corner.",
   "Edits save to Drive automatically, on a short pause after you stop typing.",
@@ -165,6 +191,16 @@ function Section({ title, items }: { title: string; items: Shortcut[] }) {
   );
 }
 
+/** A name + description row, for the Sharing and Files tabs. */
+function DefRow({ name, desc }: { name: string; desc: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1">
+      <span className="shrink-0 text-sm text-ink">{name}</span>
+      <span className="text-right text-xs text-muted">{desc}</span>
+    </div>
+  );
+}
+
 function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
     <button
@@ -181,7 +217,7 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
 
 export default function HelpPanel() {
   const [open, setOpen] = useState(false);
-  const [tab, setTab] = useState<"shortcuts" | "styling">("shortcuts");
+  const [tab, setTab] = useState<"shortcuts" | "styling" | "sharing" | "files">("shortcuts");
   // auto: this is the once-a-session intro (no dark backdrop, flies to the
   // button). flyOut: mid-flight to the corner. pulse: ring the button after.
   const [auto, setAuto] = useState(false);
@@ -293,6 +329,12 @@ export default function HelpPanel() {
                 <TabButton active={tab === "styling"} onClick={() => setTab("styling")}>
                   Styling
                 </TabButton>
+                <TabButton active={tab === "sharing"} onClick={() => setTab("sharing")}>
+                  Sharing &amp; review
+                </TabButton>
+                <TabButton active={tab === "files"} onClick={() => setTab("files")}>
+                  Files
+                </TabButton>
               </div>
               <button
                 type="button"
@@ -304,7 +346,7 @@ export default function HelpPanel() {
               </button>
             </div>
 
-            {tab === "shortcuts" ? (
+            {tab === "shortcuts" && (
               <div className="grid gap-x-10 gap-y-6 px-5 py-4 sm:grid-cols-2">
                 <Section title="View &amp; mode" items={LAYOUT} />
                 <Section title="Panels" items={PANELS} />
@@ -321,7 +363,8 @@ export default function HelpPanel() {
                   </div>
                 </div>
               </div>
-            ) : (
+            )}
+            {tab === "styling" && (
               <div className="px-5 py-4">
                 <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted">Deck &amp; doc settings (YAML)</h3>
                 <p className="mb-3 text-sm text-muted">
@@ -384,6 +427,61 @@ export default function HelpPanel() {
                     ))}
                   </div>
                 </div>
+              </div>
+            )}
+            {tab === "sharing" && (
+              <div className="px-5 py-4">
+                <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted">Who can open it</h3>
+                <p className="mb-4 text-sm text-muted">
+                  The secret link is not enough on its own: a reader must be signed in with a Google account the file
+                  is shared with in Drive. Drive sharing is the source of truth, and the effective role is the more
+                  restrictive of the link and the file&apos;s own sharing. Collaborators need no gmist account.
+                </p>
+
+                <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted">Share menu</h3>
+                <p className="mb-3 text-sm text-muted">
+                  From the <span className="text-ink">Share</span> button in the top bar.
+                </p>
+                <div className="mb-6 grid gap-x-10 sm:grid-cols-2">
+                  {SHARE_MENU.map((s) => (
+                    <DefRow key={s.name} name={s.name} desc={s.desc} />
+                  ))}
+                </div>
+
+                <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted">Comments &amp; suggestions</h3>
+                <p className="mb-3 text-sm text-muted">
+                  Select text and press <Kbd>{MOD}</Kbd> <Kbd>Shift</Kbd> <Kbd>M</Kbd> to comment: it wraps the
+                  selection as <span className="font-mono text-ink">{"{==text==}{>>note<<}"}</span>, or drops a point
+                  note <span className="font-mono text-ink">{"{>>note<<}"}</span> at the cursor. In{" "}
+                  <span className="text-ink">Suggest mode</span> your edits become CriticMarkup{" "}
+                  (<span className="font-mono text-ink">{"{++added++}"}</span> /{" "}
+                  <span className="font-mono text-ink">{"{--deleted--}"}</span>) rather than changing the text
+                  directly. An edit-link holder accepts or rejects them, one at a time or all at once, from the
+                  comments panel.
+                </p>
+                <div className="divide-y divide-border/60 sm:w-1/2">
+                  {REVIEW.map((s) => (
+                    <Row key={s.label} {...s} />
+                  ))}
+                </div>
+              </div>
+            )}
+            {tab === "files" && (
+              <div className="px-5 py-4">
+                <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted">Drive files</h3>
+                <p className="mb-3 text-sm text-muted">
+                  Every gmist document is a real Markdown file in Google Drive. It is the same file whether you open
+                  it here, in Obsidian or on disk.
+                </p>
+                <div className="mb-6 grid gap-x-10 sm:grid-cols-2">
+                  {FILES.map((f) => (
+                    <DefRow key={f.name} name={f.name} desc={f.desc} />
+                  ))}
+                </div>
+                <p className="text-sm text-muted">
+                  Live editing by several people at once is not a goal; gmist is for one writer at a time plus async
+                  review. See the Sharing &amp; review tab for comments and suggestions.
+                </p>
               </div>
             )}
           </div>
