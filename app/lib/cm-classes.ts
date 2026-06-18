@@ -14,11 +14,11 @@ import { searchScore } from "~/lib/fuzzy";
 type ClassInfo = { section: string; detail: string };
 const SECTION_LABEL: Record<string, string> = {
   component: "Component", colour: "Colour", fill: "Fill", border: "Border",
-  shade: "Shade", scale: "Scale", order: "Order", timing: "Timing",
+  shade: "Shade", scale: "Scale", opacity: "Opacity", order: "Order", timing: "Timing",
   align: "Align", place: "Place", width: "Size", height: "Size",
 };
 const SECTION_RANK: Record<string, number> = {
-  Component: 1, Colour: 2, Fill: 2.3, Border: 2.6, Scale: 3, Size: 3.5, Shade: 4,
+  Component: 1, Colour: 2, Fill: 2.3, Border: 2.6, Scale: 3, Size: 3.5, Opacity: 3.7, Shade: 4,
   Timing: 5, Align: 6, Order: 7, Place: 8, "Reveal/Quarto": 9, "Deck CSS": 10,
 };
 
