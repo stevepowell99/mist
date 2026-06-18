@@ -11,6 +11,7 @@ import { type DocBackend, DriveBackend } from "../app/lib/backend.server";
 import { type DriveEnv, driveConfigured } from "../app/lib/google.server";
 import { quickHash } from "../app/shared/hash";
 import { stampDocId, isContaminated } from "../app/shared/doc-integrity";
+import { stripFrontmatter, deserializeThreads, serializeThreads } from "../app/lib/thread-serialization";
 
 /**
  * Durable Objects SQLite accepts Uint8Array for BLOB columns via the
@@ -374,12 +375,18 @@ class DocumentAgent extends Agent {
     const body = this.doc!.getText("body");
     const local = body.toString();
     const base = this.readStoredText("lastCommitMd");
-    // No edits made in this session that are not already written to Drive: the
-    // body still equals what we last saw/saved. headRevisionId cannot tell a
-    // genuine external edit from a stale re-upload (Google Drive for Desktop can
-    // stamp a new revision on old content), so we never guess "newer"; we decide
-    // on this fact alone.
-    const noLocalEdits = base != null && local === base;
+    // Compare the BODY only (frontmatter stripped). The editor body carries no
+    // `mist:` threads block, and serializeThreads YAML-reformats the whole
+    // frontmatter whenever a doc has comments, so a saved file differs from the
+    // editor text in the frontmatter even when the body is untouched. Comparing
+    // whole files therefore made every external edit look like an unsaved-local
+    // edit, so it forked the change aside (the "drive copy" siblings) instead of
+    // adopting it. The body is the real signal for "did the content change"; the
+    // frontmatter round-trips separately. headRevisionId cannot order revisions
+    // (a stale re-upload stamps a new id), so the body equality is what decides.
+    const driveBody = stripFrontmatter(text);
+    const localBody = stripFrontmatter(local);
+    const noLocalEdits = base != null && localBody === stripFrontmatter(base);
 
     const setBaseline = () => {
       if (version) {
@@ -394,15 +401,26 @@ class DocumentAgent extends Agent {
       `;
     };
 
-    if (local === text) {
-      // Already matches Drive; just re-anchor the baseline.
+    // Bring Drive's content into the editor in the SAME shape it was seeded in:
+    // the file's own frontmatter verbatim (its `mist:` block removed, threads live
+    // in the map), then the body. So an adopt never leaks the mist YAML into the
+    // editor and the body stays comparable to Drive on the next check.
+    const adopt = () => {
+      const d = deserializeThreads(text);
+      this.replaceBodyFromText(serializeThreads(d.body, [], d.frontmatter));
+      setBaseline();
+      this.broadcast(JSON.stringify({ type: "reloaded", hash: quickHash(d.body) }));
+    };
+
+    if (localBody === driveBody) {
+      // Body already matches Drive; just re-anchor the baseline.
       setBaseline();
       return;
     }
 
     // Explicit user reload ("Load Drive version"). If the editor holds unsaved
     // edits, snapshot them to a sibling FIRST, so the reload can never destroy
-    // work the user chose to overwrite (their "be careful where saves go").
+    // work the user chose to overwrite.
     if (force) {
       if (!noLocalEdits) {
         try {
@@ -411,32 +429,22 @@ class DocumentAgent extends Agent {
           // best-effort snapshot; do not block the reload on it
         }
       }
-      this.replaceBodyFromText(text);
-      setBaseline();
-      this.broadcast(JSON.stringify({ type: "reloaded", hash: quickHash(text) }));
+      adopt();
       return;
     }
 
     if (noLocalEdits) {
-      // Drive differs and nothing is unsaved here. Treat Drive as authoritative
-      // and pull it in: Google Drive sync is always-on and the doc was last left
-      // saved, so after a gap (reopening a doc edited in Obsidian or on another
-      // device) Drive is the live truth and our stored copy is the stale one.
-      // This is safe to do without asking because our current content is itself a
-      // Drive revision (every save is one), so Drive's own version history is the
-      // backstop if this turn out to be a stale re-upload, with no sibling clutter.
-      // (The genuine-conflict case, below, still forks a sibling and never
-      // discards unsaved edits.)
-      this.replaceBodyFromText(text);
-      setBaseline();
-      this.broadcast(JSON.stringify({ type: "reloaded", hash: quickHash(text) }));
+      // Drive's body differs and nothing is unsaved here, so Drive is the live
+      // truth (the doc was last left saved; it was edited elsewhere since). Safe
+      // to adopt without asking: our content is itself a Drive revision, so
+      // Drive's own version history is the backstop, with no sibling clutter.
+      adopt();
       return;
     }
 
-    // Unsaved edits here AND Drive diverged: keep the live editor, preserve the
-    // incoming Drive version as a sibling so nothing is lost, re-anchor to the
-    // current Drive version so our own save lands (and never re-forks the same
-    // revision), and tell the client to save its content back to the main file.
+    // Unsaved edits here AND Drive's body diverged: keep the live editor, preserve
+    // the incoming Drive version as a sibling so nothing is lost, re-anchor to the
+    // current Drive version so our own save lands, and tell the client.
     let savedAs: string | null = null;
     try {
       savedAs = (await bound.backend.saveSibling?.(text, "drive copy")) ?? null;
