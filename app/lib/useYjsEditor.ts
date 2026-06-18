@@ -94,8 +94,11 @@ export function useYjsEditor(docId: string, docKey: string | null = null) {
   useEffect(() => {
     if (!socket) return;
     const ps = socket as unknown as { close?: () => void; reconnect?: () => void };
-    const IDLE_MS = 5 * 60 * 1000;
-    const HIDDEN_MS = 45 * 1000;
+    // Relaxed to 10 min (idle and hidden alike) so a tab left or backgrounded
+    // briefly is not dropped under the presenter; the tradeoff is the Durable
+    // Object stays warm (and billed) longer before going cold.
+    const IDLE_MS = 10 * 60 * 1000;
+    const HIDDEN_MS = 10 * 60 * 1000;
     let idle: ReturnType<typeof setTimeout> | undefined;
     let hidden: ReturnType<typeof setTimeout> | undefined;
 
