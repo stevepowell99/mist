@@ -126,7 +126,11 @@ async function runMermaid(){
 // page S is left to reveal so the proper speaker view (separate window) works.
 var EMBEDDED = window.parent !== window;
 var KEYBOARD = EMBEDDED ? {27:null, 83:null} : {27:null};
-var REVEAL_CONFIG = {plugins:revealPlugins,hash:false,controls:true,progress:true,slideNumber:${slideNumber},keyboard:KEYBOARD,overview:true,center:false,navigationMode:'${navigationMode}',pdfSeparateFragments:${separateFragments},scrollActivationWidth:null,width:1280,height:720};
+// pdfMaxPagesPerSlide:1 caps the print/PDF layout to one page per slide, so an
+// overstuffed slide is clipped at the slide height (like the HTML preview, which
+// clips with section{overflow:hidden}) instead of reveal spilling the overflow
+// onto extra printed pages.
+var REVEAL_CONFIG = {plugins:revealPlugins,hash:false,controls:true,progress:true,slideNumber:${slideNumber},keyboard:KEYBOARD,overview:true,center:false,navigationMode:'${navigationMode}',pdfSeparateFragments:${separateFragments},pdfMaxPagesPerSlide:1,scrollActivationWidth:null,width:1280,height:720};
 function relayout(){ try { Reveal.layout(); } catch (e) {} }
 // Re-run layout across a few frames. In a sandboxed iframe reveal can init
 // before the pane has its real size, leaving the deck unscaled; these catch it.
