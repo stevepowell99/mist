@@ -206,6 +206,15 @@ window.addEventListener("message", function(e){
 // own window, so its key events never reach the app otherwise. Reveal's own keys
 // carry no modifier, so they are untouched.
 window.addEventListener("keydown", function(e){
+  // In the embedded preview, plain F enters the app's single Present mode instead
+  // of reveal's own iframe fullscreen, so there is one present path. The
+  // standalone /slides page (not in an iframe) keeps reveal's native F.
+  if ((e.key === "f" || e.key === "F") && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && window.parent !== window) {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    parent.postMessage({ type: "mist-present" }, "*");
+    return;
+  }
   var alt = e.altKey || (e.getModifierState && e.getModifierState("AltGraph"));
   if (!(e.ctrlKey || e.metaKey) || !alt) return;
   var c = e.code, chord = null;

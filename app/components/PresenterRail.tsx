@@ -55,7 +55,7 @@ export default function PresenterRail({
   return (
     <aside
       onMouseLeave={onMouseLeave}
-      className="absolute bottom-3 right-3 z-50 flex w-[360px] flex-col gap-2 rounded-lg border border-border bg-paper/95 p-3 text-ink shadow-2xl backdrop-blur"
+      className="absolute right-3 top-1/2 z-50 flex max-h-[92vh] w-[360px] -translate-y-1/2 flex-col gap-2 overflow-y-auto rounded-lg border border-border bg-paper/95 p-3 text-ink shadow-2xl backdrop-blur"
     >
       <style>{themeStyle}</style>
       <div className="flex items-baseline justify-between font-mono text-sm">

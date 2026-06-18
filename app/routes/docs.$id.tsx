@@ -540,6 +540,15 @@ function DocumentLayout({ id }: { id: string }) {
     document.addEventListener("fullscreenchange", onFs);
     return () => document.removeEventListener("fullscreenchange", onFs);
   }, []);
+  // The deck iframe forwards F (plain) as a present request, so F in the preview
+  // enters the one Present mode rather than reveal's own iframe fullscreen.
+  useEffect(() => {
+    const onMsg = (e: MessageEvent) => {
+      if ((e.data as { type?: string })?.type === "mist-present") enterPresent();
+    };
+    window.addEventListener("message", onMsg);
+    return () => window.removeEventListener("message", onMsg);
+  }, [enterPresent]);
 
   const runChord = useCallback(
     (c: string): boolean => {
@@ -917,11 +926,11 @@ function DocumentLayout({ id }: { id: string }) {
                 onMouseLeave={() => setRailPeek(false)}
               />
             ) : (
-              // A corner target that reveals the presenter card on hover.
+              // A right-edge target that reveals the presenter card on hover.
               <div
                 onMouseEnter={() => setRailPeek(true)}
                 title="Presenter info (Ctrl/Cmd+Alt+N)"
-                className="absolute bottom-0 right-0 z-40 h-20 w-24"
+                className="absolute right-0 top-1/2 z-40 h-48 w-4 -translate-y-1/2"
               />
             )}
           </div>
