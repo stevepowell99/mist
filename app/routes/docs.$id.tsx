@@ -286,7 +286,11 @@ function DocumentLayout({ id }: { id: string }) {
   // optional presenter rail. One mode, app-controlled (we fullscreen the app, not
   // the deck iframe, so our own UI can sit over/beside the slide).
   const [presenting, setPresenting] = useState(false);
-  const [railOpen, setRailOpen] = useState(true);
+  const [presentStart, setPresentStart] = useState(0);
+  // The presenter card (bottom-right): railOpen is the persistent toggle
+  // (Ctrl/Cmd+Alt+N), railPeek is the on-hover reveal.
+  const [railOpen, setRailOpen] = useState(false);
+  const [railPeek, setRailPeek] = useState(false);
   const [editorPct, setEditorPct] = useState(() => {
     // Open in split if the URL asks for it (?view=split), so a reload or shared
     // link reopens the same layout. Preview-only is restored via initialPreview.
@@ -518,6 +522,7 @@ function DocumentLayout({ id }: { id: string }) {
   // any fullscreen exit) drops back out via the fullscreenchange listener below.
   const enterPresent = useCallback(() => {
     setPresenting(true);
+    setPresentStart(Date.now());
     document.documentElement.requestFullscreen?.().catch(() => {});
   }, []);
   const exitPresent = useCallback(() => {
@@ -554,6 +559,8 @@ function DocumentLayout({ id }: { id: string }) {
         case "g": syncEditorToSlideRef.current(); return true;
         // P presents the deck (one mode: fullscreen app, chrome off, presenter rail).
         case "p": if (!deck) return false; if (presentingRef.current) exitPresent(); else enterPresent(); return true;
+        // N toggles the presenter card (next slide + notes + timer) in Present.
+        case "n": setRailOpen((v) => !v); return true;
         case "/": window.dispatchEvent(new CustomEvent("mist-toggle-help")); return true;
         default: return false;
       }
@@ -874,35 +881,49 @@ function DocumentLayout({ id }: { id: string }) {
           </button>
         )}
         {present ? (
-          <div className="flex h-full w-full bg-black">
-            <section className="relative flex-1 overflow-hidden">
-              <SlidesView />
-              <div className="absolute right-3 top-3 z-50 flex gap-1">
-                <button
-                  type="button"
-                  onClick={() => setRailOpen((v) => !v)}
-                  title="Toggle presenter notes"
-                  aria-label="Toggle presenter notes"
-                  className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-white/15 text-white backdrop-blur hover:bg-white/30"
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <rect x="3" y="4" width="18" height="16" rx="1" /><path d="M15 4v16" />
-                  </svg>
-                </button>
-                <button
-                  type="button"
-                  onClick={exitPresent}
-                  title="Exit present (Esc)"
-                  aria-label="Exit present"
-                  className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-white/15 text-white backdrop-blur hover:bg-white/30"
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <line x1="6" y1="6" x2="18" y2="18" /><line x1="18" y1="6" x2="6" y2="18" />
-                  </svg>
-                </button>
-              </div>
-            </section>
-            {railOpen && <PresenterRail markdown={markdown} frontmatter={frontmatter} currentSlide={localSlide ?? 0} />}
+          <div className="relative h-full w-full overflow-hidden bg-black">
+            <SlidesView />
+            <button
+              type="button"
+              onClick={exitPresent}
+              title="Exit present (Esc)"
+              aria-label="Exit present"
+              className="absolute right-3 top-3 z-50 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-white/15 text-white backdrop-blur hover:bg-white/30"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <line x1="6" y1="6" x2="18" y2="18" /><line x1="18" y1="6" x2="6" y2="18" />
+              </svg>
+            </button>
+            {/* The slide list is still reachable in Present with Ctrl/Cmd+Alt+D. */}
+            {outlineOpen && (
+              <OutlinePanel
+                view={editorView}
+                text={markdown}
+                deck={deck}
+                canEdit={role === "edit"}
+                peers={peers}
+                currentSlide={localSlide}
+                overlay
+                onClose={() => setOutlineOpen(false)}
+                onMouseLeave={() => setOutlineOpen(false)}
+              />
+            )}
+            {railOpen || railPeek ? (
+              <PresenterRail
+                markdown={markdown}
+                frontmatter={frontmatter}
+                currentSlide={localSlide ?? 0}
+                startedAt={presentStart}
+                onMouseLeave={() => setRailPeek(false)}
+              />
+            ) : (
+              // A corner target that reveals the presenter card on hover.
+              <div
+                onMouseEnter={() => setRailPeek(true)}
+                title="Presenter info (Ctrl/Cmd+Alt+N)"
+                className="absolute bottom-0 right-0 z-40 h-20 w-24"
+              />
+            )}
           </div>
         ) : (
         <>

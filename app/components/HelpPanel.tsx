@@ -26,7 +26,8 @@ const LAYOUT: Shortcut[] = [
   { keys: [MOD, "Alt", "1"], label: "Editor only" },
   { keys: [MOD, "Alt", "2"], label: "Split editor + preview" },
   { keys: [MOD, "Alt", "3"], label: "Preview only" },
-  { keys: [MOD, "Alt", "P"], label: "Present (deck: fullscreen + presenter rail)" },
+  { keys: [MOD, "Alt", "P"], label: "Present (deck: fullscreen)" },
+  { keys: [MOD, "Alt", "N"], label: "Present: presenter card (next slide, notes, timer)" },
   { keys: [MOD, "Alt", "-"], label: "Shrink editor pane" },
   { keys: [MOD, "Alt", "="], label: "Grow editor pane" },
 ];
@@ -293,7 +294,7 @@ export default function HelpPanel() {
             aria-label="Keyboard shortcuts and tips"
             onClick={(e) => e.stopPropagation()}
             style={{ transformOrigin: "bottom right" }}
-            className={`max-h-[80vh] w-full max-w-[80vw] overflow-y-auto rounded-lg border border-border bg-paper leading-relaxed text-ink shadow-2xl transition-all duration-500 ease-in ${
+            className={`max-h-[80vh] w-full max-w-[60vw] overflow-y-auto rounded-lg border border-border bg-paper leading-relaxed text-ink shadow-2xl transition-all duration-500 ease-in ${
               flyOut ? "translate-x-[38vw] translate-y-[42vh] scale-[0.15] opacity-0" : "translate-x-0 translate-y-0 scale-100 opacity-100"
             }`}
           >
