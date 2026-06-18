@@ -300,6 +300,12 @@
   font-size: 2.6em; font-weight: 800; color: var(--bignum-fig, var(--teal-dark)); line-height: 1; white-space: nowrap;
 }
 
+/* COMPONENT: icons. `:name:` shortcodes become an inline SVG sized in em and
+   stroked in the current text colour, so they sit on the text baseline, scale
+   with their context (big inside a .bignums .fig) and take a colour/theme class. */
+:is(.reveal,.preview) .icon { display: inline-block; width: 1em; height: 1em; vertical-align: -0.125em; }
+:is(.reveal,.preview) .bignums .fig .icon { width: 1em; height: 1em; vertical-align: -0.08em; }
+
 /* COMPONENT: shapes. A red OUTLINE rectangle / circle / oval with a transparent
    body; type text inside and it centres in both axes. Recolour the outline with a
    colour class, move with .place + .top-/.left-, size with .scale-. */

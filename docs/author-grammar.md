@@ -39,6 +39,7 @@ Background and the staged plan to converge the two are in
 | Citation | `[@key]` / bare `@key` + a `.bib` | inline APA + reference list | inline APA + reference list | yes |
 | Math | `$…$`, `$$…$$` | yes | yes (MathJax) | yes |
 | Mermaid | ` ```mermaid ` | yes | yes | yes |
+| Icon | `:name:` (curated set) | inline SVG, inherits text colour (`app/lib/icons.ts`) | no | gmist-only; degrades to literal text elsewhere |
 | Columns | see below | `::: {.columns}` wrapping child blocks (each child is a column) | `--- start-multi-column` | intentionally different |
 
 ## Callouts

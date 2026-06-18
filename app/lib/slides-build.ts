@@ -7,6 +7,7 @@
 import { driveAssetUrl, resolveAssetSrc, rewriteImages, type AssetCtx } from "~/lib/asset-urls";
 import { convertCitations, formatReferenceList, type BibLibrary } from "~/lib/citations";
 import { renderWikiLinks } from "~/lib/wikilinks";
+import { hasIcon, renderIcon } from "~/lib/icons";
 import type { DriveMeta } from "~/shared/types";
 // The house framework, served as the default stylesheet for every deck BEFORE
 // any per-deck `css:`, so a deck anywhere renders correctly and a local file can
@@ -259,6 +260,14 @@ export function convertImages(md: string): string {
   );
 }
 
+/** `:name:` icon shortcodes become inline SVG (a curated Lucide set), e.g.
+ *  `:rocket:`. Only known names convert, so `:)`, times like `12:30` and the
+ *  `:::` fences are left alone. Runs late (after spans/divs) so an icon wrapped
+ *  as a bignums `.fig` still converts inside its span. Code is masked already. */
+export function convertIcons(md: string): string {
+  return md.replace(/:([a-z][a-z0-9-]*):/g, (m, name: string) => (hasIcon(name) ? renderIcon(name) : m));
+}
+
 /** Inline `[text]{.flare .blue}` spans, carrying classes, id and style. */
 export function convertSpans(md: string): string {
   return md.replace(/\[([^\]]+)\]\{([^}]*)\}/g, (_w, text: string, attr: string) => {
@@ -322,6 +331,7 @@ export function applyGrammar(
   let t = convertBignums(masked.text);
   if (opts.wikilinks) t = renderWikiLinks(t);
   t = convertDivs(convertImages(convertSpans(convertCallouts(t))));
+  t = convertIcons(t);
   if (opts.afterConvert) t = opts.afterConvert(t);
   return restoreCode(t, masked.tokens);
 }

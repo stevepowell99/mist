@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SLASH_HELP } from "~/lib/cm-slash";
+import { ICON_NAMES } from "~/lib/icons";
 
 /**
  * Keyboard shortcuts and tips, opened by the ? button (bottom-right) or
@@ -143,7 +144,7 @@ const FEATURES: { title: string; items: string[] }[] = [
     items: [
       "A / menu inserts structures; a . menu autocompletes the styling classes",
       "@ picks a citation from a .bib, rendered to APA with a reference list",
-      "Tables, math, mermaid and images (paste, by path, or drive: by id)",
+      "Tables, math, mermaid, images, and :name: icons",
     ],
   },
   {
@@ -476,6 +477,15 @@ export default function HelpPanel() {
                       ))}
                     </div>
                   </div>
+                </Group>
+
+                <Group title="Icons">
+                  <p className="mb-2 text-base text-ink/75">
+                    Type <span className="font-mono text-ink">:name:</span> for an inline icon, e.g.{" "}
+                    <span className="font-mono text-ink">:rocket:</span>. It takes the text colour, so a colour class
+                    tints it, and grows with a <span className="font-mono text-ink">.bignums</span> figure.
+                  </p>
+                  <p className="font-mono text-sm text-ink/75">{ICON_NAMES.map((n) => `:${n}:`).join("  ")}</p>
                 </Group>
               </div>
             )}
