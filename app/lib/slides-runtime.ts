@@ -219,6 +219,15 @@ window.addEventListener("keydown", function(e){
     parent.postMessage({ type: "mist-present" }, "*");
     return;
   }
+  // Ctrl/Cmd+P inside the embedded deck: the browser crashes printing the live
+  // sandboxed reveal iframe, so block it and ask the app to open the print-pdf
+  // page (which lays the deck out one slide per page and prints cleanly).
+  if ((e.key === "p" || e.key === "P") && (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && window.parent !== window) {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    parent.postMessage({ type: "mist-print" }, "*");
+    return;
+  }
   var alt = e.altKey || (e.getModifierState && e.getModifierState("AltGraph"));
   if (!(e.ctrlKey || e.metaKey) || !alt) return;
   var c = e.code, chord = null;

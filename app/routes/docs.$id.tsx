@@ -251,6 +251,8 @@ function DocumentLayout({ id }: { id: string }) {
     toggleMode,
     role,
     drive,
+    docKey,
+    assetToken,
     bibLib,
     markdown,
     frontmatter,
@@ -541,15 +543,46 @@ function DocumentLayout({ id }: { id: string }) {
     document.addEventListener("fullscreenchange", onFs);
     return () => document.removeEventListener("fullscreenchange", onFs);
   }, []);
-  // The deck iframe forwards F (plain) as a present request, so F in the preview
-  // enters the one Present mode rather than reveal's own iframe fullscreen.
+  // Print a deck via the standalone print-pdf page (the same route the navbar
+  // "Print to PDF" uses), NEVER the live editing-preview: the browser crashes
+  // printing the sandboxed reveal iframe. Open a new tab when there is a user
+  // gesture (the parent key path); fall back to same-tab navigation when a popup
+  // is refused (the iframe forwards via postMessage, which carries no gesture).
+  const printDeck = useCallback(() => {
+    if (!deck) return;
+    const url =
+      `/slides/${id}?k=${encodeURIComponent(docKey ?? "")}` +
+      `&token=${encodeURIComponent(assetToken ?? "")}&print-pdf&combine-fragments`;
+    const w = window.open(url, "_blank", "noopener");
+    if (!w) window.location.assign(url);
+  }, [deck, id, docKey, assetToken]);
+
+  // The deck iframe forwards F (plain) as a present request and Ctrl/Cmd+P as a
+  // print request, since the sandboxed iframe can neither fullscreen the app nor
+  // open the print page itself.
   useEffect(() => {
     const onMsg = (e: MessageEvent) => {
-      if ((e.data as { type?: string })?.type === "mist-present") enterPresent();
+      const t = (e.data as { type?: string })?.type;
+      if (t === "mist-present") enterPresent();
+      else if (t === "mist-print") printDeck();
     };
     window.addEventListener("message", onMsg);
     return () => window.removeEventListener("message", onMsg);
-  }, [enterPresent]);
+  }, [enterPresent, printDeck]);
+
+  // Ctrl/Cmd+P on a deck (focus in the app chrome) prints the slides, not the app.
+  // When focus is inside the deck iframe its runtime forwards mist-print instead.
+  useEffect(() => {
+    if (!deck) return;
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.key === "p" || e.key === "P") && (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey) {
+        e.preventDefault();
+        printDeck();
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [deck, printDeck]);
 
   const runChord = useCallback(
     (c: string): boolean => {
