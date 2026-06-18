@@ -243,6 +243,7 @@ function DocumentLayout({ id }: { id: string }) {
     previewToggled,
     handleViewReady,
     setEditorText,
+    markUserEdited,
     activeCommentRange,
     cleanView,
     setCursor,
@@ -984,6 +985,7 @@ function DocumentLayout({ id }: { id: string }) {
                 onTextChange={setEditorText}
                 onCursorChange={setCursor}
                 onViewReady={handleViewReady}
+                onUserEdit={markUserEdited}
                 onImagePaste={drive ? uploadImage : undefined}
                 onShortcut={runChord}
                 className="min-h-full text-base"

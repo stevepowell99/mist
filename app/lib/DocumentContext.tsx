@@ -118,6 +118,9 @@ export interface DocumentContextValue {
   // Editor lifecycle
   handleViewReady: (view: EditorView | null) => void;
   setEditorText: (text: string) => void;
+  /** Mark that the user themselves edited, so the save baseline freezes (called by
+   *  the editor on a userEvent transaction and by the comment/thread actions). */
+  markUserEdited: () => void;
   handleCommentClick: (commentText: string) => void;
 }
 
@@ -286,22 +289,33 @@ export function DocumentProvider({
   // name for a brief notice. Empty string means "forked but the name is unknown".
   const [forkedNotice, setForkedNotice] = useState<string | null>(null);
   const clearForkedNotice = useCallback(() => setForkedNotice(null), []);
-  const baselineSetRef = useRef(false);
+  // Flipped on the user's first real edit (typing, or a comment/reply/resolve),
+  // so the save baseline stops tracking the load-time settle and freezes.
+  const userEditedRef = useRef(false);
+  const markUserEdited = useCallback(() => {
+    userEditedRef.current = true;
+  }, []);
   const currentHash = useMemo(
     () => (backed ? quickHash(serializeThreads(markdown, threads, frontmatter)) : null),
     [backed, markdown, threads, frontmatter],
   );
 
-  // The freshly opened content came from the backend, so treat it as already
-  // saved. Wait for the provider's initial sync: the body, the `threads` map and
-  // the legacy `meta` map can land on separate ticks, so baselining on the first
-  // non-empty body would snapshot before threads/meta arrive, then drift the hash
-  // the moment they do and flash a spurious "Saving…" (and a real save) on load.
+  // The freshly opened content came from the backend, so it is already saved.
+  // Baseline against the editor's OWN serialization (currentHash), NOT the file
+  // bytes on Drive. The editor body carries no `mist:` block (threads live in a
+  // map) and serializeThreads reformats the YAML, so the editor's serialization
+  // and the stored file differ cosmetically even when the content is identical,
+  // and comparing across the two flashed a spurious "Saving" (plus a real write)
+  // on every open of a commented doc. Keep re-baselining through the post-sync
+  // settle (the body, the `threads` map and the legacy `meta` map land on separate
+  // ticks, and useTextThreads may auto-create thread metadata), and FREEZE on the
+  // user's first edit; from then on currentHash drives the unsaved badge.
   useEffect(() => {
-    if (!backed || baselineSetRef.current || !yjs.synced || !markdown) return;
-    baselineSetRef.current = true;
-    setLastCommittedHash(currentHash); // eslint-disable-line react-hooks/set-state-in-effect
-  }, [backed, yjs.synced, markdown, currentHash]);
+    if (!backed || userEditedRef.current || !yjs.synced || !markdown) return;
+    if (currentHash !== lastCommittedHash) {
+      setLastCommittedHash(currentHash); // eslint-disable-line react-hooks/set-state-in-effect
+    }
+  }, [backed, yjs.synced, markdown, currentHash, lastCommittedHash]);
 
   // saveNow read through a ref so the socket listener below does not re-subscribe
   // on every keystroke (saveNow changes with the content).
@@ -319,10 +333,10 @@ export function DocumentProvider({
       try {
         const m = JSON.parse(e.data) as { type?: string; hash?: string; name?: string | null };
         if (m.type === "committed" && typeof m.hash === "string") {
-          // The agent's committed hash is authoritative; mark the baseline set so
-          // the mid-load local snapshot below does not overwrite it with a stale
-          // (pre-threads) hash.
-          baselineSetRef.current = true;
+          // A save landed: the agent confirms the hash it wrote. This is what
+          // clears the unsaved badge after a real edit; it matches the client's
+          // currentHash because the relay wrote exactly the client's pending
+          // serialization.
           setLastCommittedHash(m.hash);
           setConflict(false);
         } else if (m.type === "conflict") {
@@ -337,8 +351,9 @@ export function DocumentProvider({
           saveNowRef.current();
         } else if (m.type === "reloaded") {
           // The relay refreshed the body from Drive; the new content arrives via
-          // the Yjs binding. Re-baseline so it reads as saved, and clear flags.
-          baselineSetRef.current = false;
+          // the Yjs binding. Re-arm the load-time baselining so the adopted content
+          // reads as saved, and clear flags.
+          userEditedRef.current = false;
           setLastCommittedHash(null);
           setConflict(false);
           setUpstreamChanged(false);
@@ -484,12 +499,30 @@ export function DocumentProvider({
   // Insert a comment on the captured selection (or a point at the cursor).
   const insertComment = useCallback(
     (text: string) => {
+      markUserEdited();
       createComment(text, commentSelection ? { from: commentSelection.from, to: commentSelection.to } : undefined);
       setCommentActive(false);
       setCommentSelection(null);
       setCommentHighlight(null);
     },
-    [createComment, commentSelection],
+    [createComment, commentSelection, markUserEdited],
+  );
+
+  // Thread-metadata edits (reply, resolve/unresolve, delete) can change only the
+  // Yjs threads map without touching the editor text, so the editor's user-edit
+  // signal would miss them. Mark the edit here so the save baseline freezes and
+  // the change is written back.
+  const addReplyEdited = useCallback(
+    (threadId: string, text: string) => { markUserEdited(); addReply(threadId, text); },
+    [addReply, markUserEdited],
+  );
+  const resolveThreadEdited = useCallback(
+    (threadId: string) => { markUserEdited(); resolveThread(threadId); },
+    [resolveThread, markUserEdited],
+  );
+  const deleteThreadEdited = useCallback(
+    (threadId: string) => { markUserEdited(); deleteThread(threadId); },
+    [deleteThread, markUserEdited],
   );
 
   const handleCommentActiveChange = useCallback(
@@ -521,8 +554,8 @@ export function DocumentProvider({
     setCommentHighlight(null);
   }, [yjs]);
 
-  const handleResolveAtCursor = useCallback(() => resolveAtCursor(), [resolveAtCursor]);
-  const handleDeleteAtCursor = useCallback(() => deleteAtCursor(), [deleteAtCursor]);
+  const handleResolveAtCursor = useCallback(() => { markUserEdited(); resolveAtCursor(); }, [resolveAtCursor, markUserEdited]);
+  const handleDeleteAtCursor = useCallback(() => { markUserEdited(); deleteAtCursor(); }, [deleteAtCursor, markUserEdited]);
 
   // The range to tint for the active comment, derived from the live text.
   const activeCommentRange = activeRange;
@@ -579,13 +612,14 @@ export function DocumentProvider({
     activeThreadId,
     setActiveThreadId,
     activeCommentRange,
-    addReply,
-    resolveThread,
-    deleteThread,
+    addReply: addReplyEdited,
+    resolveThread: resolveThreadEdited,
+    deleteThread: deleteThreadEdited,
     isOnboarding: yjs.isOnboarding,
     clearDocument,
     handleViewReady,
     setEditorText,
+    markUserEdited,
     handleCommentClick,
   };
 

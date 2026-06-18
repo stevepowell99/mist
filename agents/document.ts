@@ -216,15 +216,14 @@ class DocumentAgent extends Agent {
       connection.send(encoding.toUint8Array(awarenessEncoder));
     }
 
-    // Tell the client what's already committed, so it baselines against the
-    // AUTHORITATIVE saved content instead of a snapshot of its own mid-load state.
-    // The threads React state populates a tick after the Yjs sync, which would
-    // otherwise drift the client's hash right after it baselines and flash a
-    // spurious "Saving…" (and a real write) on every open of a commented doc.
-    const baseline = this.readStoredText("lastCommitMd");
-    if (baseline != null) {
-      connection.send(JSON.stringify({ type: "committed", hash: quickHash(baseline) }));
-    }
+    // No connect-time "committed" hash is sent: it was computed over the stored
+    // file bytes (lastCommitMd), which carry a `mist:` thread block and YAML
+    // formatting the editor's own serialization does not reproduce exactly, so it
+    // never matched the client's hash and flashed a spurious "Saving" on every
+    // open of a commented doc. The client now baselines against its OWN
+    // serialization through the load settle (see DocumentContext), and the agent
+    // only confirms a hash after an actual save (doCommit), which does match
+    // because the relay writes exactly the client's pending serialization.
   }
 
   async onMessage(connection: Connection, message: WSMessage) {

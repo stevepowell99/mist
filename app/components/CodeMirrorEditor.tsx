@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import * as Y from "yjs";
 import type { Awareness } from "y-protocols/awareness";
-import { Compartment, EditorState, Prec } from "@codemirror/state";
+import { Compartment, EditorState, Prec, Transaction } from "@codemirror/state";
 import {
   EditorView,
   keymap,
@@ -97,6 +97,7 @@ export default function CodeMirrorEditor({
   onTextChange,
   onCursorChange,
   onViewReady,
+  onUserEdit,
   onImagePaste,
   onShortcut,
   className,
@@ -114,6 +115,10 @@ export default function CodeMirrorEditor({
   onTextChange?: (text: string) => void;
   onCursorChange?: (offset: number) => void;
   onViewReady?: (view: EditorView | null) => void;
+  /** Fired when the user themselves edits the doc (a transaction carrying a
+   *  userEvent), as opposed to a remote Yjs sync update, so the save baseline can
+   *  freeze on real input rather than on the load-time settle. */
+  onUserEdit?: () => void;
   /** Upload a pasted image and return the markdown path to reference, or null
    *  to let the paste fall through (e.g. non-Drive docs). */
   onImagePaste?: (file: File) => Promise<string | null>;
@@ -130,6 +135,8 @@ export default function CodeMirrorEditor({
   onCursorRef.current = onCursorChange;
   const onViewReadyRef = useRef(onViewReady);
   onViewReadyRef.current = onViewReady;
+  const onUserEditRef = useRef(onUserEdit);
+  onUserEditRef.current = onUserEdit;
   const onImagePasteRef = useRef(onImagePaste);
   onImagePasteRef.current = onImagePaste;
   const onShortcutRef = useRef(onShortcut);
@@ -250,7 +257,14 @@ export default function CodeMirrorEditor({
         }),
         yCollab(ytext, awareness, { undoManager }),
         EditorView.updateListener.of((u) => {
-          if (u.docChanged) onChangeRef.current?.(ytext.toString());
+          if (u.docChanged) {
+            onChangeRef.current?.(ytext.toString());
+            // A userEvent annotation means this client typed/edited; a remote Yjs
+            // sync update carries none. Only real input freezes the save baseline.
+            if (u.transactions.some((tr) => tr.annotation(Transaction.userEvent) !== undefined)) {
+              onUserEditRef.current?.();
+            }
+          }
           if (u.docChanged || u.selectionSet) onCursorRef.current?.(u.state.selection.main.head);
         }),
       ],
