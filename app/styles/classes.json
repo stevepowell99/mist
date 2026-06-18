@@ -1,5 +1,5 @@
 {
-  "_comment": "Machine-readable catalogue for the gmist house framework (deck-base.css). One source for the grouped/described `.` picker, the HelpPanel axes explainer, and the generated step utilities (scale, position). Phase 3 of plans/class-system.md: a build script generates the stepped rules in deck-base.css and the README catalogue from this file. Until that build exists, keep this in step with deck-base.css by hand.",
+  "_comment": "Machine-readable catalogue for the gmist house framework (deck-base.css). One source for the grouped/described `.` picker, the HelpPanel axes explainer, and the stepped utilities. A generated block with a `scope` (scale, opacity, width, height, place) is emitted into deck-base.css's GENERATED region by scripts/gen-styles.mjs (`npm run gen:styles`); the classes-css-sync test fails if the region is stale. The hand-written axes (component, colour, fill, border, theme, shade, align) keep their appearance in deck-base.css and are guarded there by selector. fade is hand-written (a color-mix template, not a plain numeric step).",
   "axes": {
     "component": {
       "desc": "What the element is. Reads the global knobs; combine with a colour.",
@@ -63,12 +63,12 @@
     },
     "scale": {
       "desc": "Uniformly shrink or grow everything inside and reflow. .scale-50 = half, .scale-300 = triple; or .scale with --scale for any amount.",
-      "generated": { "prefix": "scale", "property": "zoom", "unit": "ratio",
+      "generated": { "prefix": "scale", "property": "zoom", "unit": "ratio", "alsoVar": "--scale", "scope": "core",
         "values": [25, 33, 40, 50, 60, 75, 80, 90, 100, 110, 125, 150, 175, 200, 250, 300, 400, 500] }
     },
     "opacity": {
       "desc": "Make a box, image or text translucent. .opacity-90 = 90% opaque.",
-      "generated": { "prefix": "opacity", "property": "opacity", "unit": "%",
+      "generated": { "prefix": "opacity", "property": "opacity", "unit": "%", "scope": "core",
         "values": [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100] }
     },
     "fade": {
@@ -94,17 +94,17 @@
     "place": {
       "desc": "Float a block within the slide. Giving any coordinate (a .top-/.left- utility or a top=/left= attribute) already floats it, so .place is optional and only an explicit opt-in.",
       "classes": { "place": "position:absolute (optional; coordinates float a block on their own)" },
-      "generated": { "prefix": ["top", "left", "right", "bottom"], "property": "self",
+      "generated": { "prefix": ["top", "left", "right", "bottom"], "property": "self", "scope": "deck",
         "unit": "%", "step": 5, "from": 0, "to": 100,
         "note": "Class name drops the % sign: .top-25 means top:25%." }
     },
     "width": {
       "desc": "Fixed width for a box/panel/card/image, as a percent of the container.",
-      "generated": { "prefix": "width", "unit": "%", "values": [10, 20, 25, 30, 33, 40, 50, 60, 66, 70, 75, 80, 90, 100] }
+      "generated": { "prefix": "width", "unit": "%", "scope": "core", "values": [10, 20, 25, 30, 33, 40, 50, 60, 66, 70, 75, 80, 90, 100] }
     },
     "height": {
       "desc": "Fixed height for a box/panel/card/image, in pixels.",
-      "generated": { "prefix": "height", "unit": "px", "values": [50, 75, 100, 150, 200, 250, 300, 400, 500, 600] }
+      "generated": { "prefix": "height", "unit": "px", "scope": "core", "values": [50, 75, 100, 150, 200, 250, 300, 400, 500, 600] }
     }
   },
   "external": {

@@ -7,6 +7,7 @@
 		"cf-typegen": "wrangler types",
 		"deploy": "npm run build && wrangler deploy",
 		"dev": "react-router dev",
+		"gen:styles": "node scripts/gen-styles.mjs",
 		"lint": "eslint .",
 		"postinstall": "npm run cf-typegen",
 		"preview": "npm run build && vite preview",

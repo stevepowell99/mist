@@ -1,19 +1,22 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { generate, BEGIN, END } from "../../../scripts/gen-styles.mjs";
 
 /**
  * classes.json (the machine-readable catalogue that drives the `.` picker and the
- * Help axes) and deck-base.css (the actual selectors) are a hand-synced double
- * source of truth: CLAUDE.md notes the generator is not built yet, so this test
- * is the guard against drift. Every hand-maintained component/colour/shade class
- * must have a real selector in deck-base.css, so adding to one file without the
- * other fails here. Read from disk, not `?raw` (which resolves to "" under
- * vitest). Generated step utilities (.scale-*, .top-* …) are out of scope: they
- * are expanded from the manifest, not listed class by class.
+ * Help axes) and deck-base.css (the actual selectors) are kept in step two ways,
+ * and this test guards both. The hand-written appearance axes
+ * (component/colour/shade) must each have a real selector in the CSS. The stepped
+ * numeric axes (scale/opacity/width/height/place) are GENERATED into a marked
+ * region of the CSS by scripts/gen-styles.mjs from the manifest, so this test also
+ * asserts that region matches the manifest output (a stale commit fails CI; run
+ * `npm run gen:styles`). Read from disk, not `?raw` (which resolves to "" under
+ * vitest).
  */
 const read = (rel: string) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), "utf8");
-const catalogue = JSON.parse(read("../../../app/styles/classes.json")) as {
+const manifestText = read("../../../app/styles/classes.json");
+const catalogue = JSON.parse(manifestText) as {
   axes: Record<string, { classes?: Record<string, string> }>;
 };
 const css = read("../../../app/styles/deck-base.css");
@@ -32,4 +35,11 @@ describe("classes.json stays in step with deck-base.css", () => {
       expect(missing).toEqual([]);
     });
   }
+
+  it("the GENERATED stepped-utility region matches the manifest", () => {
+    const region = css.slice(css.indexOf(BEGIN), css.indexOf(END) + END.length);
+    expect(css).toContain(BEGIN);
+    expect(css).toContain(END);
+    expect(region).toBe(generate(JSON.parse(manifestText)));
+  });
 });

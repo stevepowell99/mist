@@ -333,20 +333,13 @@
 :is(.reveal,.preview) .callout-important, :is(.reveal,.preview) .callout-danger, :is(.reveal,.preview) .callout-error { --hue: #d6336c; --hue-pale: #fdeef3; }
 :is(.reveal,.preview) .callout-quote, :is(.reveal,.preview) .callout-example { --hue: #6b7280; --hue-pale: #f4f6f9; }
 
-/* AXIS: SCALE (zoom; reflows). .scale-50 = half, .scale-300 = triple. */
+/* AXIS: SCALE (zoom; reflows). .scale-50 = half, .scale-300 = triple, or .scale
+   with --scale for any amount. The stepped .scale-N rules are in the GENERATED
+   region below. */
 :is(.reveal,.preview) .scale     { zoom: var(--scale, 1); }
-:is(.reveal,.preview) .scale-25  { zoom: 0.25; --scale: 0.25; } :is(.reveal,.preview) .scale-33  { zoom: 0.33; --scale: 0.33; }
-:is(.reveal,.preview) .scale-40  { zoom: 0.4; --scale: 0.4; }  :is(.reveal,.preview) .scale-50  { zoom: 0.5; --scale: 0.5; }
-:is(.reveal,.preview) .scale-60  { zoom: 0.6; --scale: 0.6; }  :is(.reveal,.preview) .scale-75  { zoom: 0.75; --scale: 0.75; }
-:is(.reveal,.preview) .scale-80  { zoom: 0.8; --scale: 0.8; }  :is(.reveal,.preview) .scale-90  { zoom: 0.9; --scale: 0.9; }
-:is(.reveal,.preview) .scale-100 { zoom: 1; --scale: 1; }    :is(.reveal,.preview) .scale-110 { zoom: 1.1; --scale: 1.1; }
-:is(.reveal,.preview) .scale-125 { zoom: 1.25; --scale: 1.25; } :is(.reveal,.preview) .scale-150 { zoom: 1.5; --scale: 1.5; }
-:is(.reveal,.preview) .scale-175 { zoom: 1.75; --scale: 1.75; } :is(.reveal,.preview) .scale-200 { zoom: 2; --scale: 2; }
-:is(.reveal,.preview) .scale-250 { zoom: 2.5; --scale: 2.5; }  :is(.reveal,.preview) .scale-300 { zoom: 3; --scale: 3; }
-:is(.reveal,.preview) .scale-400 { zoom: 4; --scale: 4; }    :is(.reveal,.preview) .scale-500 { zoom: 5; --scale: 5; }
 
-/* AXIS: OPACITY. .opacity-90 = 90% opaque, for a translucent panel/box/image. */
-:is(.reveal,.preview) .opacity-0{opacity:0}:is(.reveal,.preview) .opacity-10{opacity:0.1}:is(.reveal,.preview) .opacity-20{opacity:0.2}:is(.reveal,.preview) .opacity-30{opacity:0.3}:is(.reveal,.preview) .opacity-40{opacity:0.4}:is(.reveal,.preview) .opacity-50{opacity:0.5}:is(.reveal,.preview) .opacity-60{opacity:0.6}:is(.reveal,.preview) .opacity-70{opacity:0.7}:is(.reveal,.preview) .opacity-80{opacity:0.8}:is(.reveal,.preview) .opacity-90{opacity:0.9}:is(.reveal,.preview) .opacity-100{opacity:1}
+/* AXIS: OPACITY. .opacity-90 = 90% opaque, for a translucent panel/box/image. The
+   stepped .opacity-N rules are in the GENERATED region below. */
 
 /* AXIS: FADE (fill opacity). .fade-N makes only the BACKGROUND translucent, so a
    box over an image lets the picture show through while its TEXT stays fully
@@ -365,11 +358,24 @@
 :is(.reveal,.preview) .fade-90{background:color-mix(in srgb, var(--fill, var(--hue-pale, var(--slide-bg, #fff))) 90%, transparent) !important}
 
 /* AXIS: SIZE (fixed dimensions for a box/panel/card/image). .width-N sets width
-   to N% of the container; .height-N sets height to N pixels. */
-:is(.reveal,.preview) .width-10{width:10%} :is(.reveal,.preview) .width-20{width:20%} :is(.reveal,.preview) .width-25{width:25%} :is(.reveal,.preview) .width-30{width:30%} :is(.reveal,.preview) .width-33{width:33%} :is(.reveal,.preview) .width-40{width:40%} :is(.reveal,.preview) .width-50{width:50%}
-:is(.reveal,.preview) .width-60{width:60%} :is(.reveal,.preview) .width-66{width:66%} :is(.reveal,.preview) .width-70{width:70%} :is(.reveal,.preview) .width-75{width:75%} :is(.reveal,.preview) .width-80{width:80%} :is(.reveal,.preview) .width-90{width:90%} :is(.reveal,.preview) .width-100{width:100%}
-:is(.reveal,.preview) .height-50{height:50px} :is(.reveal,.preview) .height-75{height:75px} :is(.reveal,.preview) .height-100{height:100px} :is(.reveal,.preview) .height-150{height:150px} :is(.reveal,.preview) .height-200{height:200px} :is(.reveal,.preview) .height-250{height:250px} :is(.reveal,.preview) .height-300{height:300px}
-:is(.reveal,.preview) .height-400{height:400px} :is(.reveal,.preview) .height-500{height:500px} :is(.reveal,.preview) .height-600{height:600px}
+   to N% of the container; .height-N sets height to N pixels. The stepped rules are
+   in the GENERATED region below. */
+
+/* The stepped numeric utilities (scale, opacity, width, height, and the place
+   coordinates) are GENERATED from app/styles/classes.json by
+   scripts/gen-styles.mjs. Edit the step lists in that manifest, then run
+   `npm run gen:styles`; the classes-css-sync test fails if this region is stale.
+   Do not hand-edit between the markers. */
+/* GENERATED stepped utilities (scripts/gen-styles.mjs); do not edit by hand */
+/* scale */ :is(.reveal,.preview) .scale-25{zoom:0.25;--scale:0.25}:is(.reveal,.preview) .scale-33{zoom:0.33;--scale:0.33}:is(.reveal,.preview) .scale-40{zoom:0.4;--scale:0.4}:is(.reveal,.preview) .scale-50{zoom:0.5;--scale:0.5}:is(.reveal,.preview) .scale-60{zoom:0.6;--scale:0.6}:is(.reveal,.preview) .scale-75{zoom:0.75;--scale:0.75}:is(.reveal,.preview) .scale-80{zoom:0.8;--scale:0.8}:is(.reveal,.preview) .scale-90{zoom:0.9;--scale:0.9}:is(.reveal,.preview) .scale-100{zoom:1;--scale:1}:is(.reveal,.preview) .scale-110{zoom:1.1;--scale:1.1}:is(.reveal,.preview) .scale-125{zoom:1.25;--scale:1.25}:is(.reveal,.preview) .scale-150{zoom:1.5;--scale:1.5}:is(.reveal,.preview) .scale-175{zoom:1.75;--scale:1.75}:is(.reveal,.preview) .scale-200{zoom:2;--scale:2}:is(.reveal,.preview) .scale-250{zoom:2.5;--scale:2.5}:is(.reveal,.preview) .scale-300{zoom:3;--scale:3}:is(.reveal,.preview) .scale-400{zoom:4;--scale:4}:is(.reveal,.preview) .scale-500{zoom:5;--scale:5}
+/* opacity */ :is(.reveal,.preview) .opacity-0{opacity:0%}:is(.reveal,.preview) .opacity-10{opacity:10%}:is(.reveal,.preview) .opacity-20{opacity:20%}:is(.reveal,.preview) .opacity-30{opacity:30%}:is(.reveal,.preview) .opacity-40{opacity:40%}:is(.reveal,.preview) .opacity-50{opacity:50%}:is(.reveal,.preview) .opacity-60{opacity:60%}:is(.reveal,.preview) .opacity-70{opacity:70%}:is(.reveal,.preview) .opacity-80{opacity:80%}:is(.reveal,.preview) .opacity-90{opacity:90%}:is(.reveal,.preview) .opacity-100{opacity:100%}
+/* place (top) */ .reveal .top-0{top:0%}.reveal .top-5{top:5%}.reveal .top-10{top:10%}.reveal .top-15{top:15%}.reveal .top-20{top:20%}.reveal .top-25{top:25%}.reveal .top-30{top:30%}.reveal .top-35{top:35%}.reveal .top-40{top:40%}.reveal .top-45{top:45%}.reveal .top-50{top:50%}.reveal .top-55{top:55%}.reveal .top-60{top:60%}.reveal .top-65{top:65%}.reveal .top-70{top:70%}.reveal .top-75{top:75%}.reveal .top-80{top:80%}.reveal .top-85{top:85%}.reveal .top-90{top:90%}.reveal .top-95{top:95%}.reveal .top-100{top:100%}
+/* place (left) */ .reveal .left-0{left:0%}.reveal .left-5{left:5%}.reveal .left-10{left:10%}.reveal .left-15{left:15%}.reveal .left-20{left:20%}.reveal .left-25{left:25%}.reveal .left-30{left:30%}.reveal .left-35{left:35%}.reveal .left-40{left:40%}.reveal .left-45{left:45%}.reveal .left-50{left:50%}.reveal .left-55{left:55%}.reveal .left-60{left:60%}.reveal .left-65{left:65%}.reveal .left-70{left:70%}.reveal .left-75{left:75%}.reveal .left-80{left:80%}.reveal .left-85{left:85%}.reveal .left-90{left:90%}.reveal .left-95{left:95%}.reveal .left-100{left:100%}
+/* place (right) */ .reveal .right-0{right:0%}.reveal .right-5{right:5%}.reveal .right-10{right:10%}.reveal .right-15{right:15%}.reveal .right-20{right:20%}.reveal .right-25{right:25%}.reveal .right-30{right:30%}.reveal .right-35{right:35%}.reveal .right-40{right:40%}.reveal .right-45{right:45%}.reveal .right-50{right:50%}.reveal .right-55{right:55%}.reveal .right-60{right:60%}.reveal .right-65{right:65%}.reveal .right-70{right:70%}.reveal .right-75{right:75%}.reveal .right-80{right:80%}.reveal .right-85{right:85%}.reveal .right-90{right:90%}.reveal .right-95{right:95%}.reveal .right-100{right:100%}
+/* place (bottom) */ .reveal .bottom-0{bottom:0%}.reveal .bottom-5{bottom:5%}.reveal .bottom-10{bottom:10%}.reveal .bottom-15{bottom:15%}.reveal .bottom-20{bottom:20%}.reveal .bottom-25{bottom:25%}.reveal .bottom-30{bottom:30%}.reveal .bottom-35{bottom:35%}.reveal .bottom-40{bottom:40%}.reveal .bottom-45{bottom:45%}.reveal .bottom-50{bottom:50%}.reveal .bottom-55{bottom:55%}.reveal .bottom-60{bottom:60%}.reveal .bottom-65{bottom:65%}.reveal .bottom-70{bottom:70%}.reveal .bottom-75{bottom:75%}.reveal .bottom-80{bottom:80%}.reveal .bottom-85{bottom:85%}.reveal .bottom-90{bottom:90%}.reveal .bottom-95{bottom:95%}.reveal .bottom-100{bottom:100%}
+/* width */ :is(.reveal,.preview) .width-10{width:10%}:is(.reveal,.preview) .width-20{width:20%}:is(.reveal,.preview) .width-25{width:25%}:is(.reveal,.preview) .width-30{width:30%}:is(.reveal,.preview) .width-33{width:33%}:is(.reveal,.preview) .width-40{width:40%}:is(.reveal,.preview) .width-50{width:50%}:is(.reveal,.preview) .width-60{width:60%}:is(.reveal,.preview) .width-66{width:66%}:is(.reveal,.preview) .width-70{width:70%}:is(.reveal,.preview) .width-75{width:75%}:is(.reveal,.preview) .width-80{width:80%}:is(.reveal,.preview) .width-90{width:90%}:is(.reveal,.preview) .width-100{width:100%}
+/* height */ :is(.reveal,.preview) .height-50{height:50px}:is(.reveal,.preview) .height-75{height:75px}:is(.reveal,.preview) .height-100{height:100px}:is(.reveal,.preview) .height-150{height:150px}:is(.reveal,.preview) .height-200{height:200px}:is(.reveal,.preview) .height-250{height:250px}:is(.reveal,.preview) .height-300{height:300px}:is(.reveal,.preview) .height-400{height:400px}:is(.reveal,.preview) .height-500{height:500px}:is(.reveal,.preview) .height-600{height:600px}
+/* END GENERATED */
 
 /* ============================================================ *
  * CHROME: deck-only (.reveal). No meaning in a flowing doc.    *
@@ -421,13 +427,11 @@
    by the coordinate utilities (.top-/.left-/.right-/.bottom-) or top=/left= attrs.
    Giving any coordinate already floats the block, so .place is optional: the
    coordinate step classes carry position themselves, and the grammar adds it for
-   top=/left= attrs and inline top/left styles. .place stays as an explicit opt-in. */
+   top=/left= attrs and inline top/left styles. .place stays as an explicit opt-in.
+   The stepped coordinate utilities (.top-N/.left-N/.right-N/.bottom-N) are in the
+   GENERATED region above. */
 .reveal .place,
 .reveal :is([class*="top-"], [class*="bottom-"], [class*="left-"], [class*="right-"]) { position: absolute; z-index: 20; }
-.reveal .top-0{top:0%}.reveal .top-5{top:5%}.reveal .top-10{top:10%}.reveal .top-15{top:15%}.reveal .top-20{top:20%}.reveal .top-25{top:25%}.reveal .top-30{top:30%}.reveal .top-35{top:35%}.reveal .top-40{top:40%}.reveal .top-45{top:45%}.reveal .top-50{top:50%}.reveal .top-55{top:55%}.reveal .top-60{top:60%}.reveal .top-65{top:65%}.reveal .top-70{top:70%}.reveal .top-75{top:75%}.reveal .top-80{top:80%}.reveal .top-85{top:85%}.reveal .top-90{top:90%}.reveal .top-95{top:95%}.reveal .top-100{top:100%}
-.reveal .left-0{left:0%}.reveal .left-5{left:5%}.reveal .left-10{left:10%}.reveal .left-15{left:15%}.reveal .left-20{left:20%}.reveal .left-25{left:25%}.reveal .left-30{left:30%}.reveal .left-35{left:35%}.reveal .left-40{left:40%}.reveal .left-45{left:45%}.reveal .left-50{left:50%}.reveal .left-55{left:55%}.reveal .left-60{left:60%}.reveal .left-65{left:65%}.reveal .left-70{left:70%}.reveal .left-75{left:75%}.reveal .left-80{left:80%}.reveal .left-85{left:85%}.reveal .left-90{left:90%}.reveal .left-95{left:95%}.reveal .left-100{left:100%}
-.reveal .right-0{right:0%}.reveal .right-5{right:5%}.reveal .right-10{right:10%}.reveal .right-15{right:15%}.reveal .right-20{right:20%}.reveal .right-25{right:25%}.reveal .right-30{right:30%}.reveal .right-35{right:35%}.reveal .right-40{right:40%}.reveal .right-45{right:45%}.reveal .right-50{right:50%}.reveal .right-55{right:55%}.reveal .right-60{right:60%}.reveal .right-65{right:65%}.reveal .right-70{right:70%}.reveal .right-75{right:75%}.reveal .right-80{right:80%}.reveal .right-85{right:85%}.reveal .right-90{right:90%}.reveal .right-95{right:95%}.reveal .right-100{right:100%}
-.reveal .bottom-0{bottom:0%}.reveal .bottom-5{bottom:5%}.reveal .bottom-10{bottom:10%}.reveal .bottom-15{bottom:15%}.reveal .bottom-20{bottom:20%}.reveal .bottom-25{bottom:25%}.reveal .bottom-30{bottom:30%}.reveal .bottom-35{bottom:35%}.reveal .bottom-40{bottom:40%}.reveal .bottom-45{bottom:45%}.reveal .bottom-50{bottom:50%}.reveal .bottom-55{bottom:55%}.reveal .bottom-60{bottom:60%}.reveal .bottom-65{bottom:65%}.reveal .bottom-70{bottom:70%}.reveal .bottom-75{bottom:75%}.reveal .bottom-80{bottom:80%}.reveal .bottom-85{bottom:85%}.reveal .bottom-90{bottom:90%}.reveal .bottom-95{bottom:95%}.reveal .bottom-100{bottom:100%}
 
 /* Deck media / code / quotes */
 /* Default cap: an image never spills past the slide edge or runs taller than the

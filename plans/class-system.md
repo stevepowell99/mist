@@ -134,14 +134,89 @@ gmist already has.
 - Implement the position axis above: alignment classes, `.place`, the stepped
   percentage utilities, and `left=`/`top=`/`x=`/`y=` attributes in `parseAttrs`.
 
-### Phase 3: a machine-readable manifest (the fullest single source)
+### Phase 3: generate the stepped utilities from the manifest
 
-- Add `app/styles/classes.json`: axis → class → one-line description, plus the
-  step definitions (colours, scale steps, percentage steps). gmist reads it to
-  drive a grouped, described picker and the help panel; a build script generates
-  the stepped utility rules in `deck-base.css` and the README catalogue from it.
-- Then one manifest describes the system, the CSS implements it, and the help,
-  the picker, the generated utilities and the README all derive from it.
+DONE (18 June 2026). `scripts/gen-styles.mjs` emits the stepped numeric axes
+(`scale`, `opacity`, `width`, `height`, `place` coords) from the `scope`-tagged
+`generated` blocks in `classes.json` into the `/* GENERATED ... */` region of
+`deck-base.css` (`npm run gen:styles`; `--check` for CI). `scale` carries
+`alsoVar: --scale`; `place` is `scope: deck`, the rest `core`. `fade` stays
+hand-written (a `color-mix` template). The `classes-css-sync` test now also
+asserts the region equals the manifest output, so a stale commit fails. The
+`classes.json` `_comment` and the CLAUDE.md note were updated to drop "by hand".
+README-catalogue generation remains the optional follow-on below.
+
+Phases 1 (portable CSS + picker as catalogue) and 2 (positioning) are DONE.
+`app/styles/classes.json` exists and already drives the `.` picker and Help axes
+through `cm-classes.ts` (it reads the `generated` blocks for the colour-suffixed
+families). What is still hand-typed is the CSS side of the stepped utilities, and
+those blocks are kept in step with the manifest BY HAND (the `classes.json`
+`_comment` and CLAUDE.md both admit it). This phase closes that.
+
+**Goal.** One spec (the `generated` blocks already in `classes.json`) drives both
+the picker (today) and the CSS (new). Remove the hand-typed stepped blocks from
+`deck-base.css` and the hand-sync between the two files.
+
+**Scope: generate only the arithmetic axes; appearance stays in CSS.**
+
+- IN (number to rule, safe to generate): `scale`, `opacity`, `width`, `height`,
+  and the `place` coordinates (`top/left/right/bottom`, 5% steps). These are pure
+  arithmetic on a step list, not design decisions.
+- OUT (stay hand-written in `deck-base.css`): components, `colour`, `fill`
+  (`bg-*`), `border`, `theme`, `shade`, `align`. They carry brand tokens, the
+  `.solid` variant, and the `--fill`/`--text`/`--border` slots, i.e. appearance,
+  which the guiding rule keeps in the CSS file. The existing `classes-css-sync`
+  test continues to guard these by selector.
+- `fade` is the one semi-arithmetic case (a translucent background, not a bare
+  number). If its emit is not clean arithmetic, give it an explicit template in
+  the manifest or leave it hand-written in the first cut.
+
+**Manifest tweaks (`classes.json`, small).**
+
+- Add `"scope": "core" | "deck"` to each generated block: `core` resolves to
+  `:is(.reveal,.preview)`, `deck` to `.reveal`. Only `place` is `deck`.
+- `scale` emits two declarations (`zoom` plus `--scale`); add `"alsoVar":
+  "--scale"` so the generator emits `zoom:R;--scale:R`.
+
+**Generator (`scripts/gen-styles.mjs`, ESM like the other scripts).**
+
+- Read `classes.json`. For each axis with a numeric `generated` spec, emit
+  `${scopeSel}.${prefix}-${n}{${prop}:${fmt(n,unit)}}` (`%` gives `n%`, `px` gives
+  `npx`, `ratio` gives `n/100`; `alsoVar` appends `;--prefix:value`). `place`
+  loops its four prefixes over `from`/`to`/`step`.
+- Write the output between markers in `deck-base.css`:
+  `/* GENERATED stepped utilities (scripts/gen-styles.mjs); do not edit */` then
+  the rules then `/* END GENERATED */`. Replace the current hand-typed scale /
+  opacity / width / height / place blocks with this region.
+- Two modes: default rewrites the region in place; `--check` generates to a
+  string and compares to the region, exiting non-zero on any diff.
+- Add `"gen:styles": "node scripts/gen-styles.mjs"` to `package.json`. Run once to
+  seed the region.
+
+**Enforcement (extend `tests/unit/styles/classes-css-sync.test.ts`).**
+
+- Add a case that runs the generator's pure function (or `--check`) and asserts
+  the marked region in `deck-base.css` equals the manifest output, so generated
+  drift fails CI. Keep the existing component/colour/shade selector check for the
+  hand-written axes. Net: the test now covers BOTH the hand-written classes (have
+  a selector) and the generated ones (match the manifest), closing the
+  double-source defect.
+
+**Docs.** Drop "keep this in step by hand" from the `classes.json` `_comment` and
+the CLAUDE.md class-system note; state the generator plus check test instead.
+
+**Why this is committed, not runtime.** `deck-base.css` reaches the bundle as a
+`?raw` string import (`DocumentContext`, `slides-build`) and a normal import
+(`root.tsx`). So the generated rules must live in the committed file; the
+generator edits that file and the check test guards against a stale commit.
+Nothing changes at runtime or in the served output (byte-identical CSS).
+
+**Non-goals.** Not generating `fill`/`border`/`colour` (appearance, low payoff vs
+encoding brand templates in JS). README-catalogue generation stays an optional
+follow-on, not required for the core win.
+
+Effort: a roughly 40-line generator plus the manifest tweaks plus the test case.
+One commit.
 
 ## Guiding rule
 
