@@ -1,0 +1,36 @@
+/* Theme: handwritten. A casual handwriting font on warm paper, with thick inky
+ * outlines and slightly irregular corners for a hand-drawn, sketchbook feel.
+ * Uses system handwriting fonts (Segoe Print on Windows, Bradley Hand on Mac),
+ * falling back to any cursive, so it needs no web font. */
+:is(.reveal,.preview) {
+  --slide-bg: #fcfaf3; --ink: #2b2a28; --accent: #2f6f9f; --rule: #cbb89a; --muted: #6f6a60;
+}
+.reveal-viewport { background: var(--slide-bg); }
+.reveal, .preview { background: var(--slide-bg); color: var(--ink); font-family: "Segoe Print", "Bradley Hand", "Comic Sans MS", cursive; }
+
+:is(.reveal,.preview) h1, :is(.reveal,.preview) h2, :is(.reveal,.preview) h3 { color: var(--ink); font-weight: 700; letter-spacing: 0; }
+.reveal h2 { color: var(--accent); }
+.reveal h3 { color: var(--accent); }
+:is(.reveal,.preview) a { color: var(--accent); }
+
+:is(.reveal,.preview) blockquote { border-left: 3px solid var(--ink); background: none; font-style: normal; color: var(--ink); box-shadow: none; width: auto; }
+:is(.reveal,.preview) code { background: rgba(43,42,40,0.07); color: var(--ink); font-family: "Consolas", monospace; }
+.reveal pre { background: #fff; border: 2px solid var(--ink); border-radius: 12px 8px 14px 6px; }
+.reveal section img { border: 2px solid var(--ink); border-radius: 10px 6px 12px 8px; }
+
+/* Components: thick ink outlines with hand-drawn (uneven) corners. */
+:is(.reveal,.preview) .panel { background: #fff; border: 2px solid var(--ink); border-left-width: 4px; border-radius: 14px 8px 16px 6px; }
+:is(.reveal,.preview) .card, :is(.reveal,.preview) .cards li { background: #fff; border: 2px solid var(--ink); border-radius: 12px 16px 8px 14px; }
+:is(.reveal,.preview) .chip { background: #fff; border: 2px solid var(--ink); color: var(--ink); }
+:is(.reveal,.preview) .callout { background: #fff; border: 2px solid var(--ink); border-left-width: 4px; border-radius: 14px 8px 16px 6px; }
+:is(.reveal,.preview) .hl, :is(.reveal,.preview) .flare { background: #fde9a0; color: var(--ink); border-radius: 6px 3px 7px 2px; }
+:is(.reveal,.preview) .bignum .fig, :is(.reveal,.preview) .bignums strong { color: var(--accent); }
+:is(.reveal,.preview) :is(.rectangle, .circle, .oval) { border-width: 3px; }
+
+/* Page types: paper title and divider, inky underline. */
+.reveal .title-page { color: var(--ink); }
+.reveal .title-page:not(.has-slide-bg) { background: var(--slide-bg); }
+.reveal .title-page .eyebrow, .reveal .title-page .headline .teal { color: var(--accent); }
+.reveal .slides section:has(> h1) { color: var(--ink); }
+.reveal .slides section:has(> h1):not(.has-slide-bg) { background: var(--slide-bg); }
+.reveal .slides section:has(> h1) > h1 { color: var(--ink); border-bottom: 3px solid var(--ink); display: inline-block; padding-bottom: 0.1em; }

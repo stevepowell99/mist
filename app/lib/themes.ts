@@ -16,6 +16,10 @@ import CAUSAL_MAP from "~/styles/themes/causal-map.css?raw";
 import QUALIA from "~/styles/themes/qualia.css?raw";
 import BRUTALIST from "~/styles/themes/brutalist.css?raw";
 import EDITORIAL from "~/styles/themes/editorial.css?raw";
+import BLACKBOARD from "~/styles/themes/blackboard.css?raw";
+import MOONSHOT from "~/styles/themes/moonshot.css?raw";
+import HANDWRITTEN from "~/styles/themes/handwritten.css?raw";
+import MINIMAL from "~/styles/themes/minimal.css?raw";
 
 export const DEFAULT_THEME = "causal-map";
 
@@ -24,6 +28,10 @@ const THEME_RAW: Record<string, string> = {
   qualia: QUALIA,
   brutalist: BRUTALIST,
   editorial: EDITORIAL,
+  blackboard: BLACKBOARD,
+  moonshot: MOONSHOT,
+  handwritten: HANDWRITTEN,
+  minimal: MINIMAL,
 };
 
 /** Theme names a `theme:` value may select; the first is the default. */

@@ -1,0 +1,34 @@
+/* Theme: minimal. White, near-black, lots of space, no shadows, one thin accent.
+ * Quiet by default; let the content carry the slide. */
+:is(.reveal,.preview) {
+  --slide-bg: #ffffff; --ink: #141414; --accent: #141414; --rule: #e6e6e6; --muted: #8a8a8a;
+}
+.reveal-viewport { background: var(--slide-bg); }
+.reveal, .preview { background: var(--slide-bg); color: var(--ink); font-family: "Helvetica Neue", "Segoe UI", Arial, system-ui, sans-serif; }
+
+:is(.reveal,.preview) h1, :is(.reveal,.preview) h2, :is(.reveal,.preview) h3 { color: var(--ink); font-weight: 600; letter-spacing: -0.01em; text-transform: none; }
+.reveal h1 { font-weight: 700; }
+.reveal h2 { font-weight: 600; }
+.reveal h3 { color: var(--muted); font-weight: 600; }
+:is(.reveal,.preview) a { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+
+:is(.reveal,.preview) blockquote { border-left: 2px solid var(--rule); background: none; color: var(--muted); font-style: normal; box-shadow: none; width: auto; }
+:is(.reveal,.preview) code { background: #f4f4f4; color: var(--ink); }
+.reveal pre { background: #fafafa; border: 1px solid var(--rule); border-radius: 0; }
+.reveal section img { border: 0; border-radius: 0; }
+
+/* Components: outlines, no fills or shadows; restrained. */
+:is(.reveal,.preview) .panel { background: none; border: 0; border-left: 2px solid var(--ink); border-radius: 0; }
+:is(.reveal,.preview) .card, :is(.reveal,.preview) .cards li { background: none; border: 1px solid var(--rule); border-radius: 0; }
+:is(.reveal,.preview) .chip { background: var(--ink); color: #fff; border-radius: 0; }
+:is(.reveal,.preview) .callout { background: none; border: 0; border-left: 2px solid var(--rule); border-radius: 0; }
+:is(.reveal,.preview) .hl, :is(.reveal,.preview) .flare { background: #ededed; color: var(--ink); border-radius: 0; }
+:is(.reveal,.preview) .bignum .fig, :is(.reveal,.preview) .bignums strong { color: var(--ink); }
+
+/* Page types: plain white title and divider, no dark fill. */
+.reveal .title-page { color: var(--ink); }
+.reveal .title-page:not(.has-slide-bg) { background: var(--slide-bg); }
+.reveal .title-page .eyebrow, .reveal .title-page .headline .teal { color: var(--muted); }
+.reveal .slides section:has(> h1) { color: var(--ink); }
+.reveal .slides section:has(> h1):not(.has-slide-bg) { background: var(--slide-bg); }
+.reveal .slides section:has(> h1) > h1 { color: var(--ink); }

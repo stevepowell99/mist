@@ -68,7 +68,7 @@ const SLIDES: Shortcut[] = [
 // `format: revealjs:`). Documented in docs/author-grammar.md.
 const DECK_SETTINGS: { key: string; val: string }[] = [
   { key: "format:", val: "slides (or slide / revealjs): turns the file into a deck" },
-  { key: "theme:", val: "causal-map (default), qualia, brutalist, editorial" },
+  { key: "theme:", val: "causal-map (default), qualia, brutalist, editorial, blackboard, moonshot, handwritten, minimal" },
   { key: "footer:", val: "text shown on every slide" },
   { key: "slide-number:", val: "true, or a reveal format like c/t" },
   { key: "navigation-mode:", val: "the default is best; grid is 2D but confusing" },
@@ -126,7 +126,7 @@ const FILES: { name: string; desc: string }[] = [
 ];
 
 const TIPS = [
-  "Set theme: causal-map | qualia | brutalist | editorial in the YAML to restyle the whole deck or doc; ::: {.brand} drops the theme's logo in the corner.",
+  "Set theme: causal-map | qualia | brutalist | editorial | blackboard | moonshot | handwritten | minimal in the YAML to restyle the whole deck or doc; ::: {.brand} drops the theme's logo in the corner.",
   "Edits save to Drive automatically, on a short pause after you stop typing.",
   "Edit the file in Obsidian or Drive and it appears here on reload (Drive wins if both changed).",
   "Set navigation-mode: grid in a deck's YAML for 2D arrow transitions.",
