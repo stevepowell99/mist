@@ -29,6 +29,7 @@ import { activeCommentField, setActiveComment } from "~/lib/cm-active-comment";
 import { citationSource } from "~/lib/cm-citations";
 import { classSource } from "~/lib/cm-classes";
 import { slashSource, slashWrapSelection } from "~/lib/cm-slash";
+import { iconSource } from "~/lib/cm-icons";
 import { modAltChord } from "~/lib/chord";
 import type { BibLibrary } from "~/lib/citations";
 import type { DocMode } from "~/shared/types";
@@ -224,6 +225,7 @@ export default function CodeMirrorEditor({
             slashSource(),
             citationSource(() => bibRef.current),
             classSource(() => classRef.current),
+            iconSource(),
           ],
           icons: false,
         }),
