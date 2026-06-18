@@ -94,7 +94,10 @@ function authorText(authors: string[]): string {
   return `${authors[0]} et al.`;
 }
 
-const BRACKET_RE = /\[([^\]]*@[^\]]+)\]/g;
+// `[@key; -@key2, p.5]` citation groups. The `(?!\()` skips a markdown link
+// label, so `[steve@pogol.net](mailto:steve@pogol.net)` is left as a link rather
+// than read as a citation (the `@` in an email address would otherwise match).
+const BRACKET_RE = /\[([^\]]*@[^\]]+)\](?!\()/g;
 const BARE_RE =
   /(?<![\w[])@([A-Za-z0-9:_-]+)\b(?:\s*,\s*((?:pp?\.|chap?\.|sec\.|§)\s*\w+(?:[.-]\w+)*))?/g;
 
