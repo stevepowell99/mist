@@ -162,8 +162,8 @@
    the theme's ink surface with page-colour text, .light a muted surface with ink
    text, so the shade always relates to the active theme. For a specific theme
    surface use .bg-ink / .bg-accent / .bg-page instead. */
-:is(.reveal,.preview) .light { --fill: var(--hue-pale, var(--muted)); --text: var(--ink); color: var(--ink); }
-:is(.reveal,.preview) .dark  { --fill: var(--hue-deep, var(--ink)); --text: var(--on, var(--slide-bg)); color: var(--on, var(--slide-bg)); }
+:is(.reveal,.preview) .light { --fill: var(--hue-pale, var(--muted)); background: var(--hue-pale, var(--muted)); --text: var(--ink); color: var(--ink); }
+:is(.reveal,.preview) .dark  { --fill: var(--hue-deep, var(--ink)); background: var(--hue-deep, var(--ink)); --text: var(--on, var(--slide-bg)); color: var(--on, var(--slide-bg)); }
 :is(.reveal,.preview) .left   { text-align: left; }
 :is(.reveal,.preview) .center { text-align: center; }
 :is(.reveal,.preview) .right  { text-align: right; }
