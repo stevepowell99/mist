@@ -12,9 +12,9 @@
         "card": "A box inside a .cards grid (a standalone box is .bg-<colour>)",
         "bignums": "List of big figures: start each item with the figure in **bold**",
         "bignum": "Older headline figure (.fig + .bn-body inside); prefer .bignums",
-        "rectangle": "Red outline rectangle (type a label inside; recolour, place + scale it)",
-        "circle": "Red outline circle (type a label inside; recolour, place + scale it)",
-        "oval": "Red outline oval (type a label inside; recolour, place + scale it)",
+        "rectangle": "Outline rectangle (label inside; recolour the outline, .bg-<colour> to fill, scale + place it)",
+        "circle": "Outline circle (label inside; recolour the outline, .bg-<colour> to fill, scale + place it)",
+        "oval": "Outline oval (label inside; recolour the outline, .bg-<colour> to fill, scale + place it)",
         "callout": "Alias: a neutral .panel for a noted aside",
         "lead": "Larger intro paragraph",
         "footer": "Small dimmed footer text",
@@ -66,8 +66,8 @@
       }
     },
     "place": {
-      "desc": "Float a block absolutely within the slide, then position it with the coordinate utilities or top=/left=/width= attributes.",
-      "classes": { "place": "position:absolute" },
+      "desc": "Float a block within the slide. Giving any coordinate (a .top-/.left- utility or a top=/left= attribute) already floats it, so .place is optional and only an explicit opt-in.",
+      "classes": { "place": "position:absolute (optional; coordinates float a block on their own)" },
       "generated": { "prefix": ["top", "left", "right", "bottom"], "property": "self",
         "unit": "%", "step": 5, "from": 0, "to": 100,
         "note": "Class name drops the % sign: .top-25 means top:25%." }

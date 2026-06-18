@@ -285,7 +285,7 @@
    colour class, move with .place + .top-/.left-, size with .scale-. */
 :is(.reveal,.preview) :is(.rectangle, .circle, .oval) {
   border: 3px solid var(--border, var(--hue, #ff2f00));
-  background: transparent;
+  background: var(--fill, transparent);
   display: flex; align-items: center; justify-content: center;
   text-align: center; padding: 0.4em 0.6em; box-sizing: border-box;
 }
@@ -372,9 +372,13 @@
   100% { background-color: var(--flare-fill, var(--cm-yellow)); color: var(--ink); box-shadow: 0 0 0 0 rgba(0,0,0,0); filter: none; }
 }
 
-/* AXIS: PLACE (deck only): float a block absolutely within the slide, then
-   position with the coordinate utilities or top=/left=/width= attributes. */
-.reveal .place { position: absolute; z-index: 20; }
+/* AXIS: PLACE (deck only): float a block absolutely within the slide, positioned
+   by the coordinate utilities (.top-/.left-/.right-/.bottom-) or top=/left= attrs.
+   Giving any coordinate already floats the block, so .place is optional: the
+   coordinate step classes carry position themselves, and the grammar adds it for
+   top=/left= attrs and inline top/left styles. .place stays as an explicit opt-in. */
+.reveal .place,
+.reveal :is([class*="top-"], [class*="bottom-"], [class*="left-"], [class*="right-"]) { position: absolute; z-index: 20; }
 .reveal .top-0{top:0%}.reveal .top-5{top:5%}.reveal .top-10{top:10%}.reveal .top-15{top:15%}.reveal .top-20{top:20%}.reveal .top-25{top:25%}.reveal .top-30{top:30%}.reveal .top-35{top:35%}.reveal .top-40{top:40%}.reveal .top-45{top:45%}.reveal .top-50{top:50%}.reveal .top-55{top:55%}.reveal .top-60{top:60%}.reveal .top-65{top:65%}.reveal .top-70{top:70%}.reveal .top-75{top:75%}.reveal .top-80{top:80%}.reveal .top-85{top:85%}.reveal .top-90{top:90%}.reveal .top-95{top:95%}.reveal .top-100{top:100%}
 .reveal .left-0{left:0%}.reveal .left-5{left:5%}.reveal .left-10{left:10%}.reveal .left-15{left:15%}.reveal .left-20{left:20%}.reveal .left-25{left:25%}.reveal .left-30{left:30%}.reveal .left-35{left:35%}.reveal .left-40{left:40%}.reveal .left-45{left:45%}.reveal .left-50{left:50%}.reveal .left-55{left:55%}.reveal .left-60{left:60%}.reveal .left-65{left:65%}.reveal .left-70{left:70%}.reveal .left-75{left:75%}.reveal .left-80{left:80%}.reveal .left-85{left:85%}.reveal .left-90{left:90%}.reveal .left-95{left:95%}.reveal .left-100{left:100%}
 .reveal .right-0{right:0%}.reveal .right-5{right:5%}.reveal .right-10{right:10%}.reveal .right-15{right:15%}.reveal .right-20{right:20%}.reveal .right-25{right:25%}.reveal .right-30{right:30%}.reveal .right-35{right:35%}.reveal .right-40{right:40%}.reveal .right-45{right:45%}.reveal .right-50{right:50%}.reveal .right-55{right:55%}.reveal .right-60{right:60%}.reveal .right-65{right:65%}.reveal .right-70{right:70%}.reveal .right-75{right:75%}.reveal .right-80{right:80%}.reveal .right-85{right:85%}.reveal .right-90{right:90%}.reveal .right-95{right:95%}.reveal .right-100{right:100%}

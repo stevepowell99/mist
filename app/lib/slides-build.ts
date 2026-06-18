@@ -153,7 +153,18 @@ function parseAttrs(attr: string): { classes: string[]; id: string | null; style
   if (wM && !/\bwidth\s*:/.test(styles.join(";"))) styles.push(`width:${wM[1]}`);
   const hM = attr.match(/\bheight="?([\d.]+(?:%|px|em|rem|vh)?)"?/);
   if (hM && !/\bheight\s*:/.test(styles.join(";"))) styles.push(`height:${hM[1]}`);
-  return { classes, id: idM ? idM[1] : null, style: styles.join(";") };
+  // Position attrs: top=/left=/right=/bottom= become style declarations.
+  for (const key of ["top", "left", "right", "bottom"]) {
+    const m = attr.match(new RegExp(`\\b${key}="?([\\d.]+(?:%|px|em|rem|v[wh])?)"?`));
+    if (m && !new RegExp(`(^|;)\\s*${key}\\s*:`).test(styles.join(";"))) styles.push(`${key}:${m[1]}`);
+  }
+  let style = styles.join(";");
+  // Any coordinate (from a step style or a top=/left= attr) floats the block, so
+  // position it without needing a separate .place class.
+  if (/(^|;)\s*(top|left|right|bottom)\s*:/.test(style) && !/(^|;)\s*position\s*:/.test(style)) {
+    style = `position:absolute;z-index:20;${style}`;
+  }
+  return { classes, id: idM ? idM[1] : null, style };
 }
 
 function attrString(classes: string[], id: string | null, style: string): string {

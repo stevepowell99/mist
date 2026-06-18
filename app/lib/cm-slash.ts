@@ -98,8 +98,8 @@ const SLASH_COMMANDS: Completion[] = [
     boost: 44,
   }),
   snippetCompletion(
-    '::: {.place style="top:${1:50}%; left:${2:50}%"}\n\n${3}\n\n:::\n\n${}',
-    { label: "/place", detail: "float a block anywhere (top/left %)", type: "keyword", boost: 51 },
+    '::: {style="top:${1:50}%; left:${2:50}%"}\n\n${3}\n\n:::\n\n${}',
+    { label: "/place", detail: "float a block anywhere (just give top/left %)", type: "keyword", boost: 51 },
   ),
   // Component + colour: inserts the component class then opens the picker for the
   // colour (you then add .light/.dark or .cascade-2 by typing another `.`).
@@ -152,21 +152,21 @@ const SLASH_COMMANDS: Completion[] = [
   // Outline shapes: opens the colour picker for the outline (skip it for the
   // default red), then tab through the exact top/left % (edit for precise
   // placement) to an optional centred label. Resize with .scale- or width/height.
-  classSnippet('::: {.rectangle .${1} .place .scale-75 style="top:${2:40}%; left:${3:40}%"}\n\n${4}\n\n:::\n\n${}', {
+  classSnippet('::: {.rectangle .${1} .scale-75 style="top:${2:40}%; left:${3:40}%"}\n\n${4}\n\n:::\n\n${}', {
     label: "/rectangle",
-    detail: "outline rectangle: colour, exact top/left %, label",
+    detail: "outline rectangle: outline colour, top/left %, label (add .bg-<colour> to fill)",
     type: "keyword",
     boost: 40,
   }),
-  classSnippet('::: {.circle .${1} .place .scale-75 style="top:${2:40}%; left:${3:40}%"}\n\n${4}\n\n:::\n\n${}', {
+  classSnippet('::: {.circle .${1} .scale-75 style="top:${2:40}%; left:${3:40}%"}\n\n${4}\n\n:::\n\n${}', {
     label: "/circle",
-    detail: "outline circle: colour, exact top/left %, label",
+    detail: "outline circle: outline colour, top/left %, label (add .bg-<colour> to fill)",
     type: "keyword",
     boost: 40,
   }),
-  classSnippet('::: {.oval .${1} .place .scale-75 style="top:${2:40}%; left:${3:40}%"}\n\n${4}\n\n:::\n\n${}', {
+  classSnippet('::: {.oval .${1} .scale-75 style="top:${2:40}%; left:${3:40}%"}\n\n${4}\n\n:::\n\n${}', {
     label: "/oval",
-    detail: "outline oval: colour, exact top/left %, label",
+    detail: "outline oval: outline colour, top/left %, label (add .bg-<colour> to fill)",
     type: "keyword",
     boost: 40,
   }),
