@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { EditorView } from "@codemirror/view";
 import { extractOutlineFromText, moveSection, sectionEnd, toggleHiddenText, type OutlineItem } from "~/lib/outline";
 import { slideIndexForOffset } from "~/lib/slide-cursor";
@@ -17,7 +17,10 @@ export default function OutlinePanel({
   deck,
   canEdit,
   peers = [],
+  currentSlide = null,
+  overlay = false,
   onClose,
+  onMouseLeave,
 }: {
   view: EditorView | null;
   text: string;
@@ -25,7 +28,13 @@ export default function OutlinePanel({
   canEdit: boolean;
   /** Other connected users, for the per-slide presence markers (decks). */
   peers?: Peer[];
+  /** The flat slide index currently shown (deck), so the row is highlighted. */
+  currentSlide?: number | null;
+  /** Float over the deck (the presenting peek) rather than sit in the layout. */
+  overlay?: boolean;
   onClose: () => void;
+  /** Used by the overlay peek to close when the pointer leaves it. */
+  onMouseLeave?: () => void;
 }) {
   const [maxLevel, setMaxLevel] = useState(3);
   const items = useMemo(() => extractOutlineFromText(text), [text]);
@@ -56,6 +65,25 @@ export default function OutlinePanel({
     },
     [view],
   );
+
+  // Clicking a row: a deck navigates the slide preview (the editor cursor then
+  // follows via reverse sync); a document scrolls the editor to the heading.
+  const pick = useCallback(
+    (item: OutlineItem) => {
+      if (deck) {
+        window.dispatchEvent(new CustomEvent("mist-goto-slide", { detail: slideIndexForOffset(text, item.pos) }));
+      } else {
+        jump(item.pos);
+      }
+    },
+    [deck, text, jump],
+  );
+
+  // Keep the current slide's row in view as the deck moves.
+  const activeRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    activeRef.current?.scrollIntoView({ block: "nearest" });
+  }, [currentSlide]);
 
   const toggleHidden = useCallback(
     (item: OutlineItem) => {
@@ -103,7 +131,14 @@ export default function OutlinePanel({
   );
 
   return (
-    <aside className="panel-slide-left hidden w-64 shrink-0 flex-col overflow-hidden border-r border-border bg-paper lg:flex">
+    <aside
+      onMouseLeave={overlay ? onMouseLeave : undefined}
+      className={
+        overlay
+          ? "absolute inset-y-0 left-0 z-50 flex w-64 flex-col overflow-hidden border-r border-border bg-paper shadow-2xl"
+          : "panel-slide-left hidden w-64 shrink-0 flex-col overflow-hidden border-r border-border bg-paper lg:flex"
+      }
+    >
       <div className="flex shrink-0 items-center justify-between border-b border-border px-3 py-2">
         <span className="text-sm uppercase tracking-wider text-muted">{deck ? "Slides" : "Outline"}</span>
         <button
@@ -132,9 +167,12 @@ export default function OutlinePanel({
       )}
       <div className="flex-1 overflow-y-auto py-1">
         {shown.length === 0 && <p className="px-3 py-2 text-sm text-muted">No headings.</p>}
-        {shown.map((item, i) => (
+        {shown.map((item, i) => {
+          const active = deck && currentSlide != null && slideIndexForOffset(text, item.pos) === currentSlide;
+          return (
           <div
             key={`${item.pos}-${i}`}
+            ref={active ? activeRef : undefined}
             onDragOver={(e) => {
               if (dragIdx == null) return;
               e.preventDefault();
@@ -148,7 +186,7 @@ export default function OutlinePanel({
               setDragIdx(null);
               setOverIdx(null);
             }}
-            className={`group flex items-center gap-1 pr-1 ${item.hidden ? "opacity-45" : ""} ${dragIdx === i ? "opacity-40" : ""} ${
+            className={`group flex items-center gap-1 pr-1 ${active ? "bg-chartreuse/25" : ""} ${item.hidden ? "opacity-45" : ""} ${dragIdx === i ? "opacity-40" : ""} ${
               overIdx === i && dragIdx !== i ? (overBelow ? "border-b-2 border-coral" : "border-t-2 border-coral") : ""
             }`}
             style={{ paddingLeft: `${0.5 + (item.level - 1) * 0.9}rem` }}
@@ -177,9 +215,9 @@ export default function OutlinePanel({
             )}
             <button
               type="button"
-              onClick={() => jump(item.pos)}
+              onClick={() => pick(item)}
               title={item.title}
-              className={`flex-1 truncate py-1 text-left text-sm hover:text-coral ${item.level === 1 ? "font-semibold" : ""} ${item.hidden ? "line-through" : ""}`}
+              className={`flex-1 truncate py-1 text-left text-sm hover:text-coral ${item.level === 1 ? "font-semibold" : ""} ${active ? "text-ink" : ""} ${item.hidden ? "line-through" : ""}`}
             >
               {item.title}
             </button>
@@ -219,7 +257,8 @@ export default function OutlinePanel({
               </button>
             )}
           </div>
-        ))}
+          );
+        })}
       </div>
     </aside>
   );

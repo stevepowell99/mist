@@ -841,7 +841,16 @@ function DocumentLayout({ id }: { id: string }) {
             Paused while idle, click to reconnect
           </button>
         )}
-        <div ref={contentRef} className="flex flex-1 overflow-hidden">
+        <div ref={contentRef} className="relative flex flex-1 overflow-hidden">
+          {/* When the deck fills the pane (presenting), a thin left-edge zone
+              peeks the slide list on hover; Ctrl/Cmd+Alt+D toggles it too. */}
+          {slidesFull && !outlineOpen && (
+            <div
+              onMouseEnter={() => setOutlineOpen(true)}
+              title="Slides (hover, or Ctrl/Cmd+Alt+D)"
+              className="absolute inset-y-0 left-0 z-40 w-3 cursor-pointer bg-gradient-to-r from-border/70 to-transparent"
+            />
+          )}
           {outlineOpen && (
             <OutlinePanel
               view={editorView}
@@ -849,7 +858,10 @@ function DocumentLayout({ id }: { id: string }) {
               deck={deck}
               canEdit={role === "edit"}
               peers={peers}
+              currentSlide={localSlide}
+              overlay={slidesFull}
               onClose={() => setOutlineOpen(false)}
+              onMouseLeave={slidesFull ? () => setOutlineOpen(false) : undefined}
             />
           )}
           <main
