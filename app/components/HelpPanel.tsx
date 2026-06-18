@@ -128,6 +128,50 @@ const FILES: { name: string; desc: string }[] = [
   { name: "Library", desc: "The header gallery button (or /library) inserts reusable slides and images from the shared library folder." },
 ];
 
+// The Overview tab: everything gmist does, grouped. A newcomer's first page.
+const FEATURES: { title: string; items: string[] }[] = [
+  {
+    title: "Documents & decks",
+    items: [
+      "Edit any Markdown file from Google Drive, like Google Docs for .md / .qmd",
+      "Add format: revealjs to the frontmatter and the same file is a slide deck",
+      "Editor, split (editor + live preview) and preview-only views",
+    ],
+  },
+  {
+    title: "Writing",
+    items: [
+      "A / menu inserts structures; a . menu autocompletes the styling classes",
+      "@ picks a citation from a .bib, rendered to APA with a reference list",
+      "Tables, math, mermaid and images (paste, by path, or drive: by id)",
+    ],
+  },
+  {
+    title: "Review",
+    items: [
+      "Suggest mode records edits as CriticMarkup; accept or reject them",
+      "Threaded comments and highlights, anchored to the text",
+    ],
+  },
+  {
+    title: "Slides",
+    items: [
+      "A composable framework: components, colour / fill / border / theme colours, shade, scale, opacity, placement",
+      "Eight themes (causal-map, qualia, brutalist, editorial, blackboard, moonshot, handwritten, minimal)",
+      "A shared library of reusable slides and images",
+      "One Present mode (Ctrl/Cmd+Alt+P or F): fullscreen, with a presenter card (timer, next slide, notes)",
+    ],
+  },
+  {
+    title: "Drive & sharing",
+    items: [
+      "Open and browse Drive in a sidebar; edits autosave back, conflict-safe",
+      "Share by a secret link with an edit or a suggest role; readers sign in to pass the file's Drive sharing",
+      "The same file round-trips with Obsidian and a local editor",
+    ],
+  },
+];
+
 const TIPS = [
   "Set theme: causal-map | qualia | brutalist | editorial | blackboard | moonshot | handwritten | minimal in the YAML to restyle the whole deck or doc; ::: {.brand} drops the theme's logo in the corner.",
   "Edits save to Drive automatically, on a short pause after you stop typing.",
@@ -157,16 +201,25 @@ function Row({ keys, label }: Shortcut) {
   );
 }
 
+/** A titled grey panel, so each group of help reads as its own block. */
+function Group({ title, children, className = "" }: { title?: string; children: React.ReactNode; className?: string }) {
+  return (
+    <section className={`rounded-lg bg-border/25 p-4 ${className}`}>
+      {title && <h3 className="mb-2 text-sm font-semibold uppercase tracking-wider text-ink/75">{title}</h3>}
+      {children}
+    </section>
+  );
+}
+
 function Section({ title, items }: { title: string; items: Shortcut[] }) {
   return (
-    <div>
-      <h3 className="mb-1 text-sm font-semibold uppercase tracking-wider text-ink/75">{title}</h3>
+    <Group title={title}>
       <div className="divide-y divide-border/60">
         {items.map((s) => (
           <Row key={s.label} {...s} />
         ))}
       </div>
-    </div>
+    </Group>
   );
 }
 
@@ -196,7 +249,7 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
 
 export default function HelpPanel() {
   const [open, setOpen] = useState(false);
-  const [tab, setTab] = useState<"shortcuts" | "styling" | "sharing" | "files">("shortcuts");
+  const [tab, setTab] = useState<"overview" | "shortcuts" | "styling" | "sharing" | "files">("overview");
   // auto: this is the once-a-session intro (no dark backdrop, flies to the
   // button). flyOut: mid-flight to the corner. pulse: ring the button after.
   const [auto, setAuto] = useState(false);
@@ -302,6 +355,9 @@ export default function HelpPanel() {
             <div className="flex items-center justify-between border-b border-border px-5 py-3">
               <div className="flex items-center gap-1">
                 <h2 className="mr-3 font-medium text-ink">Help</h2>
+                <TabButton active={tab === "overview"} onClick={() => setTab("overview")}>
+                  Overview
+                </TabButton>
                 <TabButton active={tab === "shortcuts"} onClick={() => setTab("shortcuts")}>
                   Shortcuts
                 </TabButton>
@@ -325,142 +381,163 @@ export default function HelpPanel() {
               </button>
             </div>
 
+            {tab === "overview" && (
+              <div className="grid items-start gap-4 px-5 py-4 sm:grid-cols-2">
+                {FEATURES.map((f) => (
+                  <Group key={f.title} title={f.title}>
+                    <ul className="list-disc space-y-1 pl-4 text-base text-ink/80">
+                      {f.items.map((it) => (
+                        <li key={it}>{it}</li>
+                      ))}
+                    </ul>
+                  </Group>
+                ))}
+              </div>
+            )}
             {tab === "shortcuts" && (
-              <div className="grid gap-x-10 gap-y-6 px-5 py-4 sm:grid-cols-2">
+              <div className="grid items-start gap-4 px-5 py-4 sm:grid-cols-2">
                 <Section title="View &amp; mode" items={LAYOUT} />
                 <Section title="Panels" items={PANELS} />
                 <Section title="Editor" items={EDITOR} />
-                <div className="flex flex-col gap-6">
+                <div className="flex flex-col gap-4">
                   <Section title="Slides preview" items={SLIDES} />
-                  <div>
-                    <h3 className="mb-1 text-sm font-semibold uppercase tracking-wider text-ink/75">Tips</h3>
+                  <Group title="Tips">
                     <ul className="list-disc space-y-1 pl-4 text-base text-ink/75">
                       {TIPS.map((t) => (
                         <li key={t}>{t}</li>
                       ))}
                     </ul>
-                  </div>
+                  </Group>
                 </div>
               </div>
             )}
             {tab === "styling" && (
-              <div className="px-5 py-4">
-                <h3 className="mb-1 text-sm font-semibold uppercase tracking-wider text-ink/75">Deck &amp; doc settings (YAML)</h3>
-                <p className="mb-3 text-base text-ink/75">
-                  Put these at the top of the file, top-level or under{" "}
-                  <span className="font-mono text-ink">format: revealjs:</span> (both are read). The slide size is
-                  fixed at 1280&times;720, so <span className="font-mono text-ink">width</span>/
-                  <span className="font-mono text-ink">height</span> and other Quarto reveal keys are ignored.{" "}
-                  <span className="font-mono text-ink">{"::: {.brand}"}</span> drops the theme&apos;s logo in the
-                  top-left (Causal Map by default, the QualiaInterviews wordmark for the qualia theme).
-                </p>
-                <div className="mb-6 grid gap-x-10 sm:grid-cols-2">
-                  {DECK_SETTINGS.map((s) => (
-                    <div key={s.key} className="flex items-baseline justify-between gap-3 border-b border-border/60 py-2">
-                      <span className="font-mono text-base text-ink">{s.key}</span>
-                      <span className="text-right text-sm text-ink/75">{s.val}</span>
-                    </div>
-                  ))}
-                </div>
-
-                <h3 className="mb-1 text-sm font-semibold uppercase tracking-wider text-ink/75">Slash commands</h3>
-                <p className="mb-3 text-base text-ink/75">
-                  Type <Kbd>/</Kbd> at the start of a line (or after a space) to insert a structure; with text
-                  selected, <Kbd>/</Kbd> wraps it. In suggest mode the insert lands as one suggested block.
-                </p>
-                <div className="mb-6 grid gap-x-10 sm:grid-cols-2">
-                  {SLASH_HELP.map((s) => (
-                    <div key={s.cmd} className="flex items-baseline justify-between gap-3 border-b border-border/60 py-2">
-                      <span className="font-mono text-base text-ink">{s.cmd}</span>
-                      <span className="text-right text-sm text-ink/75">{s.detail}</span>
-                    </div>
-                  ))}
-                </div>
-
-                <h3 className="mb-1 text-sm font-semibold uppercase tracking-wider text-ink/75">Slide classes</h3>
-                <p className="mb-3 text-base text-ink/75">
-                  Style an element by composing a <span className="text-ink">component</span> + a{" "}
-                  <span className="text-ink">colour</span> + optional <span className="text-ink">modifiers</span>. Type{" "}
-                  <Kbd>.</Kbd> inside <span className="font-mono text-ink">{"{ }"}</span> or after a{" "}
-                  <span className="font-mono text-ink">:::</span> to autocomplete from this deck&apos;s CSS.
-                </p>
-                <div className="grid gap-x-10 gap-y-3 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    {CLASS_GROUPS.map((g) => (
-                      <div key={g.title} className="text-base">
-                        <span className="mr-2 inline-block w-24 shrink-0 text-sm uppercase tracking-wider text-ink/75">
-                          {g.title}
-                        </span>
-                        <span className="font-mono text-ink">{g.items}</span>
+              <div className="flex flex-col gap-4 px-5 py-4">
+                <Group title="Deck &amp; doc settings (YAML)">
+                  <p className="mb-3 text-base text-ink/75">
+                    Put these at the top of the file, top-level or under{" "}
+                    <span className="font-mono text-ink">format: revealjs:</span> (both are read). The slide size is
+                    fixed at 1280&times;720, so <span className="font-mono text-ink">width</span>/
+                    <span className="font-mono text-ink">height</span> and other Quarto reveal keys are ignored.{" "}
+                    <span className="font-mono text-ink">{"::: {.brand}"}</span> drops the theme&apos;s logo in the
+                    top-left (Causal Map by default, the QualiaInterviews wordmark for the qualia theme).
+                  </p>
+                  <div className="grid gap-x-10 sm:grid-cols-2">
+                    {DECK_SETTINGS.map((s) => (
+                      <div key={s.key} className="flex items-baseline justify-between gap-3 border-b border-border/60 py-2">
+                        <span className="font-mono text-base text-ink">{s.key}</span>
+                        <span className="text-right text-sm text-ink/75">{s.val}</span>
                       </div>
                     ))}
                   </div>
-                  <div className="space-y-2">
-                    {CLASS_EXAMPLES.map((e) => (
-                      <div key={e.code}>
-                        <pre className="overflow-x-auto rounded border border-border bg-border/30 px-2 py-2 font-mono text-sm text-ink">
-                          {e.code}
-                        </pre>
-                        <span className="text-sm text-ink/75">{e.note}</span>
+                </Group>
+
+                <Group title="Slash commands">
+                  <p className="mb-3 text-base text-ink/75">
+                    Type <Kbd>/</Kbd> at the start of a line (or after a space) to insert a structure; with text
+                    selected, <Kbd>/</Kbd> wraps it. In suggest mode the insert lands as one suggested block.
+                  </p>
+                  <div className="grid gap-x-10 sm:grid-cols-2">
+                    {SLASH_HELP.map((s) => (
+                      <div key={s.cmd} className="flex items-baseline justify-between gap-3 border-b border-border/60 py-2">
+                        <span className="font-mono text-base text-ink">{s.cmd}</span>
+                        <span className="text-right text-sm text-ink/75">{s.detail}</span>
                       </div>
                     ))}
                   </div>
-                </div>
+                </Group>
+
+                <Group title="Slide classes">
+                  <p className="mb-3 text-base text-ink/75">
+                    Style an element by composing a <span className="text-ink">component</span> + a{" "}
+                    <span className="text-ink">colour</span> + optional <span className="text-ink">modifiers</span>. Type{" "}
+                    <Kbd>.</Kbd> inside <span className="font-mono text-ink">{"{ }"}</span> or after a{" "}
+                    <span className="font-mono text-ink">:::</span> to autocomplete from this deck&apos;s CSS.
+                  </p>
+                  <div className="grid gap-x-10 gap-y-3 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      {CLASS_GROUPS.map((g) => (
+                        <div key={g.title} className="text-base">
+                          <span className="mr-2 inline-block w-24 shrink-0 text-sm uppercase tracking-wider text-ink/75">
+                            {g.title}
+                          </span>
+                          <span className="font-mono text-ink">{g.items}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="space-y-2">
+                      {CLASS_EXAMPLES.map((e) => (
+                        <div key={e.code}>
+                          <pre className="overflow-x-auto rounded border border-border bg-paper px-2 py-2 font-mono text-sm text-ink">
+                            {e.code}
+                          </pre>
+                          <span className="text-sm text-ink/75">{e.note}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </Group>
               </div>
             )}
             {tab === "sharing" && (
-              <div className="px-5 py-4">
-                <h3 className="mb-1 text-sm font-semibold uppercase tracking-wider text-ink/75">Who can open it</h3>
-                <p className="mb-4 text-base text-ink/75">
-                  The secret link is not enough on its own: a reader must be signed in with a Google account the file
-                  is shared with in Drive. Drive sharing is the source of truth, and the effective role is the more
-                  restrictive of the link and the file&apos;s own sharing. Collaborators need no gmist account.
-                </p>
+              <div className="flex flex-col gap-4 px-5 py-4">
+                <Group title="Who can open it">
+                  <p className="text-base text-ink/75">
+                    The secret link is not enough on its own: a reader must be signed in with a Google account the file
+                    is shared with in Drive. Drive sharing is the source of truth, and the effective role is the more
+                    restrictive of the link and the file&apos;s own sharing. Collaborators need no gmist account.
+                  </p>
+                </Group>
 
-                <h3 className="mb-1 text-sm font-semibold uppercase tracking-wider text-ink/75">Share menu</h3>
-                <p className="mb-3 text-base text-ink/75">
-                  From the <span className="text-ink">Share</span> button in the top bar.
-                </p>
-                <div className="mb-6 grid gap-x-10 sm:grid-cols-2">
-                  {SHARE_MENU.map((s) => (
-                    <DefRow key={s.name} name={s.name} desc={s.desc} />
-                  ))}
-                </div>
+                <Group title="Share menu">
+                  <p className="mb-3 text-base text-ink/75">
+                    From the <span className="text-ink">Share</span> button in the top bar.
+                  </p>
+                  <div className="grid gap-x-10 sm:grid-cols-2">
+                    {SHARE_MENU.map((s) => (
+                      <DefRow key={s.name} name={s.name} desc={s.desc} />
+                    ))}
+                  </div>
+                </Group>
 
-                <h3 className="mb-1 text-sm font-semibold uppercase tracking-wider text-ink/75">Comments &amp; suggestions</h3>
-                <p className="mb-3 text-base text-ink/75">
-                  Select text and press <Kbd>{MOD}</Kbd> <Kbd>Shift</Kbd> <Kbd>M</Kbd> to comment: it wraps the
-                  selection as <span className="font-mono text-ink">{"{==text==}{>>note<<}"}</span>, or drops a point
-                  note <span className="font-mono text-ink">{"{>>note<<}"}</span> at the cursor. In{" "}
-                  <span className="text-ink">Suggest mode</span> your edits become CriticMarkup{" "}
-                  (<span className="font-mono text-ink">{"{++added++}"}</span> /{" "}
-                  <span className="font-mono text-ink">{"{--deleted--}"}</span>) rather than changing the text
-                  directly. An edit-link holder accepts or rejects them, one at a time or all at once, from the
-                  comments panel.
-                </p>
-                <div className="divide-y divide-border/60 sm:w-1/2">
-                  {REVIEW.map((s) => (
-                    <Row key={s.label} {...s} />
-                  ))}
-                </div>
+                <Group title="Comments &amp; suggestions">
+                  <p className="mb-3 text-base text-ink/75">
+                    Select text and press <Kbd>{MOD}</Kbd> <Kbd>Shift</Kbd> <Kbd>M</Kbd> to comment: it wraps the
+                    selection as <span className="font-mono text-ink">{"{==text==}{>>note<<}"}</span>, or drops a point
+                    note <span className="font-mono text-ink">{"{>>note<<}"}</span> at the cursor. In{" "}
+                    <span className="text-ink">Suggest mode</span> your edits become CriticMarkup{" "}
+                    (<span className="font-mono text-ink">{"{++added++}"}</span> /{" "}
+                    <span className="font-mono text-ink">{"{--deleted--}"}</span>) rather than changing the text
+                    directly. An edit-link holder accepts or rejects them, one at a time or all at once, from the
+                    comments panel.
+                  </p>
+                  <div className="divide-y divide-border/60 sm:w-1/2">
+                    {REVIEW.map((s) => (
+                      <Row key={s.label} {...s} />
+                    ))}
+                  </div>
+                </Group>
               </div>
             )}
             {tab === "files" && (
-              <div className="px-5 py-4">
-                <h3 className="mb-1 text-sm font-semibold uppercase tracking-wider text-ink/75">Drive files</h3>
-                <p className="mb-3 text-base text-ink/75">
-                  Every gmist document is a real Markdown file in Google Drive. It is the same file whether you open
-                  it here, in Obsidian or on disk.
-                </p>
-                <div className="mb-6 grid gap-x-10 sm:grid-cols-2">
-                  {FILES.map((f) => (
-                    <DefRow key={f.name} name={f.name} desc={f.desc} />
-                  ))}
-                </div>
-                <p className="text-base text-ink/75">
-                  Live editing by several people at once is not a goal; gmist is for one writer at a time plus async
-                  review. See the Sharing &amp; review tab for comments and suggestions.
-                </p>
+              <div className="flex flex-col gap-4 px-5 py-4">
+                <Group title="Drive files">
+                  <p className="mb-3 text-base text-ink/75">
+                    Every gmist document is a real Markdown file in Google Drive. It is the same file whether you open
+                    it here, in Obsidian or on disk.
+                  </p>
+                  <div className="grid gap-x-10 sm:grid-cols-2">
+                    {FILES.map((f) => (
+                      <DefRow key={f.name} name={f.name} desc={f.desc} />
+                    ))}
+                  </div>
+                </Group>
+                <Group>
+                  <p className="text-base text-ink/75">
+                    Live editing by several people at once is not a goal; gmist is for one writer at a time plus async
+                    review. See the Sharing &amp; review tab for comments and suggestions.
+                  </p>
+                </Group>
               </div>
             )}
           </div>
