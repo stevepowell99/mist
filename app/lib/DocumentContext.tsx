@@ -319,6 +319,10 @@ export function DocumentProvider({
       try {
         const m = JSON.parse(e.data) as { type?: string; hash?: string; name?: string | null };
         if (m.type === "committed" && typeof m.hash === "string") {
+          // The agent's committed hash is authoritative; mark the baseline set so
+          // the mid-load local snapshot below does not overwrite it with a stale
+          // (pre-threads) hash.
+          baselineSetRef.current = true;
           setLastCommittedHash(m.hash);
           setConflict(false);
         } else if (m.type === "conflict") {
