@@ -156,12 +156,14 @@
    padding when combined; inline `[text]{.bg-pink}` spans (not divs) stay flat. */
 :where(.reveal,.preview) div:where([class*="bg-"], [class*="border-"]) { padding: var(--box-pad); border-radius: 6px; }
 
-/* AXIS: SHADE / ALIGN / TIMING */
-/* Shade also sets the text colour directly (readable on the fill), so a box
-   component never has to force its own colour and a plain `.teal` keeps tinting
-   the text. */
-:is(.reveal,.preview) .light { --fill: var(--hue-pale); --text: var(--ink); color: var(--ink); }
-:is(.reveal,.preview) .dark  { --fill: var(--hue-deep); --text: #fff; color: #fff; }
+/* AXIS: SHADE. .light / .dark fill with the PALE / DEEP version of the element's
+   colour and set a readable text colour (so a box never forces its own and a bare
+   .teal keeps tinting text). With NO colour they fall back to the THEME: .dark is
+   the theme's ink surface with page-colour text, .light a muted surface with ink
+   text, so the shade always relates to the active theme. For a specific theme
+   surface use .bg-ink / .bg-accent / .bg-page instead. */
+:is(.reveal,.preview) .light { --fill: var(--hue-pale, var(--muted)); --text: var(--ink); color: var(--ink); }
+:is(.reveal,.preview) .dark  { --fill: var(--hue-deep, var(--ink)); --text: var(--on, var(--slide-bg)); color: var(--on, var(--slide-bg)); }
 :is(.reveal,.preview) .left   { text-align: left; }
 :is(.reveal,.preview) .center { text-align: center; }
 :is(.reveal,.preview) .right  { text-align: right; }
