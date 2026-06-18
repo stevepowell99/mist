@@ -8,8 +8,28 @@ import DriveBrowser from "~/components/DriveBrowser";
  * show). The trigger sits in the header.
  */
 
+interface DocInfo {
+  file: {
+    name: string;
+    modifiedTime: string | null;
+    size: number | null;
+    owners: { name: string; email?: string }[];
+    lastModifiedBy: { name: string; email?: string } | null;
+    webViewLink: string | null;
+  } | null;
+  log: { ts: number; event: string; detail: string }[];
+}
+
+const fmtDate = (iso: string | null) =>
+  iso
+    ? new Date(iso).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
+    : "unknown";
+const fmtSize = (n: number | null) => (n == null ? "" : n < 1024 ? `${n} B` : n < 1024 * 1024 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`);
+const fmtTime = (ts: number) => new Date(ts).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+
 export default function FolderSidebar() {
-  const { drive } = useDocument();
+  const { drive, docId, docKey } = useDocument();
+  const [info, setInfo] = useState<DocInfo | null>(null);
   // Pinned by a click (stays, with a backdrop) or peeked by hover (closes when
   // the mouse leaves the trigger or panel), mirroring the right comment panel.
   // The trigger and panel are separate regions with a gap, so a short close
@@ -43,6 +63,25 @@ export default function FolderSidebar() {
     window.addEventListener("mist-toggle-folder", toggle);
     return () => window.removeEventListener("mist-toggle-folder", toggle);
   }, []);
+
+  // Refresh the current file's details + sync log each time the panel opens, so
+  // the modified time and the trail are current.
+  useEffect(() => {
+    if (!open || !docId) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(`/drive/docinfo?id=${encodeURIComponent(docId)}&k=${encodeURIComponent(docKey ?? "")}`);
+        const body = (await res.json()) as DocInfo;
+        if (!cancelled) setInfo(body);
+      } catch {
+        /* details are best-effort */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, docId, docKey]);
 
   if (!drive) return null;
 
@@ -105,6 +144,40 @@ export default function FolderSidebar() {
               &times;
             </button>
           </div>
+          {/* This file: richer Drive metadata + the sync diagnostic trail. */}
+          {info?.file && (
+            <div className="shrink-0 border-b border-border bg-border/20 px-4 py-3 text-sm">
+              <div className="mb-1 flex items-baseline justify-between gap-2">
+                <span className="truncate font-medium text-ink" title={info.file.name}>{info.file.name}</span>
+                {info.file.webViewLink && (
+                  <a href={info.file.webViewLink} target="_blank" rel="noreferrer" className="shrink-0 text-xs text-ink/60 underline hover:text-ink">
+                    open in Drive
+                  </a>
+                )}
+              </div>
+              <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-ink/75">
+                <dt className="text-ink/55">Modified</dt>
+                <dd>{fmtDate(info.file.modifiedTime)}</dd>
+                {info.file.lastModifiedBy && (<><dt className="text-ink/55">By</dt><dd className="truncate">{info.file.lastModifiedBy.name}</dd></>)}
+                {info.file.owners.length > 0 && (<><dt className="text-ink/55">Owner</dt><dd className="truncate">{info.file.owners.map((o) => o.name).join(", ")}</dd></>)}
+                {info.file.size != null && (<><dt className="text-ink/55">Size</dt><dd>{fmtSize(info.file.size)}</dd></>)}
+              </dl>
+              {info.log.length > 0 && (
+                <details className="mt-2">
+                  <summary className="cursor-pointer text-xs uppercase tracking-wider text-ink/55 hover:text-ink">Sync activity ({info.log.length})</summary>
+                  <ul className="mt-1 max-h-40 space-y-0.5 overflow-y-auto font-mono text-xs text-ink/70">
+                    {info.log.map((e, i) => (
+                      <li key={i} className="flex gap-2">
+                        <span className="shrink-0 text-ink/45">{fmtTime(e.ts)}</span>
+                        <span className="shrink-0 text-ink">{e.event}</span>
+                        {e.detail && <span className="truncate text-ink/60" title={e.detail}>{e.detail}</span>}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+            </div>
+          )}
           {drive ? (
             <DriveBrowser startFolderId={drive.folderId ?? null} currentFileId={drive.fileId} active={open} className="flex-1" />
           ) : null}

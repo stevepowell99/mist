@@ -68,6 +68,15 @@ class DocumentAgent extends Agent {
         value BLOB
       )
     `;
+    // A diagnostic trail of sync decisions (open / adopt / conflict / save), so a
+    // "why is it showing the old version" can be answered after the fact.
+    this.sql`
+      CREATE TABLE IF NOT EXISTS sync_log (
+        ts INTEGER,
+        event TEXT,
+        detail TEXT
+      )
+    `;
 
     // Load persisted state
     const rows = this.sql<{ value: ArrayBuffer }>`
@@ -117,6 +126,23 @@ class DocumentAgent extends Agent {
     return rows.length > 0 ? new TextDecoder().decode(new Uint8Array(rows[0].value)) : null;
   }
 
+  /** Append a sync event to the diagnostic trail, pruned to the last 200. */
+  private logSync(event: string, detail = ""): void {
+    try {
+      this.sql`INSERT INTO sync_log (ts, event, detail) VALUES (${Date.now()}, ${event}, ${detail})`;
+      this.sql`DELETE FROM sync_log WHERE rowid NOT IN (SELECT rowid FROM sync_log ORDER BY ts DESC LIMIT 200)`;
+    } catch {
+      // diagnostics are best-effort; never let logging break a sync path
+    }
+  }
+
+  private readSyncLog(): { ts: number; event: string; detail: string }[] {
+    const rows = this.sql<{ ts: number; event: string; detail: string }>`
+      SELECT ts, event, detail FROM sync_log ORDER BY ts DESC LIMIT 200
+    `;
+    return rows.map((r) => ({ ts: Number(r.ts), event: r.event, detail: r.detail }));
+  }
+
   private ensureKeys(): { editKey: string; suggestKey: string } {
     let editKey = this.readStoredText("editKey");
     let suggestKey = this.readStoredText("suggestKey");
@@ -158,11 +184,13 @@ class DocumentAgent extends Agent {
     // suppress the pull right after a reload), so clear it first. The version
     // check inside still skips the pull when nothing actually changed. Never let
     // a Drive hiccup break the connect.
+    this.logSync("open", this.roleForKey(k) ?? "");
     try {
       this.lastUpstreamCheck = 0;
       await this.checkUpstream(false);
-    } catch {
+    } catch (err) {
       // upstream check is best-effort; fall through to sync the current state
+      this.logSync("upstream-error", err instanceof Error ? err.message : "read failed");
     }
 
     // Send SyncStep1 to the new client
@@ -405,10 +433,11 @@ class DocumentAgent extends Agent {
     // the file's own frontmatter verbatim (its `mist:` block removed, threads live
     // in the map), then the body. So an adopt never leaks the mist YAML into the
     // editor and the body stays comparable to Drive on the next check.
-    const adopt = () => {
+    const adopt = (why: string) => {
       const d = deserializeThreads(text);
       this.replaceBodyFromText(serializeThreads(d.body, [], d.frontmatter));
       setBaseline();
+      this.logSync("adopt-drive", `${why}; ${d.body.length} chars`);
       this.broadcast(JSON.stringify({ type: "reloaded", hash: quickHash(d.body) }));
     };
 
@@ -429,7 +458,7 @@ class DocumentAgent extends Agent {
           // best-effort snapshot; do not block the reload on it
         }
       }
-      adopt();
+      adopt("forced reload");
       return;
     }
 
@@ -438,7 +467,7 @@ class DocumentAgent extends Agent {
       // truth (the doc was last left saved; it was edited elsewhere since). Safe
       // to adopt without asking: our content is itself a Drive revision, so
       // Drive's own version history is the backstop, with no sibling clutter.
-      adopt();
+      adopt("clean reopen, drive newer");
       return;
     }
 
@@ -452,6 +481,7 @@ class DocumentAgent extends Agent {
       // best-effort: even if the sibling write fails we must not overwrite.
     }
     setBaseline();
+    this.logSync("conflict-fork", `unsaved edits + drive diverged; forked to ${savedAs ?? "(failed)"}`);
     this.broadcast(JSON.stringify({ type: "forked", name: savedAs }));
   }
 
@@ -502,10 +532,12 @@ class DocumentAgent extends Agent {
           ON CONFLICT(key) DO UPDATE SET value = excluded.value
         `;
       }
+      this.logSync("save", `${stripFrontmatter(pending).length} chars to Drive`);
       // broadcast() is the agents framework's send-to-all-connections helper.
       this.broadcast(JSON.stringify({ type: "committed", hash: quickHash(pending) }));
     } catch (err) {
       const conflict = err instanceof Error && /changed upstream/.test(err.message);
+      this.logSync(conflict ? "save-conflict" : "save-error", err instanceof Error ? err.message : "");
       if (conflict) this.broadcast(JSON.stringify({ type: "conflict" }));
       // Leave the edits pending: a conflict pauses auto-save (the client gates
       // on it) until the two versions are reconciled. We never clobber.
@@ -616,8 +648,21 @@ class DocumentAgent extends Agent {
     }
 
     if (request.method === "GET") {
-      // Check whether this document exists
       this.ensureInitialised();
+      const url = new URL(request.url);
+
+      // Diagnostic sync trail (open/adopt/conflict/save), for an authorised caller.
+      if (url.searchParams.has("synclog")) {
+        const k = url.searchParams.get("k");
+        if (!this.roleForKey(k)) return new Response("Not found", { status: 404 });
+        const driveRaw = this.readStoredText("drive");
+        return new Response(
+          JSON.stringify({ drive: driveRaw ? JSON.parse(driveRaw) : null, log: this.readSyncLog() }),
+          { headers: { "Content-Type": "application/json" } },
+        );
+      }
+
+      // Check whether this document exists
       const rows = this.sql<{ value: ArrayBuffer }>`
         SELECT value FROM doc_state WHERE key = 'exists'
       `;

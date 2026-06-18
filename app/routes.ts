@@ -16,6 +16,7 @@ export default [
   route("drive/resolve", "routes/drive.resolve.ts"),
   route("drive/fragment", "routes/drive.fragment.ts"),
   route("drive/bib", "routes/drive.bib.ts"),
+  route("drive/docinfo", "routes/drive.docinfo.ts"),
   route("drive/op", "routes/drive.op.ts"),
   route("auth/google", "routes/auth.google.ts"),
   route("auth/logout", "routes/auth.logout.ts"),

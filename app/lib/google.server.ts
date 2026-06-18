@@ -91,6 +91,47 @@ export async function driveGetMeta(token: string, fileId: string): Promise<Drive
   return { id: body.id, name: body.name, parents: body.parents, version: body.headRevisionId ?? null };
 }
 
+export interface DriveFileDetails {
+  id: string;
+  name: string;
+  modifiedTime: string | null;
+  size: number | null;
+  owners: { name: string; email?: string }[];
+  lastModifiedBy: { name: string; email?: string } | null;
+  webViewLink: string | null;
+}
+
+/** Richer human-facing metadata for the open file: when it changed, who owns it
+ *  and who touched it last, its size and a Drive link. For the file-details panel. */
+export async function driveFileDetails(token: string, fileId: string): Promise<DriveFileDetails> {
+  const fields =
+    "id,name,modifiedTime,size,webViewLink,owners(displayName,emailAddress),lastModifyingUser(displayName,emailAddress)";
+  const res = await fetch(`${DRIVE}/files/${fileId}?fields=${encodeURIComponent(fields)}&${COMMON}`, {
+    headers: authHeaders(token),
+  });
+  if (!res.ok) throw new Error(`Drive details failed (${res.status})`);
+  const b = (await res.json()) as {
+    id: string;
+    name: string;
+    modifiedTime?: string;
+    size?: string;
+    webViewLink?: string;
+    owners?: { displayName?: string; emailAddress?: string }[];
+    lastModifyingUser?: { displayName?: string; emailAddress?: string };
+  };
+  return {
+    id: b.id,
+    name: b.name,
+    modifiedTime: b.modifiedTime ?? null,
+    size: b.size ? Number(b.size) : null,
+    owners: (b.owners ?? []).map((o) => ({ name: o.displayName ?? "Unknown", email: o.emailAddress })),
+    lastModifiedBy: b.lastModifyingUser
+      ? { name: b.lastModifyingUser.displayName ?? "Unknown", email: b.lastModifyingUser.emailAddress }
+      : null,
+    webViewLink: b.webViewLink ?? null,
+  };
+}
+
 /** File text content plus its version token. */
 export async function driveRead(token: string, fileId: string): Promise<{ text: string; version: string | null }> {
   const meta = await driveGetMeta(token, fileId);
