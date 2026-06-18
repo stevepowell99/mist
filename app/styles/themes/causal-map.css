@@ -5,7 +5,7 @@
  * document .preview, so an un-themed document keeps its existing serif look in
  * both light and dark app modes. Selecting another theme opts a doc into being
  * restyled too. */
-:is(.reveal,.preview) { --slide-bg: #ffffff; --theme-accent: #2a8a86; --accent: #2a8a86; --accent-2: #d6336c; }
+:is(.reveal,.preview) { --slide-bg: #ffffff; --theme-accent: #2a8a86; --accent: #2a8a86; --accent-2: #d6336c; --divider-bg: var(--cm-dark, #1F1F36); }
 .reveal-viewport { background: var(--slide-bg); }
 .reveal { background: var(--slide-bg); color: var(--ink); }
 .reveal a { color: var(--theme-accent); }

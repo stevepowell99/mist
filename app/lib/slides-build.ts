@@ -121,11 +121,16 @@ function classesFrom(attr: string): string[] {
   return [...noQuotes.matchAll(/\.([\w-]+)/g)].map((m) => m[1]);
 }
 
-/** A leading `# Heading {.cls background-color="..."}` becomes section attributes. */
+/** A leading `# Heading {.cls background-color="..."}` becomes section attributes.
+ *  Works with or without the `{ ... }` block, so a plain `# Title` divider is
+ *  recognised too. */
 function parseHeading(line: string, ctx: AssetCtx): { heading: string; classAttr: string; bgAttr: string } {
-  const m = line.match(/^(#{1,6})\s*(.*?)\s*\{([^}]*)\}\s*$/);
-  if (!m) return { heading: line, classAttr: "", bgAttr: "" };
-  const [, hashes, text, attr] = m;
+  const hm = line.match(/^(#{1,6})\s+(.*)$/);
+  if (!hm) return { heading: line, classAttr: "", bgAttr: "" };
+  const hashes = hm[1];
+  const am = line.match(/^#{1,6}\s+(.*?)\s*\{([^}]*)\}\s*$/);
+  const text = am ? am[1] : hm[2];
+  const attr = am ? am[2] : "";
   const classes = classesFrom(attr);
   const bg: string[] = [];
   for (const key of ["background-color", "background-image", "background-size", "background-position"]) {
@@ -139,7 +144,18 @@ function parseHeading(line: string, ctx: AssetCtx): { heading: string; classAttr
   // Mark a slide that sets its own background, so a theme's dark section-divider
   // / title-page fill steps aside (:not(.has-slide-bg)) and the chosen background
   // shows instead of being painted over on the section element.
-  if (bg.length) classes.push("has-slide-bg");
+  if (bg.length) {
+    classes.push("has-slide-bg");
+  } else if (hashes.length === 1 || classes.includes("title-page")) {
+    // A theme that styles section-divider / title slides dark paints the SECTION,
+    // which covers only the 16:9 slide and leaves the letterbox the light slide
+    // colour (white gutters around a dark slide). Give the slide reveal's own
+    // full-viewport background too, from the theme's --divider-bg. Other themes
+    // leave --divider-bg unset, so it falls back to --slide-bg (their normal
+    // colour) and nothing changes; only a divider-styling theme that sets the var
+    // gets the seamless full-bleed, like an explicit background-color=.
+    bg.push(`data-background-color="var(--divider-bg, var(--slide-bg))"`);
+  }
   return { heading, classAttr: classes.length ? ` class="${classes.join(" ")}"` : "", bgAttr: bg.join(" ") };
 }
 
