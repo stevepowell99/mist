@@ -515,13 +515,7 @@ class DocumentAgent extends Agent {
     const bound = this.backendFor();
     if (!bound) return; // commit-back not configured on this server
 
-    // Write conditionally on the version we last saw, so an edit made in
-    // Obsidian/Drive while a session is open is never clobbered. On a version
-    // mismatch the backend throws; we surface a conflict and leave the edits
-    // pending rather than overwriting.
-    const expected = this.readStoredText("driveVersion");
-    try {
-      const { version } = await bound.backend.write(pending, expected, `Update ${bound.label} via mist`);
+    const recordSaved = (version: string | null) => {
       this.sql`
         INSERT INTO doc_state (key, value) VALUES ('lastCommitMd', ${textBlob(pending)})
         ON CONFLICT(key) DO UPDATE SET value = excluded.value
@@ -532,15 +526,46 @@ class DocumentAgent extends Agent {
           ON CONFLICT(key) DO UPDATE SET value = excluded.value
         `;
       }
-      this.logSync("save", `${stripFrontmatter(pending).length} chars to Drive`);
       // broadcast() is the agents framework's send-to-all-connections helper.
       this.broadcast(JSON.stringify({ type: "committed", hash: quickHash(pending) }));
+    };
+
+    // Write conditionally on the version we last saw, so a genuine edit made in
+    // Obsidian/Drive while a session is open is never clobbered.
+    const expected = this.readStoredText("driveVersion");
+    try {
+      const { version } = await bound.backend.write(pending, expected, `Update ${bound.label} via mist`);
+      recordSaved(version);
+      this.logSync("save", `${stripFrontmatter(pending).length} chars to Drive`);
+      return;
     } catch (err) {
-      const conflict = err instanceof Error && /changed upstream/.test(err.message);
-      this.logSync(conflict ? "save-conflict" : "save-error", err instanceof Error ? err.message : "");
-      if (conflict) this.broadcast(JSON.stringify({ type: "conflict" }));
-      // Leave the edits pending: a conflict pauses auto-save (the client gates
-      // on it) until the two versions are reconciled. We never clobber.
+      if (!(err instanceof Error && /changed upstream/.test(err.message))) {
+        this.logSync("save-error", err instanceof Error ? err.message : "");
+        return;
+      }
+    }
+
+    // The revision id moved underneath us. Distinguish a genuine external edit
+    // from a FALSE conflict: Google Drive for Desktop re-uploads our own save and
+    // stamps a new revision id on identical content (headRevisionId cannot order
+    // revisions), which would otherwise block every save with no one editing.
+    // Compare the BODY: if upstream equals our last save, it is our own content
+    // re-stamped, so re-anchor to the new version and write our pending (one
+    // retry). Only a real body divergence stays a conflict.
+    try {
+      const { text: driveText, version: driveVer } = await bound.backend.read();
+      const baseline = this.readStoredText("lastCommitMd");
+      if (baseline != null && stripFrontmatter(driveText) === stripFrontmatter(baseline)) {
+        const { version } = await bound.backend.write(pending, driveVer, `Update ${bound.label} via mist`);
+        recordSaved(version);
+        this.logSync("save", `${stripFrontmatter(pending).length} chars (recovered from a re-upload churn)`);
+        return;
+      }
+      this.logSync("save-conflict", "drive body genuinely diverged; left pending");
+      this.broadcast(JSON.stringify({ type: "conflict" }));
+    } catch (err) {
+      this.logSync("save-conflict", err instanceof Error ? err.message : "recheck failed");
+      this.broadcast(JSON.stringify({ type: "conflict" }));
     }
   }
 
