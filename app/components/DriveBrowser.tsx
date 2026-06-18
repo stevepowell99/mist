@@ -15,6 +15,12 @@ import type { SearchResult } from "~/routes/drive.search";
 
 const SIGN_IN_MSG = "Sign in with Google on the home page to use Drive.";
 
+/** True for a click that conventionally opens in a new tab: Ctrl/Cmd/Shift held,
+ *  or the middle mouse button. */
+function newTabClick(e: { metaKey?: boolean; ctrlKey?: boolean; shiftKey?: boolean; button?: number }): boolean {
+  return !!(e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1);
+}
+
 /** Parse a JSON response, but if the body is not JSON (e.g. a sanitised server
  *  error page), surface the text as a clean error instead of a parse crash. */
 async function readJson(res: Response): Promise<Record<string, unknown>> {
@@ -287,8 +293,14 @@ export default function DriveBrowser({
   }, []);
 
   const openFile = useCallback(
-    async (item: RecentItem) => {
-      setBusy(true);
+    async (item: RecentItem, newTab = false) => {
+      // Opening a file needs an async import to mint the room URL, so a plain
+      // `window.open(url)` afterwards would be popup-blocked (no user gesture
+      // survives the await). Open a blank tab NOW (in the click), then point it at
+      // the room once import returns; navigate in place for a normal click.
+      const tab = newTab && typeof window !== "undefined" ? window.open("about:blank", "_blank") : null;
+      if (tab) tab.opener = null;
+      if (!newTab) setBusy(true);
       setError(null);
       try {
         const res = await fetch("/drive/import", {
@@ -306,13 +318,16 @@ export default function DriveBrowser({
             ? new URL(window.location.href).searchParams.get("view")
             : null;
           const target = view ? `${body.url}&view=${encodeURIComponent(view)}` : body.url;
-          // Client-side navigation keeps the top bar mounted through the load;
-          // the doc page remounts per id (keyed) so Yjs state resets.
-          navigate(target);
+          // New tab: fill the tab we opened. Same tab: client-side navigation
+          // keeps the top bar mounted through the load (the doc page remounts per
+          // id, so Yjs state resets).
+          if (tab) tab.location.href = target;
+          else navigate(target);
           return; // keep the waiter up until the route swaps
         }
         throw new Error(body.error ?? "could not open file");
       } catch (e) {
+        if (tab) tab.close();
         setError(e instanceof Error ? e.message : "could not open file");
         setBusy(false);
       }
@@ -321,9 +336,9 @@ export default function DriveBrowser({
   );
 
   const onPick = useCallback(
-    (item: Item) => {
-      if (item.isFolder) browseFolder(item.id);
-      else if (item.openInMist) void openFile({ id: item.id, name: item.name, path: item.path, parentId: item.parentId, trail: item.trail });
+    (item: Item, newTab = false) => {
+      if (item.isFolder) browseFolder(item.id); // a new tab makes no sense for a folder
+      else if (item.openInMist) void openFile({ id: item.id, name: item.name, path: item.path, parentId: item.parentId, trail: item.trail }, newTab);
       else if (item.webViewLink) window.open(item.webViewLink, "_blank", "noopener,noreferrer");
     },
     [browseFolder, openFile],
@@ -505,9 +520,10 @@ export default function DriveBrowser({
                   <button
                     type="button"
                     disabled={busy}
-                    onClick={() => onPick(e)}
+                    onClick={(ev) => onPick(e, newTabClick(ev))}
+                    onAuxClick={(ev) => { if (ev.button === 1) { ev.preventDefault(); onPick(e, true); } }}
                     className={`flex min-w-0 flex-1 items-start gap-2 px-3 py-1.5 text-left disabled:opacity-50 ${cursor} ${isCurrent ? "font-semibold" : ""}`}
-                    title={e.isFolder ? "Open folder" : e.openInMist ? "Open in gmist" : "Open in Drive (new tab)"}
+                    title={e.isFolder ? "Open folder" : e.openInMist ? "Open in gmist (Ctrl/Cmd-click for a new tab)" : "Open in Drive (new tab)"}
                   >
                     <span className="mt-0.5 shrink-0">
                       <KindIcon kind={e.kind} />
@@ -558,9 +574,10 @@ export default function DriveBrowser({
                 <button
                   type="button"
                   disabled={busy}
-                  onClick={() => void openFile(r)}
+                  onClick={(ev) => void openFile(r, newTabClick(ev))}
+                  onAuxClick={(ev) => { if (ev.button === 1) { ev.preventDefault(); void openFile(r, true); } }}
                   className="flex w-full cursor-pointer items-start gap-2 px-3 py-1 text-left hover:bg-black/5 disabled:opacity-50"
-                  title="Open in gmist"
+                  title="Open in gmist (Ctrl/Cmd-click for a new tab)"
                 >
                   <span className="mt-0.5 shrink-0">
                     <KindIcon kind="markdown" />
