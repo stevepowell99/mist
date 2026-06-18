@@ -31,6 +31,7 @@ import OnboardingBanner from "~/components/OnboardingBanner";
 import NamePrompt from "~/components/NamePrompt";
 import FolderSidebar from "~/components/FolderSidebar";
 import OutlinePanel from "~/components/OutlinePanel";
+import PresenterRail from "~/components/PresenterRail";
 import HelpPanel from "~/components/HelpPanel";
 import LibraryGallery from "~/components/LibraryGallery";
 import GoogleSignIn from "~/components/GoogleSignIn";
@@ -249,8 +250,6 @@ function DocumentLayout({ id }: { id: string }) {
     toggleMode,
     role,
     drive,
-    docKey,
-    assetToken,
     bibLib,
     markdown,
     frontmatter,
@@ -283,6 +282,11 @@ function DocumentLayout({ id }: { id: string }) {
   // 100 there is no split. Mobile keeps the full-swap Preview toggle.
   const [isDesktop, setIsDesktop] = useState(false);
   const [outlineOpen, setOutlineOpen] = useState(false);
+  // Present mode: the deck fills the (fullscreened) app, chrome hidden, with an
+  // optional presenter rail. One mode, app-controlled (we fullscreen the app, not
+  // the deck iframe, so our own UI can sit over/beside the slide).
+  const [presenting, setPresenting] = useState(false);
+  const [railOpen, setRailOpen] = useState(true);
   const [editorPct, setEditorPct] = useState(() => {
     // Open in split if the URL asks for it (?view=split), so a reload or shared
     // link reopens the same layout. Preview-only is restored via initialPreview.
@@ -303,6 +307,8 @@ function DocumentLayout({ id }: { id: string }) {
   // the split preview, so the iframe gets a definite height and reveal can size
   // the deck. Nesting it inside <main> collapses the iframe to zero height.
   const slidesFull = slidesMode && !splitOpen;
+  // Present mode only applies to a deck; it fills the app and hides the chrome.
+  const present = presenting && deck;
 
   // The View is one of three exclusive layouts. It is derived from the preview
   // toggle and split ratio, and setView drives both, so the navbar, keyboard and
@@ -413,9 +419,9 @@ function DocumentLayout({ id }: { id: string }) {
   }, []);
   const localSlide = useMemo(() => {
     if (!deck) return null;
-    if ((splitOpen || slidesFull) && deckSlide != null) return deckSlide;
+    if ((splitOpen || slidesFull || present) && deckSlide != null) return deckSlide;
     return slideIndexForOffset(markdown, cursorOffset);
-  }, [deck, splitOpen, slidesFull, deckSlide, markdown, cursorOffset]);
+  }, [deck, splitOpen, slidesFull, present, deckSlide, markdown, cursorOffset]);
   useEffect(() => {
     setLocalSlide(localSlide);
   }, [localSlide, setLocalSlide]);
@@ -507,6 +513,29 @@ function DocumentLayout({ id }: { id: string }) {
     moveCursorToSlide(idx, false);
   };
 
+  // Enter/exit Present. Fullscreen the whole app (best-effort), not the deck
+  // iframe, so the presenter rail and exit control sit beside the slide. Esc (or
+  // any fullscreen exit) drops back out via the fullscreenchange listener below.
+  const enterPresent = useCallback(() => {
+    setPresenting(true);
+    document.documentElement.requestFullscreen?.().catch(() => {});
+  }, []);
+  const exitPresent = useCallback(() => {
+    setPresenting(false);
+    if (typeof document !== "undefined" && document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+  }, []);
+  // Leaving browser fullscreen (Esc, F11) leaves Present too, so the two never
+  // disagree. Held in a ref so the chord handler stays stable.
+  const presentingRef = useRef(presenting);
+  presentingRef.current = presenting;
+  useEffect(() => {
+    const onFs = () => {
+      if (!document.fullscreenElement && presentingRef.current) setPresenting(false);
+    };
+    document.addEventListener("fullscreenchange", onFs);
+    return () => document.removeEventListener("fullscreenchange", onFs);
+  }, []);
+
   const runChord = useCallback(
     (c: string): boolean => {
       switch (c) {
@@ -523,11 +552,13 @@ function DocumentLayout({ id }: { id: string }) {
         case "=": nudgeSplit(5); return true;
         case "f": window.dispatchEvent(new CustomEvent("mist-toggle-folder")); return true;
         case "g": syncEditorToSlideRef.current(); return true;
+        // P presents the deck (one mode: fullscreen app, chrome off, presenter rail).
+        case "p": if (!deck) return false; if (presentingRef.current) exitPresent(); else enterPresent(); return true;
         case "/": window.dispatchEvent(new CustomEvent("mist-toggle-help")); return true;
         default: return false;
       }
     },
-    [toggleMode, setView, isDesktop, setAsideCollapsedPersist, asideCollapsed, nudgeSplit],
+    [toggleMode, setView, isDesktop, setAsideCollapsedPersist, asideCollapsed, nudgeSplit, deck, enterPresent, exitPresent],
   );
 
   // Ctrl/Cmd+S (and Ctrl/Cmd+Enter, dispatched by the editor) flushes a save to
@@ -670,6 +701,7 @@ function DocumentLayout({ id }: { id: string }) {
 
   return (
     <div className="flex h-screen flex-col">
+      {!present && (
       <header ref={headerRef} className="flex items-stretch border-b border-border">
         <Link
           to="/"
@@ -702,22 +734,21 @@ function DocumentLayout({ id }: { id: string }) {
             <rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" />
           </svg>
         </button>
-        {/* Present: open the deck as a standalone page in a new tab (a real URL,
-            not the sandboxed preview), so reveal's F fullscreen and S speaker-notes
-            window work natively. Share that tab's window to keep notes private. */}
-        {deck && docKey && assetToken && (
-          <a
-            href={`/slides/${id}?k=${encodeURIComponent(docKey)}&token=${encodeURIComponent(assetToken)}`}
-            target="_blank"
-            rel="noreferrer"
-            title="Present in a new tab (F fullscreen, S speaker notes)"
+        {/* Present: fill the app (fullscreen), hide the chrome and show the
+            presenter rail. One in-app mode, so the slide and our own UI share the
+            screen. Ctrl/Cmd+Alt+P toggles it; Esc leaves. */}
+        {deck && (
+          <button
+            type="button"
+            onClick={enterPresent}
+            title="Present (Ctrl/Cmd+Alt+P)"
             aria-label="Present deck"
             className="flex shrink-0 cursor-pointer items-center border-r border-border px-3 transition-colors hover:bg-border hover:text-ink"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <rect x="2" y="3" width="20" height="14" rx="2" /><path d="M8 21h8M12 17v4" /><path d="M10 8.5 14.5 11 10 13.5Z" fill="currentColor" stroke="none" />
             </svg>
-          </a>
+          </button>
         )}
         <div className="flex min-w-0 grow items-center gap-2 px-4">
           <span
@@ -823,6 +854,7 @@ function DocumentLayout({ id }: { id: string }) {
           </div>
         </div>
       </header>
+      )}
       <div className="relative flex flex-1 overflow-hidden">
         {!yjs.synced && !yjs.paused && (
           <div className="absolute inset-0 z-40 flex flex-col items-center justify-center gap-3 bg-paper">
@@ -841,6 +873,39 @@ function DocumentLayout({ id }: { id: string }) {
             Paused while idle, click to reconnect
           </button>
         )}
+        {present ? (
+          <div className="flex h-full w-full bg-black">
+            <section className="relative flex-1 overflow-hidden">
+              <SlidesView />
+              <div className="absolute right-3 top-3 z-50 flex gap-1">
+                <button
+                  type="button"
+                  onClick={() => setRailOpen((v) => !v)}
+                  title="Toggle presenter notes"
+                  aria-label="Toggle presenter notes"
+                  className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-white/15 text-white backdrop-blur hover:bg-white/30"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <rect x="3" y="4" width="18" height="16" rx="1" /><path d="M15 4v16" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  onClick={exitPresent}
+                  title="Exit present (Esc)"
+                  aria-label="Exit present"
+                  className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-white/15 text-white backdrop-blur hover:bg-white/30"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <line x1="6" y1="6" x2="18" y2="18" /><line x1="18" y1="6" x2="6" y2="18" />
+                  </svg>
+                </button>
+              </div>
+            </section>
+            {railOpen && <PresenterRail markdown={markdown} frontmatter={frontmatter} currentSlide={localSlide ?? 0} />}
+          </div>
+        ) : (
+        <>
         <div ref={contentRef} className="relative flex flex-1 overflow-hidden">
           {/* When the deck fills the pane (presenting), a thin left-edge zone
               peeks the slide list on hover; Ctrl/Cmd+Alt+D toggles it too. */}
@@ -1041,6 +1106,8 @@ function DocumentLayout({ id }: { id: string }) {
               </div>
             )}
           </aside>
+        )}
+        </>
         )}
       </div>
       <MobilePanel className="lg:hidden" />

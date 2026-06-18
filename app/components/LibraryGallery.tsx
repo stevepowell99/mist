@@ -1,21 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { marked } from "marked";
-import DOMPurify from "dompurify";
 import { useDocument } from "~/lib/DocumentContext";
-import { deckSlides, stripFrontmatter, applyGrammar } from "~/lib/slides-build";
+import { deckSlides } from "~/lib/slides-build";
+import { slideThumbHtml as thumbHtml } from "~/lib/slide-thumb";
 import { slideIndexForOffset } from "~/lib/slide-cursor";
 import type { SearchResult } from "~/routes/drive.search";
-
-/** Convert a slide fragment's markdown to styled HTML for a thumbnail, the same
- *  way the document Preview does (the house grammar is global CSS, so a `.preview`
- *  box renders panels/cards/colours without a reveal iframe). */
-function thumbHtml(md: string): string {
-  // The same shared grammar pipeline the deck and Preview use, so a thumbnail
-  // matches the rendered slide (this previously omitted bignums and wikilinks).
-  const converted = applyGrammar(stripFrontmatter(md).body);
-  return DOMPurify.sanitize(marked.parse(converted, { async: false }) as string);
-}
 
 /** Hover-to-enlarge: tracks whether the pointer is over a thumbnail and where to
  *  float the enlarged copy (offset from the cursor, clamped to the viewport). The
