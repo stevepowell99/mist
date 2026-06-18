@@ -127,6 +127,9 @@ const BUILTIN_CLASSES: Record<string, string> = {
   "callout-warning": "Warning callout (yellow)",
   "callout-important": "Important callout (pink)",
   "callout-caution": "Caution callout (yellow)",
+  // Aliases expanded by the slides converter (no CSS of their own).
+  "caption-bar": "Caption bar over a full-bleed image (= .bg-ink .left-0 .right-0 .bottom-0 .footer)",
+  "shot-cap": "Caption bar over a full-bleed image (alias of .caption-bar)",
 };
 
 export function classSource(getClasses: () => string[]): CompletionSource {

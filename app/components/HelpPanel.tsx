@@ -89,7 +89,7 @@ const CLASS_GROUPS: { title: string; items: string }[] = [
   { title: "Theme colours", items: ".page .ink .accent .accent-2 (the deck's own palette; also .bg-* and .border-* variants)" },
   { title: "Modifiers", items: ".light .dark .fast .slow .cascade-2…5 .scale-* .width-* .height-* .left .center .right .align-top .align-middle .align-bottom" },
   { title: "Callouts", items: "> [!note] / [!tip] / [!warning] / [!important]" },
-  { title: "Slide", items: ".place .top-* .left-* .title-page .no-title .shot-cap .brand" },
+  { title: "Slide", items: ".place .top-* .left-* .title-page .no-title .caption-bar .brand" },
 ];
 
 const CLASS_EXAMPLES: { code: string; note: string }[] = [

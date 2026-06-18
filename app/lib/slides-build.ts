@@ -143,9 +143,25 @@ function parseHeading(line: string, ctx: AssetCtx): { heading: string; classAttr
   return { heading, classAttr: classes.length ? ` class="${classes.join(" ")}"` : "", bgAttr: bg.join(" ") };
 }
 
+/** Markup aliases: a friendly class name that expands to a set of standard
+ *  composable classes, so it carries no bespoke CSS and every axis utility
+ *  overrides it. Expanded in parseAttrs, so an alias works on a div, span or
+ *  image, and a user-supplied utility (e.g. .bottom-20) just wins by being a
+ *  later rule in the cascade. */
+const CLASS_ALIAS: Record<string, string[]> = {
+  // Caption bar over a full-bleed image: the theme's dark ink fill (light text),
+  // pinned full-width to the bottom edge, small footer-sized text. Recolour with
+  // .bg-teal, lift with .bottom-20, resize with .scale-*; it is just utilities.
+  // .caption-bar is the clear name; .shot-cap stays as a back-compat alias.
+  "caption-bar": ["bg-ink", "left-0", "right-0", "bottom-0", "footer"],
+  "shot-cap": ["bg-ink", "left-0", "right-0", "bottom-0", "footer"],
+};
+
 /** Parse a Pandoc attribute spec: .classes, #id, and key="value" pairs. */
 function parseAttrs(attr: string): { classes: string[]; id: string | null; style: string } {
-  const classes = [...attr.matchAll(/\.([\w-]+)/g)].map((m) => m[1]);
+  const classes = [
+    ...new Set([...attr.matchAll(/\.([\w-]+)/g)].map((m) => m[1]).flatMap((c) => CLASS_ALIAS[c] ?? [c])),
+  ];
   const idM = attr.match(/#([\w-]+)/);
   const styles: string[] = [];
   const styleM = attr.match(/\bstyle="([^"]*)"/);

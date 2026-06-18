@@ -425,12 +425,10 @@
 
 /* Deck media labels */
 .caption { display: block; font-size: 0.6em; color: #666; margin-top: 0.2em; line-height: 1.3; }
-/* Positional defaults at :where() (zero specificity) so the place utilities
-   (.left- .right- .top- .bottom-) always override them; the look keeps normal
-   specificity. Same pattern for any component that wants overridable defaults. */
-.reveal :where(.shot-cap) { position: absolute; left: 0; right: 0; bottom: 0; }
-.reveal .shot-cap { margin: 0; background: rgba(31,31,54,0.88); color: #fff; padding: 0.5em 1.2em; font-size: 0.62em; line-height: 1.3; z-index: 5; }
-.reveal .shot-cap a { color: var(--cm-blue-bright); }
+/* .caption-bar (a caption bar over a full-bleed image; .shot-cap is a back-compat
+   alias) is not a bespoke component: the slides converter expands it to standard
+   classes (.bg-ink .left-0 .right-0 .bottom-0 .footer), so every axis utility
+   overrides it. See CLASS_ALIAS in slides-build.ts. */
 .reveal img.brand { position: fixed; top: 4%; left: 4%; width: 11%; margin: 0; border: 0; box-shadow: none; background: none; z-index: 10; }
 
 /* Title / resources / closing slide helpers */

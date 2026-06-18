@@ -134,7 +134,10 @@ itself in the hub `CLAUDE.md`).
 
 - gmist has slide-only constructs with no Garden equivalent and no meaning in a
   flowing page: `.flare` animation, `.place` + `.top-`/`.left-` positioning,
-  `.cascade-*`, deck chrome (`.title-page`, `.slide-breadcrumb`, `.shot-cap`).
+  `.cascade-*`, deck chrome (`.title-page`, `.slide-breadcrumb`). `.caption-bar`
+  (and its back-compat alias `.shot-cap`) is expanded by the slides converter to
+  standard classes (`.bg-ink .left-0 .right-0 .bottom-0 .footer`), so every utility
+  overrides it. Add more such aliases in `CLASS_ALIAS` (slides-build.ts).
 - The Garden owns the whole site layer gmist lacks: sidebar, rightbar,
   breadcrumb, table of contents, search, backlinks, theme pages, PDF export, and
   the page-type styling (`.banner*`, `.rounded*`, `.paper-page`).
