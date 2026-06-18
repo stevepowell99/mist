@@ -289,11 +289,15 @@ export function DocumentProvider({
   // name for a brief notice. Empty string means "forked but the name is unknown".
   const [forkedNotice, setForkedNotice] = useState<string | null>(null);
   const clearForkedNotice = useCallback(() => setForkedNotice(null), []);
-  // Flipped on the user's first real edit (typing, or a comment/reply/resolve),
-  // so the save baseline stops tracking the load-time settle and freezes.
+  // Flipped on the user's first real edit (typing, or a comment/reply/resolve).
+  // The ref is the synchronous guard for the baseline effect below; the state
+  // gates the unsaved badge so it never shows "Saving" before this user has
+  // actually changed anything (a fresh load is, by definition, in sync).
   const userEditedRef = useRef(false);
+  const [userEdited, setUserEdited] = useState(false);
   const markUserEdited = useCallback(() => {
     userEditedRef.current = true;
+    setUserEdited(true);
   }, []);
   const currentHash = useMemo(
     () => (backed ? quickHash(serializeThreads(markdown, threads, frontmatter)) : null),
@@ -354,6 +358,7 @@ export function DocumentProvider({
           // the Yjs binding. Re-arm the load-time baselining so the adopted content
           // reads as saved, and clear flags.
           userEditedRef.current = false;
+          setUserEdited(false);
           setLastCommittedHash(null);
           setConflict(false);
           setUpstreamChanged(false);
@@ -368,7 +373,11 @@ export function DocumentProvider({
     return () => socket.removeEventListener("message", onMsg);
   }, [yjs.socket]);
 
-  const unsaved = backed && !!currentHash && currentHash !== lastCommittedHash;
+  // Not "unsaved" until this user has edited: a freshly loaded file is in sync, so
+  // the badge stays "Synced" through the load settle instead of flashing "Saving".
+  // After the first edit, the editor's own baseline (above) decides, so reverting
+  // an edit still clears the badge.
+  const unsaved = backed && userEdited && !!currentHash && currentHash !== lastCommittedHash;
 
   // Auto-save toggle (persisted), so sync issues can be isolated by turning it
   // off. Manual save still works when off. Read after mount to avoid SSR drift.
