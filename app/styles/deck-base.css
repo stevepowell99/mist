@@ -348,6 +348,22 @@
 /* AXIS: OPACITY. .opacity-90 = 90% opaque, for a translucent panel/box/image. */
 :is(.reveal,.preview) .opacity-0{opacity:0}:is(.reveal,.preview) .opacity-10{opacity:0.1}:is(.reveal,.preview) .opacity-20{opacity:0.2}:is(.reveal,.preview) .opacity-30{opacity:0.3}:is(.reveal,.preview) .opacity-40{opacity:0.4}:is(.reveal,.preview) .opacity-50{opacity:0.5}:is(.reveal,.preview) .opacity-60{opacity:0.6}:is(.reveal,.preview) .opacity-70{opacity:0.7}:is(.reveal,.preview) .opacity-80{opacity:0.8}:is(.reveal,.preview) .opacity-90{opacity:0.9}:is(.reveal,.preview) .opacity-100{opacity:1}
 
+/* AXIS: FADE (fill opacity). .fade-N makes only the BACKGROUND translucent, so a
+   box over an image lets the picture show through while its TEXT stays fully
+   opaque (unlike .opacity-N, which fades the whole element, text included). It
+   mixes the element's fill colour with transparent, so pair it with a fill
+   (.bg-<colour>, .light, .dark). !important so it beats a component's own
+   background (including a .solid fill). */
+:is(.reveal,.preview) .fade-10{background:color-mix(in srgb, var(--fill, var(--hue-pale, var(--slide-bg, #fff))) 10%, transparent) !important}
+:is(.reveal,.preview) .fade-20{background:color-mix(in srgb, var(--fill, var(--hue-pale, var(--slide-bg, #fff))) 20%, transparent) !important}
+:is(.reveal,.preview) .fade-30{background:color-mix(in srgb, var(--fill, var(--hue-pale, var(--slide-bg, #fff))) 30%, transparent) !important}
+:is(.reveal,.preview) .fade-40{background:color-mix(in srgb, var(--fill, var(--hue-pale, var(--slide-bg, #fff))) 40%, transparent) !important}
+:is(.reveal,.preview) .fade-50{background:color-mix(in srgb, var(--fill, var(--hue-pale, var(--slide-bg, #fff))) 50%, transparent) !important}
+:is(.reveal,.preview) .fade-60{background:color-mix(in srgb, var(--fill, var(--hue-pale, var(--slide-bg, #fff))) 60%, transparent) !important}
+:is(.reveal,.preview) .fade-70{background:color-mix(in srgb, var(--fill, var(--hue-pale, var(--slide-bg, #fff))) 70%, transparent) !important}
+:is(.reveal,.preview) .fade-80{background:color-mix(in srgb, var(--fill, var(--hue-pale, var(--slide-bg, #fff))) 80%, transparent) !important}
+:is(.reveal,.preview) .fade-90{background:color-mix(in srgb, var(--fill, var(--hue-pale, var(--slide-bg, #fff))) 90%, transparent) !important}
+
 /* AXIS: SIZE (fixed dimensions for a box/panel/card/image). .width-N sets width
    to N% of the container; .height-N sets height to N pixels. */
 :is(.reveal,.preview) .width-10{width:10%} :is(.reveal,.preview) .width-20{width:20%} :is(.reveal,.preview) .width-25{width:25%} :is(.reveal,.preview) .width-30{width:30%} :is(.reveal,.preview) .width-33{width:33%} :is(.reveal,.preview) .width-40{width:40%} :is(.reveal,.preview) .width-50{width:50%}

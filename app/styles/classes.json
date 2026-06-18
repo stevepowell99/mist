@@ -71,6 +71,11 @@
       "generated": { "prefix": "opacity", "property": "opacity", "unit": "%",
         "values": [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100] }
     },
+    "fade": {
+      "desc": "Make only the BACKGROUND translucent (text stays opaque), for a box over an image. .fade-70 = 70% opaque fill. Pair with a .bg-/.light/.dark fill; use .opacity-* to fade the whole element instead.",
+      "generated": { "prefix": "fade", "property": "background", "unit": "%",
+        "values": [10, 20, 30, 40, 50, 60, 70, 80, 90] }
+    },
     "order": {
       "desc": "Bring later items in one after another. On its own a cascade class fades the element in on its delay (it arrives from nothing); add .flare to colour it in instead.",
       "classes": { "cascade-2": "Arrive 2nd", "cascade-3": "Arrive 3rd", "cascade-4": "Arrive 4th", "cascade-5": "Arrive 5th" }
