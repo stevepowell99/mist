@@ -392,7 +392,9 @@
    slide. A `.scale-*` wrapper or width=/height= still overrides intentionally. */
 .reveal section img { max-width: 100%; max-height: 72vh; margin: 0.3em 0; border-radius: 4px; }
 .preview img { max-width: 100%; height: auto; }
-.reveal code { font-size: 0.85em; background: #f4f6f9; padding: 0.1em 0.3em; border-radius: 3px; color: var(--ink); }
+/* Translucent grey + inherited text colour, so inline code reads on a light OR
+   a dark background (a dark theme, or a .dark panel) without each one overriding. */
+.reveal code { font-size: 0.85em; background: rgba(128,128,128,0.18); padding: 0.1em 0.3em; border-radius: 3px; color: inherit; }
 .reveal blockquote { border-left: 3px solid var(--teal); background: none; padding: 0.2em 0 0.2em 0.8em; margin: 0.4em 0; font-style: italic; font-size: 0.85em; box-shadow: none; width: auto; }
 
 /* Deck media labels */

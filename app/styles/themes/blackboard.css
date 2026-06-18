@@ -4,7 +4,7 @@
   --slide-bg: #20322b; --ink: #f3f1e7; --accent: #f2d65c; --rule: #6f8a7e; --muted: #b9c7bf;
 }
 .reveal-viewport { background: var(--slide-bg); }
-.reveal, .preview { background: var(--slide-bg); color: var(--ink); font-family: "Trebuchet MS", "Segoe UI", system-ui, sans-serif; }
+.reveal, .preview { background: var(--slide-bg); color: var(--ink); font-family: "Chalkduster", "Comic Sans MS", "Segoe Print", "Bradley Hand", cursive; }
 
 :is(.reveal,.preview) h1, :is(.reveal,.preview) h2, :is(.reveal,.preview) h3 { color: var(--ink); font-weight: 700; letter-spacing: 0.01em; }
 .reveal h1 { color: var(--accent); }
