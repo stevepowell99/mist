@@ -19,7 +19,7 @@ export default function ShareButton() {
   const { docId, markdown, threads, frontmatter, role, docKey, suggestKey, assetToken } = useDocument();
   const [copied, setCopied] = useState<"edit" | "suggest" | null>(null);
   const [asPreview, setAsPreview] = useState(false);
-  const [combineFragments, setCombineFragments] = useState(false);
+  const [combineFragments, setCombineFragments] = useState(true);
   const deck = isSlideDeck(markdown, frontmatter);
   const pdfHref =
     `/slides/${docId}?k=${encodeURIComponent(docKey ?? "")}&token=${encodeURIComponent(assetToken ?? "")}&print-pdf` +
