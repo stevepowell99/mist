@@ -1,23 +1,21 @@
-/* Theme: causal-map (the default, the gmist house look).
- * deck-base.css already carries the composable grammar and the deck typography
- * (Inter, ink headings, teal h2 rule), so this theme only sets the canvas: a
- * clean white slide on a brand-teal accent. It deliberately does NOT restyle the
- * document .preview, so an un-themed document keeps its existing serif look in
- * both light and dark app modes. Selecting another theme opts a doc into being
- * restyled too. */
+/* Theme: causal-map (the default, the gmist house look), and the reference for
+ * how a theme is written. A theme sets VARIABLES on :is(.reveal,.preview)
+ * (--slide-bg, --ink, --accent, --accent-2, optional --divider-bg + a font) plus
+ * its own accent/component overrides. It does NOT restate the deck canvas
+ * (.reveal-viewport / .reveal background+text): that is the shared shell, which
+ * reads --slide-bg / --ink. It does NOT paint divider/title slide backgrounds:
+ * the slides builder gives a lone-# or .title-page slide reveal's full-viewport
+ * background from --divider-bg (so it fills the letterbox, seamless), and the
+ * theme only sets the divider TEXT colour. To restyle a DOCUMENT preview too, add
+ * a `.preview { background; color }` rule (this theme deliberately omits it, so an
+ * un-themed document keeps its serif look; other themes opt in). */
 :is(.reveal,.preview) { --slide-bg: #ffffff; --theme-accent: #2a8a86; --accent: #2a8a86; --accent-2: #d6336c; --divider-bg: var(--cm-dark, #1F1F36); }
-.reveal-viewport { background: var(--slide-bg); }
-.reveal { background: var(--slide-bg); color: var(--ink); }
 .reveal a { color: var(--theme-accent); }
 
-/* Page types: the title slide stays brand-dark (so it works even when the deck
- * does not set its own background-color); section-divider h1 in the accent. */
+/* Page types: the divider/title canvas is painted by --divider-bg (the slides
+ * builder emits reveal's full-viewport background for a lone-# or .title-page
+ * slide); this theme only sets the divider TEXT colours. */
 .reveal .title-page { color: #fff; }
-.reveal .title-page:not(.has-slide-bg) { background: var(--cm-dark, #1F1F36); }
 .reveal .title-page .eyebrow, .reveal .title-page .headline .teal { color: var(--cm-blue, #6DC4C8); }
-/* A section-divider slide (a lone #) gets a dark brand background with light
-   text, like a mini title slide. :has(> h1) targets the divider section. A slide
-   with its own background (.has-slide-bg) keeps that instead of the dark fill. */
 .reveal .slides section:has(> h1) { color: #fff; }
-.reveal .slides section:has(> h1):not(.has-slide-bg) { background: var(--cm-dark, #1F1F36); }
 .reveal .slides section:has(> h1) > h1 { color: #fff; }

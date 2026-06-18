@@ -5,8 +5,9 @@
 :is(.reveal,.preview) {
   --slide-bg: #f5efe2; --ink: #2a2722; --rule: #c8b48a; --accent: #7a2820; --accent-2: #9a7b3f; --muted: #6b6256;
 }
-.reveal-viewport { background: var(--slide-bg); }
-.reveal, .preview { background: var(--slide-bg); color: var(--ink); }
+/* Deck canvas (background/text) comes from the shared shell; a document preview
+   opts into the theme's colours here. */
+.preview { background: var(--slide-bg); color: var(--ink); }
 .reveal, .preview { font-family: "Source Serif Pro", "Source Serif", "Cambria", "Georgia", serif; }
 
 :is(.reveal,.preview) h1, :is(.reveal,.preview) h2, :is(.reveal,.preview) h3 {
@@ -33,7 +34,6 @@
 
 /* Page types: cream title slide with a ruled italic masthead; ruled section h1. */
 .reveal .title-page { color: var(--ink); }
-.reveal .title-page:not(.has-slide-bg) { background: var(--slide-bg); }
 .reveal .title-page .eyebrow { font-variant: small-caps; letter-spacing: 0.15em; color: var(--accent); }
 .reveal .title-page .headline { color: var(--ink); font-style: italic; border-top: 2px solid var(--ink); border-bottom: 2px solid var(--ink); display: inline-block; padding: 0.1em 0.5em; }
 .reveal .title-page .headline .teal { color: var(--accent); }

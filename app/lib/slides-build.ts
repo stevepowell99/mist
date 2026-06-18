@@ -141,19 +141,14 @@ function parseHeading(line: string, ctx: AssetCtx): { heading: string; classAttr
     bg.push(`data-${key}="${val}"`);
   }
   const heading = text ? `${hashes} ${text}` : ""; // drop empty (e.g. .no-title) headings
-  // Mark a slide that sets its own background, so a theme's dark section-divider
-  // / title-page fill steps aside (:not(.has-slide-bg)) and the chosen background
-  // shows instead of being painted over on the section element.
-  if (bg.length) {
-    classes.push("has-slide-bg");
-  } else if (hashes.length === 1 || classes.includes("title-page")) {
-    // A theme that styles section-divider / title slides dark paints the SECTION,
-    // which covers only the 16:9 slide and leaves the letterbox the light slide
-    // colour (white gutters around a dark slide). Give the slide reveal's own
-    // full-viewport background too, from the theme's --divider-bg. Other themes
-    // leave --divider-bg unset, so it falls back to --slide-bg (their normal
-    // colour) and nothing changes; only a divider-styling theme that sets the var
-    // gets the seamless full-bleed, like an explicit background-color=.
+  // A section-divider (lone #) or title-page slide with no background of its own
+  // gets reveal's full-viewport background, from the theme's --divider-bg (it
+  // falls back to --slide-bg, so a theme that does not set it is unaffected). This
+  // is the ONE way a whole slide is coloured: reveal's background layer fills the
+  // slide AND the letterbox, unlike a `background` on the section element (which
+  // covers only the 16:9 area and leaves light gutters). So themes no longer paint
+  // divider/title sections; they just set --divider-bg and the divider text colour.
+  if (!bg.length && (hashes.length === 1 || classes.includes("title-page"))) {
     bg.push(`data-background-color="var(--divider-bg, var(--slide-bg))"`);
   }
   return { heading, classAttr: classes.length ? ` class="${classes.join(" ")}"` : "", bgAttr: bg.join(" ") };
@@ -427,8 +422,12 @@ html,body{margin:0;height:100%}
 html.mist-embedded{background:#ececec !important}
 /* The slide canvas reads --slide-bg (set by the theme, default white), so a
    theme's background shows in the embedded preview AND in fullscreen/PDF. The
-   grey above is only the letterbox around the 16:9 slide. */
+   grey above is only the letterbox around the 16:9 slide. These three rules are
+   the ONE home for the deck canvas colour; a theme only sets the --slide-bg /
+   --ink variables, never repeats these. */
 .reveal .backgrounds .slide-background{background-color:var(--slide-bg,#fff)}
+.reveal-viewport{background:var(--slide-bg,#fff)}
+.reveal{background:var(--slide-bg,#fff);color:var(--ink)}
 /* "Waiter" overlay: an opaque cover with a spinner that hides the deck until it
    has rendered AND jumped to the right slide, so the cover slide never flashes
    in the live preview. Shown only while embedded; removed by showDeck(). */

@@ -2,9 +2,11 @@
  * A bold, futuristic deck. */
 :is(.reveal,.preview) {
   --slide-bg: #0a0e1a; --ink: #e7ecff; --accent: #76f7ff; --accent-2: #ff8fb8; --rule: #2a3550; --muted: #9aa6c9;
+  --divider-bg: #060912; font-family: "Segoe UI", system-ui, "Helvetica Neue", sans-serif;
 }
-.reveal-viewport { background: var(--slide-bg); }
-.reveal, .preview { background: var(--slide-bg); color: var(--ink); font-family: "Segoe UI", system-ui, "Helvetica Neue", sans-serif; }
+/* Deck canvas (background/text) comes from the shared shell; a document preview
+   opts into the theme's colours here. */
+.preview { background: var(--slide-bg); color: var(--ink); }
 
 :is(.reveal,.preview) h1, :is(.reveal,.preview) h2, :is(.reveal,.preview) h3 { color: #fff; font-weight: 800; letter-spacing: -0.01em; }
 .reveal h1 { color: var(--accent); text-shadow: 0 0 18px rgba(118,247,255,0.4); }
@@ -27,9 +29,7 @@
 
 /* Page types: glowing title and divider on the deep field. */
 .reveal .title-page { color: var(--ink); }
-.reveal .title-page:not(.has-slide-bg) { background: var(--slide-bg); }
 .reveal .title-page .headline { text-shadow: 0 0 22px rgba(118,247,255,0.45); }
 .reveal .title-page .eyebrow, .reveal .title-page .headline .teal { color: var(--accent); }
 .reveal .slides section:has(> h1) { color: var(--ink); }
-.reveal .slides section:has(> h1):not(.has-slide-bg) { background: #060912; }
 .reveal .slides section:has(> h1) > h1 { color: var(--accent); text-shadow: 0 0 22px rgba(118,247,255,0.45); }

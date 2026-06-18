@@ -4,9 +4,11 @@
  * falling back to any cursive, so it needs no web font. */
 :is(.reveal,.preview) {
   --slide-bg: #fcfaf3; --ink: #2b2a28; --accent: #2f6f9f; --accent-2: #c0392b; --rule: #cbb89a; --muted: #6f6a60;
+  font-family: "Segoe Print", "Bradley Hand", "Comic Sans MS", cursive;
 }
-.reveal-viewport { background: var(--slide-bg); }
-.reveal, .preview { background: var(--slide-bg); color: var(--ink); font-family: "Segoe Print", "Bradley Hand", "Comic Sans MS", cursive; }
+/* Deck canvas (background/text) comes from the shared shell; a document preview
+   opts into the theme's colours here. */
+.preview { background: var(--slide-bg); color: var(--ink); }
 
 :is(.reveal,.preview) h1, :is(.reveal,.preview) h2, :is(.reveal,.preview) h3 { color: var(--ink); font-weight: 700; letter-spacing: 0; }
 .reveal h2 { color: var(--accent); }
@@ -29,8 +31,6 @@
 
 /* Page types: paper title and divider, inky underline. */
 .reveal .title-page { color: var(--ink); }
-.reveal .title-page:not(.has-slide-bg) { background: var(--slide-bg); }
 .reveal .title-page .eyebrow, .reveal .title-page .headline .teal { color: var(--accent); }
 .reveal .slides section:has(> h1) { color: var(--ink); }
-.reveal .slides section:has(> h1):not(.has-slide-bg) { background: var(--slide-bg); }
 .reveal .slides section:has(> h1) > h1 { color: var(--ink); border-bottom: 3px solid var(--ink); display: inline-block; padding-bottom: 0.1em; }

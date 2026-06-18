@@ -2,9 +2,11 @@
  * Quiet by default; let the content carry the slide. */
 :is(.reveal,.preview) {
   --slide-bg: #ffffff; --ink: #141414; --accent: #141414; --accent-2: #8a8a8a; --rule: #e6e6e6; --muted: #8a8a8a;
+  font-family: "Helvetica Neue", "Segoe UI", Arial, system-ui, sans-serif;
 }
-.reveal-viewport { background: var(--slide-bg); }
-.reveal, .preview { background: var(--slide-bg); color: var(--ink); font-family: "Helvetica Neue", "Segoe UI", Arial, system-ui, sans-serif; }
+/* Deck canvas (background/text) comes from the shared shell; a document preview
+   opts into the theme's colours here. */
+.preview { background: var(--slide-bg); color: var(--ink); }
 
 :is(.reveal,.preview) h1, :is(.reveal,.preview) h2, :is(.reveal,.preview) h3 { color: var(--ink); font-weight: 600; letter-spacing: -0.01em; text-transform: none; }
 .reveal h1 { font-weight: 700; }
@@ -27,8 +29,6 @@
 
 /* Page types: plain white title and divider, no dark fill. */
 .reveal .title-page { color: var(--ink); }
-.reveal .title-page:not(.has-slide-bg) { background: var(--slide-bg); }
 .reveal .title-page .eyebrow, .reveal .title-page .headline .teal { color: var(--muted); }
 .reveal .slides section:has(> h1) { color: var(--ink); }
-.reveal .slides section:has(> h1):not(.has-slide-bg) { background: var(--slide-bg); }
 .reveal .slides section:has(> h1) > h1 { color: var(--ink); }

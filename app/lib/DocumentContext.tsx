@@ -277,6 +277,26 @@ export function DocumentProvider({
     }
   }, [yjs.socket]);
 
+  // SAVE / DIRTY STATE MACHINE (Drive-backed docs). The badge is driven by a few
+  // interacting flags; the lifecycle is:
+  //   load        -> userEdited=false; the effect below baselines lastCommittedHash
+  //                  to the editor's own currentHash through the sync settle. While
+  //                  userEdited is false the doc reads "Synced" (a load is in sync
+  //                  by definition), so there is no flash and no write.
+  //   first edit  -> markUserEdited() sets userEdited=true and freezes the baseline.
+  //                  unsaved = currentHash !== lastCommittedHash from here on, so
+  //                  reverting an edit clears the badge.
+  //   autosave    -> when unsaved (and not conflict/upstreamChanged), saveNow()
+  //                  relays the content; the agent writes to Drive and broadcasts
+  //                  `committed{hash}`, which sets lastCommittedHash = that hash
+  //                  (it matches because the relay wrote our exact serialization).
+  //   conflict    -> the agent rejected a write (Drive body genuinely diverged);
+  //                  pauses autosave until the user reloads.
+  //   upstreamChanged -> Drive changed AND we have local edits; the user must
+  //                  reload (Drive wins), forkedNotice names any preserved sibling.
+  //   reloaded    -> re-arms the load state (userEdited=false, baseline cleared).
+  // Content is the only truth: every comparison is on the body, never a revision id
+  // or timestamp (see CLAUDE.md "content is the source of truth").
   // Track whether the shown document matches what was last saved to Drive.
   const [lastCommittedHash, setLastCommittedHash] = useState<string | null>(null);
   // True when the backend rejected a write because the file changed upstream
