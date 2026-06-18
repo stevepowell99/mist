@@ -4,7 +4,7 @@
  * components (.panel, .card, .chip, .callout, .bignum, .hl) are restyled here so
  * a deck written in the normal grammar comes out brutalist. */
 :is(.reveal,.preview) {
-  --slide-bg: #ffffff; --ink: #000000; --bru-yellow: #ffd400; --bru-red: #ff2f00;
+  --slide-bg: #ffffff; --ink: #000000; --bru-yellow: #ffd400; --bru-red: #ff2f00; --accent: #ff2f00; --accent-2: #ffd400;
 }
 .reveal-viewport { background: var(--slide-bg); }
 .reveal, .preview { background: var(--slide-bg); color: var(--ink); }

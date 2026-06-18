@@ -1,7 +1,7 @@
 /* Theme: minimal. White, near-black, lots of space, no shadows, one thin accent.
  * Quiet by default; let the content carry the slide. */
 :is(.reveal,.preview) {
-  --slide-bg: #ffffff; --ink: #141414; --accent: #141414; --rule: #e6e6e6; --muted: #8a8a8a;
+  --slide-bg: #ffffff; --ink: #141414; --accent: #141414; --accent-2: #8a8a8a; --rule: #e6e6e6; --muted: #8a8a8a;
 }
 .reveal-viewport { background: var(--slide-bg); }
 .reveal, .preview { background: var(--slide-bg); color: var(--ink); font-family: "Helvetica Neue", "Segoe UI", Arial, system-ui, sans-serif; }

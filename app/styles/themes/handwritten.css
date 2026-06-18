@@ -3,7 +3,7 @@
  * Uses system handwriting fonts (Segoe Print on Windows, Bradley Hand on Mac),
  * falling back to any cursive, so it needs no web font. */
 :is(.reveal,.preview) {
-  --slide-bg: #fcfaf3; --ink: #2b2a28; --accent: #2f6f9f; --rule: #cbb89a; --muted: #6f6a60;
+  --slide-bg: #fcfaf3; --ink: #2b2a28; --accent: #2f6f9f; --accent-2: #c0392b; --rule: #cbb89a; --muted: #6f6a60;
 }
 .reveal-viewport { background: var(--slide-bg); }
 .reveal, .preview { background: var(--slide-bg); color: var(--ink); font-family: "Segoe Print", "Bradley Hand", "Comic Sans MS", cursive; }

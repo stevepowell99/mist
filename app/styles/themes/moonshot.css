@@ -1,7 +1,7 @@
 /* Theme: moonshot. Deep space navy with bright cyan accents and a soft glow.
  * A bold, futuristic deck. */
 :is(.reveal,.preview) {
-  --slide-bg: #0a0e1a; --ink: #e7ecff; --accent: #76f7ff; --accent2: #ff8fb8; --rule: #2a3550; --muted: #9aa6c9;
+  --slide-bg: #0a0e1a; --ink: #e7ecff; --accent: #76f7ff; --accent-2: #ff8fb8; --rule: #2a3550; --muted: #9aa6c9;
 }
 .reveal-viewport { background: var(--slide-bg); }
 .reveal, .preview { background: var(--slide-bg); color: var(--ink); font-family: "Segoe UI", system-ui, "Helvetica Neue", sans-serif; }
@@ -9,7 +9,7 @@
 :is(.reveal,.preview) h1, :is(.reveal,.preview) h2, :is(.reveal,.preview) h3 { color: #fff; font-weight: 800; letter-spacing: -0.01em; }
 .reveal h1 { color: var(--accent); text-shadow: 0 0 18px rgba(118,247,255,0.4); }
 .reveal h2 { color: var(--accent); }
-.reveal h3 { color: var(--accent2); }
+.reveal h3 { color: var(--accent-2); }
 :is(.reveal,.preview) a { color: var(--accent); }
 
 :is(.reveal,.preview) blockquote { border-left: 3px solid var(--accent); background: rgba(255,255,255,0.03); color: var(--ink); box-shadow: none; width: auto; }

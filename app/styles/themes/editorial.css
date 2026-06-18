@@ -3,7 +3,7 @@
  * small-caps italic headings, a rust accent. The composable components are
  * restyled to the calm print look. */
 :is(.reveal,.preview) {
-  --slide-bg: #f5efe2; --ink: #2a2722; --rule: #c8b48a; --accent: #7a2820; --muted: #6b6256;
+  --slide-bg: #f5efe2; --ink: #2a2722; --rule: #c8b48a; --accent: #7a2820; --accent-2: #9a7b3f; --muted: #6b6256;
 }
 .reveal-viewport { background: var(--slide-bg); }
 .reveal, .preview { background: var(--slide-bg); color: var(--ink); }

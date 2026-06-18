@@ -131,6 +131,25 @@
 :is(.reveal,.preview) .border-navy   { border: 2px solid var(--c-navy);   --border: var(--c-navy); }   :is(.reveal,.preview) .border-mag   { border: 2px solid var(--c-mag);   --border: var(--c-mag); }
 :is(.reveal,.preview) .border-white  { border: 2px solid var(--c-white);  --border: var(--c-white); }  :is(.reveal,.preview) .border-black { border: 2px solid var(--c-black); --border: var(--c-black); }
 
+/* AXIS: THEME COLOURS. The active theme's own palette, so a box or word can match
+   the deck: `page` = slide background, `ink` = body text, `accent` / `accent-2` =
+   the theme's two accents. Every theme sets --slide-bg, --ink, --accent,
+   --accent-2. As text (.accent), fill (.bg-accent) or border (.border-accent).
+   Text on an accent/ink fill is the slide background, which contrasts the accent
+   by design across the themes (yellow-on-dark, teal-on-white, ...). */
+:is(.reveal,.preview) .page { color: var(--slide-bg); }
+:is(.reveal,.preview) .ink { color: var(--ink); }
+:is(.reveal,.preview) .accent { color: var(--accent); }
+:is(.reveal,.preview) .accent-2 { color: var(--accent-2, var(--accent)); }
+:is(.reveal,.preview) .bg-page    { background: var(--slide-bg); --fill: var(--slide-bg); }
+:is(.reveal,.preview) .bg-ink     { background: var(--ink); --fill: var(--ink); color: var(--slide-bg); }
+:is(.reveal,.preview) .bg-accent  { background: var(--accent); --fill: var(--accent); color: var(--slide-bg); }
+:is(.reveal,.preview) .bg-accent-2 { background: var(--accent-2, var(--accent)); --fill: var(--accent-2, var(--accent)); color: var(--slide-bg); }
+:is(.reveal,.preview) .border-page    { border: 2px solid var(--slide-bg);            --border: var(--slide-bg); }
+:is(.reveal,.preview) .border-ink     { border: 2px solid var(--ink);                 --border: var(--ink); }
+:is(.reveal,.preview) .border-accent  { border: 2px solid var(--accent);              --border: var(--accent); }
+:is(.reveal,.preview) .border-accent-2 { border: 2px solid var(--accent-2, var(--accent)); --border: var(--accent-2, var(--accent)); }
+
 /* A bare fill or border colour on a fenced div IS the box: `::: {.bg-teal}` or
    `::: {.border-navy}` on their own are a padded, rounded box. This replaces the
    old .bg component. Zero specificity (:where) so .panel/.card keep their own
@@ -166,7 +185,6 @@
 /* Lead paragraph + small dimmed text. These are self-explanatory aliases: just
    a size/weight tweak, so the name teaches the use and a deck can still adjust. */
 :is(.reveal,.preview) .lead, :is(.reveal,.preview) .lead p { font-size: 1.05em; line-height: 1.4; color: var(--ink); }
-:is(.reveal,.preview) .accent { color: var(--teal-dark); font-weight: 700; }
 :is(.reveal,.preview) .footer { font-size: 0.6em; opacity: 0.65; }
 :is(.reveal,.preview) .fineprint { font-size: 0.5em; opacity: 0.6; line-height: 1.3; }
 

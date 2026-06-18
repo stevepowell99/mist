@@ -1,7 +1,7 @@
 /* Theme: blackboard. Dark chalkboard green with chalk-white text and a yellow
  * chalk accent. Boxes read as chalk outlines; a quiet classroom feel. */
 :is(.reveal,.preview) {
-  --slide-bg: #20322b; --ink: #f3f1e7; --accent: #f2d65c; --rule: #6f8a7e; --muted: #b9c7bf;
+  --slide-bg: #20322b; --ink: #f3f1e7; --accent: #f2d65c; --accent-2: #8fd0c2; --rule: #6f8a7e; --muted: #b9c7bf;
 }
 .reveal-viewport { background: var(--slide-bg); }
 .reveal, .preview { background: var(--slide-bg); color: var(--ink); font-family: "Chalkduster", "Comic Sans MS", "Segoe Print", "Bradley Hand", cursive; }

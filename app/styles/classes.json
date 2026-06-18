@@ -41,6 +41,23 @@
       "desc": "Draw a border in that colour: .border-teal on any box gives a teal edge. A panel keeps its left accent and a shape its outline, just taking the colour.",
       "generated": { "prefix": "border", "suffixesFrom": "colour", "detail": "$suffix border" }
     },
+    "theme": {
+      "desc": "The active theme's own palette, so a box or word matches the deck. page = slide background, ink = body text, accent / accent-2 = the theme's accents. Works as text, .bg- fill and .border-.",
+      "classes": {
+        "page": "Theme: slide-background colour (text)",
+        "ink": "Theme: body-text colour (text)",
+        "accent": "Theme: primary accent (text)",
+        "accent-2": "Theme: secondary accent (text)",
+        "bg-page": "Theme: fill with the slide background",
+        "bg-ink": "Theme: fill with the body-text colour",
+        "bg-accent": "Theme: fill with the primary accent",
+        "bg-accent-2": "Theme: fill with the secondary accent",
+        "border-page": "Theme: border in the slide background",
+        "border-ink": "Theme: border in the body-text colour",
+        "border-accent": "Theme: border in the primary accent",
+        "border-accent-2": "Theme: border in the secondary accent"
+      }
+    },
     "shade": {
       "desc": "Which version of the hue a component fills with.",
       "classes": { "light": "Pale fill (--hue-pale)", "dark": "Deep fill (--hue-deep)" }
