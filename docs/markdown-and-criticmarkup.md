@@ -156,15 +156,16 @@ Preview converts these to inline APA and lists every cited work under a Referenc
 
 ### The reference library
 
-Citations resolve against a BibTeX file in the document's GitHub repository. The first of these paths that exists is used:
+Citations resolve against a BibTeX file in Google Drive (`app/routes/drive.bib.ts`). Resolution order:
 
-`assets/MyLibrary.bib`, `assets/My Library.bib`, `My Library.bib`, `MyLibrary.bib`, `references.bib`, `bibliography.bib`.
+1. Any explicit `bibliography:` frontmatter path, resolved relative to the document's Drive folder (honoured first, so a deck can point at its library directly).
+2. Otherwise a folder walk: starting at the document's folder and walking up to six ancestor folders, each folder and its `assets/` subfolder is checked for any `.bib`. Every `.bib` at the first level that has one is merged.
 
-A document not backed by a GitHub repo has no library, so its citations render with the key and `n.d.` in place of the author and year.
+A document with no reachable `.bib` has no library, so its citations render with the key and `n.d.` in place of the author and year.
 
 ### The @ picker
 
-Typing `@` in the editor opens a searchable list of the library's references (author, year, title), filtered as you type; choosing one inserts `[@key]`. It works in both edit and suggest mode, and in suggest mode the inserted citation shows as a tracked addition. The picker appears only on a document whose repository contains a `.bib`.
+Typing `@` in the editor opens a searchable list of the library's references (author, year, title), filtered as you type; choosing one inserts `[@key]`. It works in both edit and suggest mode, and in suggest mode the inserted citation shows as a tracked addition. The picker appears only on a document with a reachable `.bib`.
 
 ## References
 

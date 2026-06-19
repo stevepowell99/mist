@@ -1115,12 +1115,12 @@ function DocumentLayout({ id }: { id: string }) {
                 the editor). A deck preview instead renders in the section below. */}
             {!splitOpen && showPreview && !deck && <Preview />}
           </main>
-          {isDesktop && !slidesFull && (
+          {isDesktop && splitOpen && (
             <div
               role="separator"
               aria-orientation="vertical"
               onMouseDown={startDrag}
-              title="Drag to split editor and preview"
+              title="Drag to resize editor and preview"
               className="group relative z-10 flex w-2 shrink-0 cursor-col-resize items-center justify-center bg-border transition-colors hover:bg-chartreuse"
             >
               {/* widen the grab target a few px into each pane */}
