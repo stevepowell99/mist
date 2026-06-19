@@ -466,8 +466,50 @@ export async function driveFiles(
     params.set("orderBy", opts.nameQuery || opts.folderId ? "folder,name" : "viewedByMeTime desc");
   }
 
-  // Page through results until we reach the limit or run out (Drive caps a page
-  // at 100 with these fields, so a folder of 100+ items needs several requests).
+  return collectDriveFiles(token, params, limit, opts.types && opts.types.length ? new Set(opts.types) : null);
+}
+
+/**
+ * Markdown (or other) files that live directly in any of the given folders, in
+ * one Drive query with an OR over parents. Used by the quick-open palette to
+ * surface files whose PARENT folder name matched the query (ranked below direct
+ * name hits client-side). Returns [] for no folders.
+ */
+export async function driveFilesUnderFolders(
+  token: string,
+  folderIds: string[],
+  types: DriveKind[],
+  limit = 60,
+): Promise<DriveSearchEntry[]> {
+  if (!folderIds.length) return [];
+  const parents = folderIds.map((id) => `'${escapeQ(id)}' in parents`).join(" or ");
+  const typeParts = types.map((t) => KIND_CLAUSE[t]).filter(Boolean);
+  const clauses = ["trashed = false", `(${parents})`];
+  if (typeParts.length) clauses.push(`(${typeParts.join(" or ")})`);
+  const params = new URLSearchParams({
+    q: clauses.join(" and "),
+    fields: "nextPageToken,files(id,name,mimeType,webViewLink,parents)",
+    pageSize: String(Math.min(limit, 100)),
+    supportsAllDrives: "true",
+    includeItemsFromAllDrives: "true",
+    orderBy: "folder,name",
+  });
+  return collectDriveFiles(token, params, limit, new Set(types));
+}
+
+/**
+ * Page through a Drive files query and classify each hit, dropping kinds outside
+ * `wanted` (the markdown clause over-matches, e.g. "x.md.json") and generated
+ * build directories. Shared by the name search and the parent-folder expansion.
+ */
+async function collectDriveFiles(
+  token: string,
+  params: URLSearchParams,
+  limit: number,
+  wanted: Set<DriveKind> | null,
+): Promise<DriveSearchEntry[]> {
+  // Drive caps a page at 100 with these fields, so a folder of 100+ items needs
+  // several requests.
   const raw: { id: string; name: string; mimeType: string; webViewLink?: string; parents?: string[] }[] = [];
   let pageToken: string | undefined;
   do {
@@ -482,9 +524,6 @@ export async function driveFiles(
     pageToken = body.nextPageToken;
   } while (pageToken && raw.length < limit);
 
-  // The markdown clause (name contains '.md') over-matches (e.g. "x.md.json"),
-  // so re-check the classified kind against the requested types and drop misses.
-  const wanted = opts.types && opts.types.length ? new Set(opts.types) : null;
   const cache = new Map<string, { name: string; parent?: string }>();
   const entries: DriveSearchEntry[] = [];
   for (const f of raw) {

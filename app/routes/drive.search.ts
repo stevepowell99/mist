@@ -3,6 +3,7 @@ import { getCloudflare } from "~/lib/cloudflare.server";
 import {
   getDriveAccessToken,
   driveFiles,
+  driveFilesUnderFolders,
   driveTrail,
   type DriveKind,
   type DriveSearchEntry,
@@ -23,11 +24,14 @@ export interface SearchResult {
   openInMist: boolean;
   /** Drive web link for opening anything else in a new tab. */
   webViewLink: string | null;
+  /** A file surfaced because its PARENT folder matched the query, not its own
+   *  name. Ranked below direct name hits in the quick-open palette. */
+  viaParent?: boolean;
 }
 
 const FILTERABLE: DriveKind[] = ["folder", "markdown", "doc", "sheet", "slides", "pdf", "image"];
 
-function toResult(e: DriveSearchEntry): SearchResult {
+function toResult(e: DriveSearchEntry, viaParent = false): SearchResult {
   return {
     id: e.id,
     name: e.name,
@@ -37,6 +41,7 @@ function toResult(e: DriveSearchEntry): SearchResult {
     trail: e.trail,
     openInMist: e.kind === "markdown",
     webViewLink: e.webViewLink,
+    ...(viaParent ? { viaParent: true } : {}),
   };
 }
 
@@ -73,13 +78,27 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     // whole folder; a name search stays a short relevant list.
     const limit = folder && !q ? 1000 : 30;
     const entries = await driveFiles(token, { nameQuery: q || undefined, folderId: folder, types, fullText, limit });
+
+    // Parent-folder expansion (the quick-open palette sets parents=1): for a
+    // top-level name search, also surface markdown that lives in folders whose
+    // NAME matched the query, flagged so the client ranks it below direct hits.
+    // Reuses the folders the main search already returned, so no extra folder
+    // query; capped so it stays one bounded Drive call.
+    let parentResults: SearchResult[] = [];
+    if (url.searchParams.get("parents") === "1" && q && !folder) {
+      const folderIds = entries.filter((e) => e.kind === "folder").map((e) => e.id).slice(0, 6);
+      const seen = new Set(entries.map((e) => e.id));
+      const kids = await driveFilesUnderFolders(token, folderIds, ["markdown"], 40);
+      parentResults = kids.filter((k) => !seen.has(k.id)).map((e) => toResult(e, true));
+    }
+
     // When browsing a folder, also return its trail (top -> current) so the
     // panel can show a clickable breadcrumb and walk up.
     let folderInfo: { trail: { id: string; name: string }[] } | null = null;
     if (folder) {
       folderInfo = { trail: await driveTrail(token, folder) };
     }
-    return Response.json({ results: entries.map(toResult), folder: folderInfo });
+    return Response.json({ results: [...entries.map((e) => toResult(e)), ...parentResults], folder: folderInfo });
   } catch (err) {
     return Response.json(
       { error: err instanceof Error ? err.message : "search failed" },

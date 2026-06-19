@@ -105,6 +105,15 @@ export default function ShareButton() {
           >
             Download
           </DropdownMenu.Item>
+          {!deck && (
+            <DropdownMenu.Item
+              onSelect={() => window.dispatchEvent(new CustomEvent("mist-print-doc"))}
+              title="Paginate the document into A4 pages and Save as PDF"
+              className="block w-full cursor-pointer px-3 py-1.5 text-left text-sm outline-none data-[highlighted]:bg-border"
+            >
+              Print to PDF
+            </DropdownMenu.Item>
+          )}
           {deck && (
             <>
               <div className="my-1 border-t border-border" />

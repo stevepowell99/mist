@@ -596,6 +596,16 @@ function DocumentLayout({ id }: { id: string }) {
     return () => window.removeEventListener("message", onMsg);
   }, [enterPresent, printDeck]);
 
+  // The Share menu's "Print to PDF" (a document) fires this; a deck uses its own
+  // /slides print link in that menu instead.
+  useEffect(() => {
+    const onPrint = () => {
+      if (!deck) printDoc();
+    };
+    window.addEventListener("mist-print-doc", onPrint);
+    return () => window.removeEventListener("mist-print-doc", onPrint);
+  }, [deck, printDoc]);
+
   // Ctrl/Cmd+P prints through gmist, not the raw app: a deck prints its slides,
   // a document switches to Preview and prints that. For a deck, focus inside the
   // iframe instead forwards mist-print (the runtime cannot open the print page).
