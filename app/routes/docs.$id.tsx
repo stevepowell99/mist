@@ -557,6 +557,26 @@ function DocumentLayout({ id }: { id: string }) {
     if (!w) window.location.assign(url);
   }, [deck, id, docKey, assetToken]);
 
+  // Print a document: a quick browser Save as PDF of the rendered preview (the
+  // @media print stylesheet hides the shell and flows the preview across pages).
+  // Switch to Preview first so it is mounted, then wait for it to render its
+  // content before handing off to print. Decks use printDeck instead.
+  const printDoc = useCallback(() => {
+    if (deck) return;
+    setView("preview");
+    let tries = 0;
+    const tick = () => {
+      const el = document.querySelector(".preview");
+      if ((el && el.textContent && el.textContent.trim()) || tries > 30) {
+        window.print();
+      } else {
+        tries++;
+        requestAnimationFrame(tick);
+      }
+    };
+    requestAnimationFrame(tick);
+  }, [deck, setView]);
+
   // The deck iframe forwards F (plain) as a present request and Ctrl/Cmd+P as a
   // print request, since the sandboxed iframe can neither fullscreen the app nor
   // open the print page itself.
@@ -570,19 +590,20 @@ function DocumentLayout({ id }: { id: string }) {
     return () => window.removeEventListener("message", onMsg);
   }, [enterPresent, printDeck]);
 
-  // Ctrl/Cmd+P on a deck (focus in the app chrome) prints the slides, not the app.
-  // When focus is inside the deck iframe its runtime forwards mist-print instead.
+  // Ctrl/Cmd+P prints through gmist, not the raw app: a deck prints its slides,
+  // a document switches to Preview and prints that. For a deck, focus inside the
+  // iframe instead forwards mist-print (the runtime cannot open the print page).
   useEffect(() => {
-    if (!deck) return;
     const onKey = (e: KeyboardEvent) => {
       if ((e.key === "p" || e.key === "P") && (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey) {
         e.preventDefault();
-        printDeck();
+        if (deck) printDeck();
+        else printDoc();
       }
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [deck, printDeck]);
+  }, [deck, printDeck, printDoc]);
 
   const runChord = useCallback(
     (c: string): boolean => {
@@ -797,6 +818,21 @@ function DocumentLayout({ id }: { id: string }) {
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <rect x="2" y="3" width="20" height="14" rx="2" /><path d="M8 21h8M12 17v4" /><path d="M10 8.5 14.5 11 10 13.5Z" fill="currentColor" stroke="none" />
+            </svg>
+          </button>
+        )}
+        {/* Print to PDF (documents only; a deck prints via Present/Ctrl+P). The
+            browser's Save as PDF of the rendered preview, not a typeset PDF. */}
+        {!deck && (
+          <button
+            type="button"
+            onClick={printDoc}
+            title="Print to PDF (Ctrl/Cmd+P)"
+            aria-label="Print to PDF"
+            className="flex shrink-0 cursor-pointer items-center border-r border-border px-3 transition-colors hover:bg-border hover:text-ink"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M6 9V2h12v7" /><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /><rect x="6" y="14" width="12" height="8" rx="1" />
             </svg>
           </button>
         )}

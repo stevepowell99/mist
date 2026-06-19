@@ -568,3 +568,32 @@ body {
     --color-canary: color(display-p3 1 0.9 0.04);
   }
 }
+
+/* Print a document (the browser's Save as PDF) of the reading view. The navbar
+   Print button switches to Preview first, then calls window.print(). This is a
+   quick dump of the rendered preview, not a typeset PDF: the whole app shell is
+   hidden and the preview is lifted out of the app's fixed-height, overflow-hidden
+   flex cages (position:absolute + overflow:visible everywhere) so the full
+   document flows across pages. Decks have their own print path (/slides). */
+@media print {
+  header,
+  aside { display: none !important; }
+
+  body * {
+    overflow: visible !important;
+    visibility: hidden !important;
+  }
+
+  .preview,
+  .preview * { visibility: visible !important; }
+
+  .preview {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    color: #000;
+  }
+}
