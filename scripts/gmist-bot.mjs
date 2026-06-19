@@ -7,21 +7,30 @@
  * file out of band (which only reconciles at a sync boundary and can fork).
  *
  * Usage:
- *   GMIST_SESSION="<mist_session cookie value>" \
- *     node scripts/gmist-bot.mjs "<doc URL>" [--suggest "a note"]
+ *   node scripts/gmist-bot.mjs "<doc URL>" [--suggest "a note"] [--edits <file.json>]
  *
  * - <doc URL> is the share link, e.g.
  *   https://mist.broad-smoke-cc64.workers.dev/docs/<id>?k=<key>
- * - GMIST_SESSION is the value of the `mist_session` cookie taken from a browser
- *   signed into gmist with a Google account the file is shared with (DevTools >
- *   Application > Cookies). It is a credential: never commit it. The WebSocket
- *   gate (workers/app.ts) requires it plus the file's Drive ACL.
- * - Without --suggest the client is read-only (connect, sync, print, observe and
- *   reprint on every remote change). With --suggest "<text>" it appends a
- *   CriticMarkup comment {>>text<<} to the body, which surfaces as a review
- *   comment in every connected editor, then disconnects.
+ * - The `mist_session` cookie (a credential, never committed) comes from
+ *   $GMIST_SESSION, or failing that scripts/.gmist-session (gitignored). Take it
+ *   from a browser signed into gmist with a Google account the file is shared
+ *   with (DevTools > Application > Cookies). The WebSocket gate (workers/app.ts)
+ *   requires it plus the file's Drive ACL. It expires, so refresh when a run 401s.
+ * - With no edit flag the client is read-only (connect, sync, print, observe and
+ *   reprint on every remote change).
+ * - --suggest "<text>" appends a CriticMarkup comment {>>text<<} to the body.
+ * - --edits <file.json> applies a list of ANCHORED CriticMarkup edits, each found
+ *   by a literal `find` substring of the current body:
+ *     [{ "op": "comment",     "find": "intro", "text": "tighten this" },
+ *      { "op": "replace",     "find": "teh",    "replace": "the" },
+ *      { "op": "insertAfter", "find": ".",      "text": " More." },
+ *      { "op": "delete",      "find": "very " }]
+ *   replace/delete render as {--old--}{++new++} / {--old--} (additions and
+ *   deletions, which gmist styles); a comment with no `find` is appended.
+ *   This is the real tracked-changes review path; --suggest is the quick note.
  */
 
+import { readFileSync } from "node:fs";
 import WebSocket from "ws";
 import * as Y from "yjs";
 import * as awarenessProtocol from "y-protocols/awareness";
@@ -35,17 +44,32 @@ const MSG_AWARENESS = 1;
 
 function parseArgs(argv) {
   const args = argv.slice(2);
-  const i = args.indexOf("--suggest");
+  const flag = (name) => {
+    const i = args.indexOf(name);
+    return i >= 0 ? args[i + 1] : null;
+  };
   return {
     url: args.find((a) => /^https?:\/\//.test(a)),
-    suggest: i >= 0 ? args[i + 1] : null,
+    suggest: flag("--suggest"),
+    editsPath: flag("--edits"),
   };
 }
 
-const { url: docUrl, suggest } = parseArgs(process.argv);
-const session = process.env.GMIST_SESSION;
+/** The cookie from $GMIST_SESSION, else the gitignored scripts/.gmist-session. */
+function resolveSession() {
+  if (process.env.GMIST_SESSION) return process.env.GMIST_SESSION.trim();
+  try {
+    return readFileSync(new URL("./.gmist-session", import.meta.url), "utf8").trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+const { url: docUrl, suggest, editsPath } = parseArgs(process.argv);
+const session = resolveSession();
 if (!docUrl || !session) {
-  console.error('Usage: GMIST_SESSION=<cookie> node scripts/gmist-bot.mjs <docUrl> [--suggest "text"]');
+  console.error('Usage: node scripts/gmist-bot.mjs <docUrl> [--suggest "text"] [--edits file.json]');
+  console.error("(needs $GMIST_SESSION or scripts/.gmist-session)");
   process.exit(1);
 }
 
@@ -85,18 +109,56 @@ function printBody(tag) {
   console.log("----- end -----\n");
 }
 
+/** Apply one anchored edit, located by a literal `find` substring of the current
+ *  body. Each is its own transaction so it becomes one CRDT update. */
+function applyOp(op) {
+  if (op.op === "comment" && !op.find) {
+    body.insert(body.length, `\n\n{>>${op.text}<<}`);
+    return "comment appended";
+  }
+  const text = body.toString();
+  const idx = op.find ? text.indexOf(op.find) : -1;
+  if (op.find && idx < 0) return `SKIP (anchor not found): ${JSON.stringify(op.find)}`;
+  const end = idx + (op.find?.length ?? 0);
+  switch (op.op) {
+    case "comment":
+      body.insert(end, `{>>${op.text}<<}`);
+      return `comment at ${JSON.stringify(op.find)}`;
+    case "insertAfter":
+      body.insert(end, `{++${op.text}++}`);
+      return `insert after ${JSON.stringify(op.find)}`;
+    case "delete":
+      body.delete(idx, op.find.length);
+      body.insert(idx, `{--${op.find}--}`);
+      return `delete ${JSON.stringify(op.find)}`;
+    case "replace":
+      body.delete(idx, op.find.length);
+      body.insert(idx, `{--${op.find}--}{++${op.replace}++}`);
+      return `replace ${JSON.stringify(op.find)} -> ${JSON.stringify(op.replace)}`;
+    default:
+      return `unknown op ${JSON.stringify(op.op)}`;
+  }
+}
+
 function onSynced() {
   console.error("synced");
   printBody("initial");
   body.observe(() => printBody("updated"));
-  if (suggest == null) {
-    console.error("read-only; observing live changes. Ctrl+C to exit.");
+
+  if (editsPath) {
+    const ops = JSON.parse(readFileSync(editsPath, "utf8"));
+    for (const op of ops) console.error("  " + applyOp(op));
+    console.error(`applied ${ops.length} edit(s); flushing then leaving...`);
+    setTimeout(() => ws.close(), 1500);
     return;
   }
-  const note = `\n\n{>>Claude (bot): ${suggest}<<}`;
-  body.insert(body.length, note); // a CriticMarkup comment, merges into the CRDT
-  console.error(`posted a comment (${note.length} chars); flushing then leaving...`);
-  setTimeout(() => ws.close(), 1500); // let the update reach the server
+  if (suggest != null) {
+    body.insert(body.length, `\n\n{>>Claude (bot): ${suggest}<<}`);
+    console.error("posted a comment; flushing then leaving...");
+    setTimeout(() => ws.close(), 1500);
+    return;
+  }
+  console.error("read-only; observing live changes. Ctrl+C to exit.");
 }
 
 ws.on("open", () => {

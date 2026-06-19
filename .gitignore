@@ -16,11 +16,15 @@ worker-configuration.d.ts
 .env*
 !.env.example
 
-# Claude Code
-.claude/
+# Claude Code (ignore transient data, but version-control project skills)
+.claude/*
+!.claude/skills/
 
 # Coverage
 /coverage/
 
 # Vendored at build by scripts/vendor-pagedjs.mjs
 public/vendor/
+
+# gmist headless client session cookie (a credential)
+scripts/.gmist-session
