@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router";
 import { getRecentOpened, addRecentOpened, type RecentItem } from "~/lib/drive-recent";
+import { importDriveFile, readJson, SIGN_IN_MSG } from "~/lib/drive-open";
 import type { DriveKind } from "~/lib/google.server";
 import type { SearchResult } from "~/routes/drive.search";
 
@@ -13,23 +14,10 @@ import type { SearchResult } from "~/routes/drive.search";
  * sharing; a 401 means the session has lapsed.
  */
 
-const SIGN_IN_MSG = "Sign in with Google on the home page to use Drive.";
-
 /** True for a click that conventionally opens in a new tab: Ctrl/Cmd/Shift held,
  *  or the middle mouse button. */
 function newTabClick(e: { metaKey?: boolean; ctrlKey?: boolean; shiftKey?: boolean; button?: number }): boolean {
   return !!(e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1);
-}
-
-/** Parse a JSON response, but if the body is not JSON (e.g. a sanitised server
- *  error page), surface the text as a clean error instead of a parse crash. */
-async function readJson(res: Response): Promise<Record<string, unknown>> {
-  const text = await res.text();
-  try {
-    return text ? (JSON.parse(text) as Record<string, unknown>) : {};
-  } catch {
-    throw new Error(text.trim().slice(0, 200) || `request failed (${res.status})`);
-  }
 }
 
 interface Item {
@@ -303,29 +291,20 @@ export default function DriveBrowser({
       if (!newTab) setBusy(true);
       setError(null);
       try {
-        const res = await fetch("/drive/import", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url: item.id }),
-        });
-        if (res.status === 401) throw new Error(SIGN_IN_MSG);
-        const body = (await readJson(res)) as { url?: string; error?: string };
-        if (body.url) {
-          addRecentOpened({ id: item.id, name: item.name, path: item.path, parentId: item.parentId, trail: item.trail });
-          // Carry the current View (editor/split/preview) onto the new doc so
-          // the layout is preserved when opening from the sidebar.
-          const view = typeof window !== "undefined"
-            ? new URL(window.location.href).searchParams.get("view")
-            : null;
-          const target = view ? `${body.url}&view=${encodeURIComponent(view)}` : body.url;
-          // New tab: fill the tab we opened. Same tab: client-side navigation
-          // keeps the top bar mounted through the load (the doc page remounts per
-          // id, so Yjs state resets).
-          if (tab) tab.location.href = target;
-          else navigate(target);
-          return; // keep the waiter up until the route swaps
-        }
-        throw new Error(body.error ?? "could not open file");
+        const url = await importDriveFile(item.id);
+        addRecentOpened({ id: item.id, name: item.name, path: item.path, parentId: item.parentId, trail: item.trail });
+        // Carry the current View (editor/split/preview) onto the new doc so
+        // the layout is preserved when opening from the sidebar.
+        const view = typeof window !== "undefined"
+          ? new URL(window.location.href).searchParams.get("view")
+          : null;
+        const target = view ? `${url}&view=${encodeURIComponent(view)}` : url;
+        // New tab: fill the tab we opened. Same tab: client-side navigation
+        // keeps the top bar mounted through the load (the doc page remounts per
+        // id, so Yjs state resets).
+        if (tab) tab.location.href = target;
+        else navigate(target);
+        return; // keep the waiter up until the route swaps
       } catch (e) {
         if (tab) tab.close();
         setError(e instanceof Error ? e.message : "could not open file");

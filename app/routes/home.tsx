@@ -5,6 +5,7 @@ import { APP_NAME, generateDocumentId } from "~/shared/constants";
 import { deserializeThreads } from "~/lib/thread-serialization";
 import ThemeSelector from "~/components/ThemeSelector";
 import DriveBrowser from "~/components/DriveBrowser";
+import { QuickOpenTrigger } from "~/components/QuickOpen";
 import GoogleSignIn from "~/components/GoogleSignIn";
 import demoDocument from "./demo.md?raw";
 
@@ -78,6 +79,7 @@ export default function Home(_props: Route.ComponentProps) {
 
   return (
     <>
+      <QuickOpenTrigger />
       <div
         className="relative flex min-h-screen flex-col items-center justify-center px-4"
         onDrop={handleDrop}

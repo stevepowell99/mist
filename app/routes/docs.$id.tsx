@@ -8,6 +8,7 @@ import { getCloudflare } from "~/lib/cloudflare.server";
 import { mintAssetToken, mintAssetTokenForDoc, authorizeDoc, type DriveSessionEnv } from "~/lib/drive-access.server";
 import { EditorView } from "@codemirror/view";
 import { useChordListener } from "~/lib/useChordListener";
+import { QuickOpenTrigger } from "~/components/QuickOpen";
 import { useSplitDrag } from "~/lib/useSplitDrag";
 import { offsetForSlideIndex, slideIndexForOffset } from "~/lib/slide-cursor";
 import { docFileKey, loadDocSettings, saveDocSettings } from "~/lib/doc-settings";
@@ -36,6 +37,7 @@ import HelpPanel from "~/components/HelpPanel";
 import LibraryGallery from "~/components/LibraryGallery";
 import GoogleSignIn from "~/components/GoogleSignIn";
 import SlidesView, { isSlideDeck } from "~/components/SlidesView";
+import { printDocumentPaged } from "~/lib/print-paged.client";
 
 // useLayoutEffect on the client (so scroll is restored before paint, no flash),
 // useEffect on the server (avoids the SSR warning).
@@ -557,10 +559,12 @@ function DocumentLayout({ id }: { id: string }) {
     if (!w) window.location.assign(url);
   }, [deck, id, docKey, assetToken]);
 
-  // Print a document: a quick browser Save as PDF of the rendered preview (the
-  // @media print stylesheet hides the shell and flows the preview across pages).
-  // Switch to Preview first so it is mounted, then wait for it to render its
-  // content before handing off to print. Decks use printDeck instead.
+  // Print a document. Switch to Preview first so it is mounted, wait for it to
+  // render, then paginate it with Paged.js into a real multi-page layout (A4,
+  // margins, running title, page numbers) and open the print dialog. If Paged.js
+  // is unavailable or fails, fall back to a plain window.print() (the @media
+  // print stylesheet still hides the shell and flows the preview). Decks use
+  // printDeck instead.
   const printDoc = useCallback(() => {
     if (deck) return;
     setView("preview");
@@ -568,14 +572,16 @@ function DocumentLayout({ id }: { id: string }) {
     const tick = () => {
       const el = document.querySelector(".preview");
       if ((el && el.textContent && el.textContent.trim()) || tries > 30) {
-        window.print();
+        void printDocumentPaged(title).then((ok) => {
+          if (!ok) window.print();
+        });
       } else {
         tries++;
         requestAnimationFrame(tick);
       }
     };
     requestAnimationFrame(tick);
-  }, [deck, setView]);
+  }, [deck, setView, title]);
 
   // The deck iframe forwards F (plain) as a present request and Ctrl/Cmd+P as a
   // print request, since the sandboxed iframe can neither fullscreen the app nor
@@ -772,6 +778,7 @@ function DocumentLayout({ id }: { id: string }) {
 
   return (
     <div className="flex h-screen flex-col">
+      <QuickOpenTrigger />
       {!present && (
       <header ref={headerRef} className="flex items-stretch border-b border-border">
         <Link
@@ -821,8 +828,8 @@ function DocumentLayout({ id }: { id: string }) {
             </svg>
           </button>
         )}
-        {/* Print to PDF (documents only; a deck prints via Present/Ctrl+P). The
-            browser's Save as PDF of the rendered preview, not a typeset PDF. */}
+        {/* Print to PDF (documents only; a deck prints via Present/Ctrl+P).
+            Paginates the preview with Paged.js into real A4 pages, then prints. */}
         {!deck && (
           <button
             type="button"
