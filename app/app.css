@@ -350,28 +350,31 @@ body {
 /* Floating toolbar over a selection (comment / suggest). The CM tooltip wrapper
    carries its own border/background, so strip those when it holds our toolbar. */
 .cm-tooltip:has(.cm-sel-toolbar) {
-  border: none;
-  background: transparent;
+  border: none !important;
+  background: transparent !important;
 }
 .cm-sel-toolbar {
   display: flex;
-  gap: 1px;
-  overflow: hidden;
-  border-radius: 5px;
-  background: var(--color-ink);
-  box-shadow: 0 2px 10px rgb(0 0 0 / 0.25);
+  gap: 2px;
+  padding: 2px;
+  border-radius: 6px;
+  background: #1f1f36;
+  box-shadow: 0 3px 12px rgb(0 0 0 / 0.35);
 }
-.cm-sel-btn {
+.cm-sel-toolbar button.cm-sel-btn {
+  appearance: none;
+  -webkit-appearance: none;
+  margin: 0;
+  border: 0;
   cursor: pointer;
-  border: none;
   background: transparent;
-  color: var(--color-paper);
-  padding: 4px 9px;
-  font-size: 12px;
-  line-height: 1.2;
+  color: #ffffff;
+  padding: 5px 11px;
+  border-radius: 4px;
+  font: 500 12px/1.2 inherit;
   white-space: nowrap;
 }
-.cm-sel-btn:hover {
+.cm-sel-toolbar button.cm-sel-btn:hover {
   background: var(--color-chartreuse);
   color: #1a1a1a;
 }

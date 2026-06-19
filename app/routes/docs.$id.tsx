@@ -259,7 +259,6 @@ function DocumentLayout({ id }: { id: string }) {
     markdown,
     frontmatter,
     setPreview,
-    threads,
     uploadImage,
     cssClasses,
     saveNow,
@@ -269,6 +268,7 @@ function DocumentLayout({ id }: { id: string }) {
     followCursor,
     setFollowCursor,
     setCleanView,
+    commentActive,
   } = useDocument();
 
   const title = fileTitle(drive, id);
@@ -376,6 +376,11 @@ function DocumentLayout({ id }: { id: string }) {
     setAsideCollapsed(v);
     setAsidePeek(false);
   }, []);
+  // Commenting needs the panel: when a comment starts and the panel is collapsed,
+  // peek it open; close the peek once the comment is saved or cancelled.
+  useEffect(() => {
+    if (asideCollapsed) setAsidePeek(commentActive);
+  }, [commentActive, asideCollapsed]);
 
   // Per-file UI settings (divider, view, follow-cursor, clean view, comments
   // collapsed): remember the layout each file was left in, and default a new
@@ -970,6 +975,20 @@ function DocumentLayout({ id }: { id: string }) {
           <div className="flex shrink-0 items-center border-l border-border">
             <ThemeSelector />
           </div>
+          <button
+            type="button"
+            onClick={() => setAsideCollapsedPersist(!asideCollapsed)}
+            title="Comments panel (Ctrl/Cmd+Alt+C)"
+            aria-label="Toggle comments panel"
+            aria-pressed={!asideCollapsed}
+            className={`hidden shrink-0 cursor-pointer items-center border-l border-border px-3 transition-colors lg:flex ${
+              !asideCollapsed ? "bg-ink text-paper" : "hover:bg-border hover:text-ink"
+            }`}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <path d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
         </div>
       </header>
       )}
@@ -1138,33 +1157,18 @@ function DocumentLayout({ id }: { id: string }) {
             </section>
           )}
         </div>
-        {/* Collapsed strip: essentials only (expand control + comment count). */}
+        {/* No collapsed strip: an invisible right-edge zone peeks the panel on
+            hover (the navbar hamburger toggles it for good). */}
         {asideCollapsed && !asidePeek && (
           <div
             onMouseEnter={() => setAsidePeek(true)}
-            className="hidden w-9 shrink-0 flex-col items-center gap-3 border-l border-border py-2 lg:flex"
-          >
-            <button
-              type="button"
-              onClick={() => setAsideCollapsedPersist(false)}
-              title="Expand comments (Ctrl/Cmd+Alt+C)"
-              aria-label="Expand panel"
-              className="cursor-pointer p-1 text-muted hover:text-ink"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <path d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-            </button>
-            {threads.length > 0 && (
-              <span className="mt-1 rounded bg-coral/20 px-1 text-xs text-coral" title={`${threads.length} comments`}>
-                {threads.length}
-              </span>
-            )}
-          </div>
+            aria-hidden
+            className="absolute inset-y-0 right-0 z-40 hidden w-3 lg:block"
+          />
         )}
         {(!asideCollapsed || asidePeek) && (
           <aside
-            onMouseLeave={() => asidePeek && setAsidePeek(false)}
+            onMouseLeave={() => asidePeek && !commentActive && setAsidePeek(false)}
             className={`hidden w-96 flex-col overflow-hidden border-l border-border bg-paper lg:flex ${
               asidePeek ? "panel-slide-right absolute right-0 top-0 z-30 h-full shadow-lg" : ""
             }`}
