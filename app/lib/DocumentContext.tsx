@@ -581,6 +581,21 @@ export function DocumentProvider({
     [deleteThread, markUserEdited],
   );
 
+  // The editor toolbar's comment Resolve/Delete (selection over a comment) post
+  // these with the comment text, so they resolve/delete the matching thread (and
+  // its inline markup) by content, no reliance on cursor position.
+  useEffect(() => {
+    const find = (e: Event) => threads.find((t) => t.commentText === (e as CustomEvent<string>).detail);
+    const onResolve = (e: Event) => { const t = find(e); if (t) resolveThreadEdited(t.id); };
+    const onDelete = (e: Event) => { const t = find(e); if (t) deleteThreadEdited(t.id); };
+    window.addEventListener("mist-comment-resolve", onResolve);
+    window.addEventListener("mist-comment-delete", onDelete);
+    return () => {
+      window.removeEventListener("mist-comment-resolve", onResolve);
+      window.removeEventListener("mist-comment-delete", onDelete);
+    };
+  }, [threads, resolveThreadEdited, deleteThreadEdited]);
+
   const handleCommentActiveChange = useCallback(
     (active: boolean) => {
       if (active) {

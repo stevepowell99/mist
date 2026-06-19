@@ -1,6 +1,8 @@
 import { EditorView, showTooltip, type Tooltip } from "@codemirror/view";
 import { StateField, Transaction } from "@codemirror/state";
 import { commentTextAt } from "./cm-comments";
+import { criticSpans, type CriticSpan } from "./cm-criticmarkup";
+import { resolveAtCursor } from "./cm-suggestion-actions";
 
 /**
  * A floating toolbar over a non-empty selection (the Google-Docs gesture), so
@@ -46,7 +48,32 @@ function applySuggestion(view: EditorView, kind: "delete" | "replace" | "insert"
   view.focus();
 }
 
-function buildToolbar(view: EditorView): { dom: HTMLElement } {
+/** Accept or reject the suggestion the selection sits on, by a direct edit on
+ *  the literal CriticMarkup (a userEvent, so the save baseline freezes). */
+function resolveSuggestion(view: EditorView, accept: boolean): void {
+  const { from } = view.state.selection.main;
+  const change = resolveAtCursor(view.state.doc.toString(), from, accept);
+  if (change) view.dispatch({ changes: change, userEvent: "input.accept", scrollIntoView: true });
+  view.focus();
+}
+
+/** The suggestion span (addition/deletion/substitution) that WHOLLY contains the
+ *  selection, so the toolbar only offers accept/reject when the selection is the
+ *  markup itself, not markup plus surrounding text. */
+function suggestionAround(text: string, from: number, to: number): CriticSpan | null {
+  for (const s of criticSpans(text)) {
+    if (
+      (s.type === "addition" || s.type === "deletion" || s.type === "substitution") &&
+      from >= s.from &&
+      to <= s.to
+    ) {
+      return s;
+    }
+  }
+  return null;
+}
+
+function buildToolbar(view: EditorView, canEdit: boolean): { dom: HTMLElement } {
   const dom = document.createElement("div");
   dom.className = "cm-sel-toolbar";
   const add = (label: string, title: string, run: () => void) => {
@@ -60,15 +87,36 @@ function buildToolbar(view: EditorView): { dom: HTMLElement } {
     b.addEventListener("click", run);
     dom.appendChild(b);
   };
-  // If the selection sits on an existing comment, offer a direct reply to it
-  // (the highlighted text or the comment span both count as "on" the comment).
+
   const { from, to } = view.state.selection.main;
   const text = view.state.doc.toString();
-  const onComment = commentTextAt(text, from) ?? commentTextAt(text, to);
+
+  // When the selection is wholly a suggestion, edit users get accept/reject for
+  // it (suggesting on top of a suggestion makes no sense, so nothing else).
+  if (canEdit && suggestionAround(text, from, to)) {
+    add("Accept", "Accept this suggestion", () => resolveSuggestion(view, true));
+    add("Reject", "Reject this suggestion", () => resolveSuggestion(view, false));
+    return { dom };
+  }
+
+  // When the selection is wholly on one comment (its highlight or the comment
+  // span), manage that comment instead of creating a new suggestion. Reply is
+  // open to everyone who can see it; resolve/delete need edit rights.
+  const cFrom = commentTextAt(text, from);
+  const cTo = commentTextAt(text, to);
+  const onComment = cFrom && cFrom === cTo ? cFrom : null;
   if (onComment) {
     add("Reply", "Reply to this comment", () =>
       window.dispatchEvent(new CustomEvent("mist-reply", { detail: onComment })));
+    if (canEdit) {
+      add("Resolve", "Resolve this comment", () =>
+        window.dispatchEvent(new CustomEvent("mist-comment-resolve", { detail: onComment })));
+      add("Delete", "Delete this comment", () =>
+        window.dispatchEvent(new CustomEvent("mist-comment-delete", { detail: onComment })));
+    }
+    return { dom };
   }
+
   add("Comment", "Comment on the selection", () => window.dispatchEvent(new CustomEvent("mist-comment")));
   add("Delete", "Suggest deleting the selection", () => applySuggestion(view, "delete"));
   add("Replace", "Suggest replacing the selection", () => applySuggestion(view, "replace"));
@@ -76,21 +124,19 @@ function buildToolbar(view: EditorView): { dom: HTMLElement } {
   return { dom };
 }
 
-function selectionTooltips(state: EditorView["state"]): readonly Tooltip[] {
-  const sel = state.selection.main;
-  if (sel.empty) return [];
-  return [{ pos: sel.from, above: true, arrow: false, create: buildToolbar }];
-}
-
-const selectionToolbarField = StateField.define<readonly Tooltip[]>({
-  create: selectionTooltips,
-  update(value, tr) {
-    if (!tr.docChanged && tr.selection === undefined) return value;
-    return selectionTooltips(tr.state);
-  },
-  provide: (f) => showTooltip.computeN([f], (state) => state.field(f)),
-});
-
-export function selectionToolbar() {
-  return [selectionToolbarField];
+export function selectionToolbar(getCanEdit: () => boolean) {
+  const tooltipsFor = (state: EditorView["state"]): readonly Tooltip[] => {
+    const sel = state.selection.main;
+    if (sel.empty) return [];
+    return [{ pos: sel.from, above: true, arrow: false, create: (view) => buildToolbar(view, getCanEdit()) }];
+  };
+  const field = StateField.define<readonly Tooltip[]>({
+    create: tooltipsFor,
+    update(value, tr) {
+      if (!tr.docChanged && tr.selection === undefined) return value;
+      return tooltipsFor(tr.state);
+    },
+    provide: (f) => showTooltip.computeN([f], (state) => state.field(f)),
+  });
+  return [field];
 }

@@ -1108,6 +1108,7 @@ function DocumentLayout({ id }: { id: string }) {
                 doc={yjs.doc}
                 awareness={yjs.awareness}
                 mode={mode}
+                canEdit={role === "edit"}
                 cleanView={cleanView}
                 activeComment={activeCommentRange}
                 bibLibrary={bibLib}

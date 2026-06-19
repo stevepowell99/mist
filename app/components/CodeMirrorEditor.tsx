@@ -90,6 +90,7 @@ export default function CodeMirrorEditor({
   doc,
   awareness,
   mode = "suggest",
+  canEdit = false,
   cleanView = false,
   activeComment = null,
   bibLibrary = null,
@@ -106,6 +107,9 @@ export default function CodeMirrorEditor({
   doc: Y.Doc;
   awareness: Awareness;
   mode?: DocMode;
+  /** The user may apply edits (edit-link role): enables the selection toolbar's
+   *  accept/reject and comment resolve/delete actions. */
+  canEdit?: boolean;
   cleanView?: boolean;
   activeComment?: { from: number; to: number } | null;
   bibLibrary?: BibLibrary | null;
@@ -146,6 +150,10 @@ export default function CodeMirrorEditor({
   // rebuilds when the mode flips.
   const modeRef = useRef<DocMode>(mode);
   modeRef.current = mode;
+  // Live edit-permission flag, read when the selection toolbar is built so the
+  // editor never rebuilds if the role were to change.
+  const canEditRef = useRef(canEdit);
+  canEditRef.current = canEdit;
   // Live bib library for the @-picker, read at completion time so the editor
   // never rebuilds when the library loads.
   const bibRef = useRef<BibLibrary | null>(bibLibrary);
@@ -240,7 +248,7 @@ export default function CodeMirrorEditor({
         markdownLineStyle,
         fencedDivStyle,
         criticMarkup,
-        selectionToolbar(),
+        selectionToolbar(() => canEditRef.current),
         activeCommentField,
         EditorView.domEventHandlers({
           paste: (event, v) => handleImagePaste(event, v, onImagePasteRef.current),
