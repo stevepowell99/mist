@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { KindIcon, Spinner } from "~/components/DriveBrowser";
-import { importDriveFile, readJson, SIGN_IN_MSG } from "~/lib/drive-open";
+import GoogleSignIn from "~/components/GoogleSignIn";
+import { importDriveFile, readJson } from "~/lib/drive-open";
 import { getRecentOpened, addRecentOpened, type RecentItem } from "~/lib/drive-recent";
 import { searchScore } from "~/lib/fuzzy";
 import type { DriveKind } from "~/lib/google.server";
@@ -90,6 +91,11 @@ export function QuickOpen({ onClose }: { onClose?: () => void }) {
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // A 401 from the search: this browser profile is not signed into gmist. Show a
+  // sign-in button inline so the launcher page is self-contained (no need to find
+  // the home page first). `reload` re-runs the search after signing in.
+  const [needAuth, setNeedAuth] = useState(false);
+  const [reload, setReload] = useState(0);
 
   // Recents are the top-level empty-query list and the instant first paint
   // (localStorage, read after mount so SSR stays stable).
@@ -101,6 +107,21 @@ export function QuickOpen({ onClose }: { onClose?: () => void }) {
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
+
+  // Proactive auth check so the launcher prompts sign-in immediately (before the
+  // user types), not only after a failed search. Re-checked after signing in.
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/auth/google")
+      .then((r) => r.json() as Promise<{ email: string | null }>)
+      .then((d) => {
+        if (!cancelled) setNeedAuth(!d.email);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [reload]);
 
   // Fetch logic: at the top level with no query, show recents (no fetch); in a
   // folder context list its contents; a query searches (scoped to the context if
@@ -123,9 +144,15 @@ export function QuickOpen({ onClose }: { onClose?: () => void }) {
         if (context) p.set("folder", context.id);
         else p.set("parents", "1");
         const res = await fetch(`/drive/search?${p.toString()}`);
-        if (res.status === 401) throw new Error(SIGN_IN_MSG);
-        const body = (await readJson(res)) as { results?: SearchResult[]; error?: string };
         if (mine !== reqId.current) return; // superseded
+        if (res.status === 401) {
+          setNeedAuth(true);
+          setRows([]);
+          setError(null);
+          return;
+        }
+        setNeedAuth(false);
+        const body = (await readJson(res)) as { results?: SearchResult[]; error?: string };
         if (!res.ok) throw new Error(body.error ?? "search failed");
         let next = (body.results ?? []).map(resultToRow);
         // Rank by name hit first, parent/path hit a distant second. The folder
@@ -149,7 +176,7 @@ export function QuickOpen({ onClose }: { onClose?: () => void }) {
       }
     }, 250);
     return () => clearTimeout(t);
-  }, [query, context, types, recent]);
+  }, [query, context, types, recent, reload]);
 
   const toggleType = useCallback((kind: DriveKind) => {
     setTypes((prev) => (prev.includes(kind) ? prev.filter((k) => k !== kind) : [...prev, kind]));
@@ -318,6 +345,12 @@ export function QuickOpen({ onClose }: { onClose?: () => void }) {
 
         {error && <div className="border-b border-border px-3 py-2 text-sm text-red-600">{error}</div>}
 
+        {needAuth ? (
+          <div className="flex flex-col items-center gap-3 px-3 py-8 text-center">
+            <p className="text-sm text-muted">Sign in with Google to open your Drive files.</p>
+            <GoogleSignIn onSignedIn={() => { setNeedAuth(false); setReload((n) => n + 1); }} />
+          </div>
+        ) : (
         <div className="min-h-0 flex-1 overflow-y-auto">
           {rows.length === 0 && !loading && (
             <div className="px-3 py-6 text-center text-sm text-muted">{emptyMsg}</div>
@@ -341,21 +374,26 @@ export function QuickOpen({ onClose }: { onClose?: () => void }) {
             </button>
           ))}
         </div>
+        )}
       </div>
     </div>
   );
 }
 
 /**
- * Mounts the palette as a Cmd/Ctrl-K overlay anywhere it is dropped in. The
- * listener is capture-phase so it fires even when CodeMirror has focus. Drop one
- * <QuickOpenTrigger/> into a page; it renders nothing until opened.
+ * Mounts the palette as a Cmd/Ctrl+Alt+K overlay anywhere it is dropped in. Plain
+ * Ctrl/Cmd-K is unusable in a browser tab (Chrome steals it for the address-bar
+ * search), so this matches the OS launcher hotkey and gmist's other mod+alt
+ * chords. The listener is capture-phase so it fires even when CodeMirror has
+ * focus. Drop one <QuickOpenTrigger/> into a page; it renders nothing until open.
  */
 export function QuickOpenTrigger() {
   const [open, setOpen] = useState(false);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && (e.key === "k" || e.key === "K")) {
+      // e.code (physical key) survives the Windows Ctrl+Alt = AltGr remap that
+      // can change e.key on some layouts.
+      if ((e.metaKey || e.ctrlKey) && e.altKey && !e.shiftKey && (e.key === "k" || e.key === "K" || e.code === "KeyK")) {
         e.preventDefault();
         setOpen((v) => !v);
       }
