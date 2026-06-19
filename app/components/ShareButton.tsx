@@ -16,7 +16,7 @@ export function shareLink(href: string, key: string | null, asPreview: boolean):
 }
 
 export default function ShareButton() {
-  const { docId, markdown, threads, frontmatter, role, docKey, suggestKey, assetToken } = useDocument();
+  const { docId, markdown, threads, frontmatter, role, docKey, suggestKey, assetToken, drive } = useDocument();
   const [copied, setCopied] = useState<"edit" | "suggest" | null>(null);
   const [asPreview, setAsPreview] = useState(false);
   const [combineFragments, setCombineFragments] = useState(true);
@@ -97,6 +97,19 @@ export default function ShareButton() {
               className="block w-full cursor-pointer px-3 py-1.5 text-left text-sm outline-none data-[highlighted]:bg-border"
             >
               {copied ? "\u2713 Copied" : "Copy link"}
+            </DropdownMenu.Item>
+          )}
+          {drive && (
+            <DropdownMenu.Item asChild>
+              <a
+                href={`https://drive.google.com/file/d/${drive.fileId}/view`}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Open this file in Google Drive to view or change its real Drive sharing"
+                className="block w-full cursor-pointer px-3 py-1.5 text-left text-sm outline-none data-[highlighted]:bg-border"
+              >
+                Open in Google Drive
+              </a>
             </DropdownMenu.Item>
           )}
           <DropdownMenu.Item
