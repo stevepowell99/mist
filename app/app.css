@@ -569,44 +569,22 @@ body {
   }
 }
 
-/* Printing a document. Two paths share the navbar Print button (it switches to
-   Preview first). The primary path paginates the preview with Paged.js into real
-   A4 pages (see app/lib/print-paged.ts), marked by `is-paged-printing` on body;
-   the fallback is a plain window.print() of the live preview. Decks print via
-   /slides. */
-
-/* Paged.js builds the pages in this off-screen container (never shown on
-   screen); the @media print rules below make it the only thing printed. */
-.is-paged-printing #paged-print-root {
-  position: fixed;
-  left: -10000px;
-  top: 0;
-  width: 250mm;
-}
-
+/* Printing a document. The primary path paginates the preview with Paged.js in a
+   separate throwaway tab (see app/lib/print-paged.client.ts), so the rules here
+   only matter for the popup-blocked fallback: a plain window.print() of the live
+   preview. They hide the app shell and lift the preview out of the app's
+   fixed-height, overflow-hidden flex cages so it flows across pages. Decks print
+   via /slides. */
 @media print {
-  /* Paged.js path: print only the generated pages, full bleed. */
-  body.is-paged-printing > *:not(#paged-print-root) { display: none !important; }
-  body.is-paged-printing #paged-print-root {
-    position: static;
-    left: auto;
-    top: auto;
-    width: auto;
-  }
-  body.is-paged-printing .pagedjs_page { box-shadow: none; }
-
-  /* Fallback path (no Paged.js): hide the app shell and lift the live preview
-     out of the fixed-height, overflow-hidden flex cages so it flows across
-     pages. Not typeset, just the browser's Save as PDF of the reading view. */
-  body:not(.is-paged-printing) header,
-  body:not(.is-paged-printing) aside { display: none !important; }
-  body:not(.is-paged-printing) * {
+  header,
+  aside { display: none !important; }
+  body * {
     overflow: visible !important;
     visibility: hidden !important;
   }
-  body:not(.is-paged-printing) .preview,
-  body:not(.is-paged-printing) .preview * { visibility: visible !important; }
-  body:not(.is-paged-printing) .preview {
+  .preview,
+  .preview * { visibility: visible !important; }
+  .preview {
     position: absolute;
     inset: 0 auto auto 0;
     width: 100%;

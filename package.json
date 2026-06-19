@@ -4,9 +4,11 @@
 	"type": "module",
 	"scripts": {
 		"build": "react-router build",
+		"prebuild": "node scripts/vendor-pagedjs.mjs",
 		"cf-typegen": "wrangler types",
 		"deploy": "npm run build && wrangler deploy",
 		"dev": "react-router dev",
+		"predev": "node scripts/vendor-pagedjs.mjs",
 		"gen:styles": "node scripts/gen-styles.mjs",
 		"lint": "eslint .",
 		"postinstall": "npm run cf-typegen",

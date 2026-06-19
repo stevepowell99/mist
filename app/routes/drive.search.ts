@@ -88,7 +88,10 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     if (url.searchParams.get("parents") === "1" && q && !folder) {
       const folderIds = entries.filter((e) => e.kind === "folder").map((e) => e.id).slice(0, 6);
       const seen = new Set(entries.map((e) => e.id));
-      const kids = await driveFilesUnderFolders(token, folderIds, ["markdown"], 40);
+      // Expand to the requested file kinds (minus folder), so a parent-folder
+      // match surfaces whatever the type filters allow, not just markdown.
+      const kidTypes = types.filter((t) => t !== "folder");
+      const kids = await driveFilesUnderFolders(token, folderIds, kidTypes.length ? kidTypes : ["markdown"], 40);
       parentResults = kids.filter((k) => !seen.has(k.id)).map((e) => toResult(e, true));
     }
 

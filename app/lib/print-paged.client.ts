@@ -1,18 +1,19 @@
-// Typeset-ish print for documents using Paged.js. It paginates the already
-// rendered preview into real pages (A4, margins, running title, page numbers,
-// controlled breaks) and prints them, without ever showing the paginated layout
-// on screen: the pages are built in an off-screen container that becomes the
-// only printed thing (see the @media print block in app.css). A step up from a
-// plain window.print() dump without needing a server.
+// Typeset-ish print for documents. Mirrors the slide deck's print path: it opens
+// a separate browser tab and paginates there with Paged.js, so the gmist editor
+// window is NEVER touched and nothing can be left behind in it. The tab is a
+// throwaway print view (grey backdrop, A4 pages, running title, page numbers);
+// the user saves as PDF and closes it, exactly like the /slides print view.
 //
-// Paged.js renders into the SAME document, so the paginated `.preview` inherits
-// all the preview/grammar/theme CSS already in the page head for free; the only
-// stylesheet we feed it is the @page rules below (page size, margin boxes,
-// break hints). Loaded only on demand (dynamic import) so it stays out of the
-// initial bundle and never runs during SSR. Decks keep their own /slides path.
+// The tab is self-contained: it links the app's own stylesheets (so the
+// preview/grammar styles match) plus the document's theme CSS, and loads the
+// Paged.js polyfill, which auto-paginates and then opens the print dialog.
 
-const PRINT_ROOT_ID = "paged-print-root";
-const PRINTING_CLASS = "is-paged-printing";
+import { themeCss } from "~/lib/themes";
+
+// Served copy of the Paged.js polyfill, staged into public/ by
+// scripts/vendor-pagedjs.mjs (the package's exports map hides the dist file from
+// a bundler import).
+const POLYFILL_PATH = "/vendor/paged.polyfill.js";
 
 /** @page rules plus print-only typography and break hints. The running title
  *  goes in the @top-left margin box; "n / m" in @bottom-right. */
@@ -33,72 +34,55 @@ function pageCss(title: string): string {
   `;
 }
 
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
 /**
- * Paginate the live `.preview` element off-screen and open the print dialog.
- * Nothing is shown on screen at any point; the off-screen container is the only
- * thing the @media print rules reveal. Cleanup runs on afterprint, on the window
- * regaining focus (the dialog closing, success or cancel), and on a safety
- * timeout, so a print never leaves an intermediate behind. Returns false if
- * there is nothing to print or Paged.js fails, so the caller can fall back to a
- * plain window.print().
+ * Fill an already-opened tab with the paginated document and open its print
+ * dialog. The tab must be opened synchronously in the click handler (to survive
+ * popup blockers) and passed in; this runs after the preview HTML is ready.
  */
-export async function printDocumentPaged(title: string): Promise<boolean> {
-  const source = document.querySelector(".preview");
-  if (!source || !source.textContent?.trim()) return false;
+export function fillPrintTab(
+  win: Window,
+  previewHtml: string,
+  title: string,
+  frontmatter: string,
+): void {
+  const links = Array.from(
+    document.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]'),
+  )
+    .map((l) => `<link rel="stylesheet" href="${escapeHtml(l.href)}">`)
+    .join("\n");
+  const theme = themeCss(frontmatter ?? "");
+  const polyfill = new URL(POLYFILL_PATH, window.location.origin).href;
+  const dataTheme = document.documentElement.getAttribute("data-theme") ?? "";
 
-  let Previewer: typeof import("pagedjs").Previewer;
-  try {
-    ({ Previewer } = await import("pagedjs"));
-  } catch (err) {
-    console.error("Paged.js failed to load", err);
-    return false;
+  const doc = `<!doctype html>
+<html data-theme="${escapeHtml(dataTheme)}">
+<head>
+<meta charset="utf-8">
+<title>${escapeHtml(title)}</title>
+${links}
+<style>${theme}</style>
+<style>${pageCss(title)}</style>
+<style>
+  html, body { margin: 0; }
+  @media screen {
+    body { background: #525659; }
+    .pagedjs_pages { display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 24px 0; }
+    .pagedjs_page { background: #fff; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45); }
   }
+</style>
+<script>
+  window.PagedConfig = { auto: true, after: function () { window.focus(); window.print(); } };
+</script>
+<script src="${escapeHtml(polyfill)}"></script>
+</head>
+<body><div class="preview">${previewHtml}</div></body>
+</html>`;
 
-  // Fresh off-screen container each run.
-  document.getElementById(PRINT_ROOT_ID)?.remove();
-  const root = document.createElement("div");
-  root.id = PRINT_ROOT_ID;
-  document.body.appendChild(root);
-  document.body.classList.add(PRINTING_CLASS);
-
-  let done = false;
-  let safety = 0;
-  const cleanup = () => {
-    if (done) return;
-    done = true;
-    if (safety) window.clearTimeout(safety);
-    document.body.classList.remove(PRINTING_CLASS);
-    document.getElementById(PRINT_ROOT_ID)?.remove();
-    window.removeEventListener("afterprint", cleanup);
-    window.removeEventListener("focus", onFocus);
-  };
-  // The print dialog blurs the window; closing it (printed or cancelled) returns
-  // focus. Ignore the focus event the opening click itself fires.
-  let armed = false;
-  const onFocus = () => {
-    if (armed) cleanup();
-  };
-  window.addEventListener("afterprint", cleanup);
-  window.addEventListener("focus", onFocus);
-
-  const content = `<div class="preview">${source.innerHTML}</div>`;
-  try {
-    const previewer = new Previewer();
-    await previewer.preview(content, [{ print: pageCss(title) }], root);
-  } catch (err) {
-    console.error("Paged.js pagination failed", err);
-    cleanup();
-    return false;
-  }
-
-  // Let the paginated pages settle, then print. Arm the focus fallback only
-  // after the dialog has been asked for.
-  requestAnimationFrame(() =>
-    requestAnimationFrame(() => {
-      armed = true;
-      safety = window.setTimeout(cleanup, 120000);
-      window.print();
-    }),
-  );
-  return true;
+  win.document.open();
+  win.document.write(doc);
+  win.document.close();
 }

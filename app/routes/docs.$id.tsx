@@ -37,7 +37,7 @@ import HelpPanel from "~/components/HelpPanel";
 import LibraryGallery from "~/components/LibraryGallery";
 import GoogleSignIn from "~/components/GoogleSignIn";
 import SlidesView, { isSlideDeck } from "~/components/SlidesView";
-import { printDocumentPaged } from "~/lib/print-paged.client";
+import { fillPrintTab } from "~/lib/print-paged.client";
 
 // useLayoutEffect on the client (so scroll is restored before paint, no flash),
 // useEffect on the server (avoids the SSR warning).
@@ -323,6 +323,9 @@ function DocumentLayout({ id }: { id: string }) {
   // toggle and split ratio, and setView drives both, so the navbar, keyboard and
   // URL all speak the same three-state language.
   const view: "editor" | "split" | "preview" = splitOpen ? "split" : showPreview ? "preview" : "editor";
+  // Read inside printDoc to restore the view after grabbing the preview HTML.
+  const viewRef = useRef(view);
+  viewRef.current = view;
   const setView = useCallback(
     (v: "editor" | "split" | "preview") => {
       if (v === "preview") {
@@ -559,29 +562,41 @@ function DocumentLayout({ id }: { id: string }) {
     if (!w) window.location.assign(url);
   }, [deck, id, docKey, assetToken]);
 
-  // Print a document. Switch to Preview first so it is mounted, wait for it to
-  // render, then paginate it with Paged.js into a real multi-page layout (A4,
-  // margins, running title, page numbers) and open the print dialog. If Paged.js
-  // is unavailable or fails, fall back to a plain window.print() (the @media
-  // print stylesheet still hides the shell and flows the preview). Decks use
-  // printDeck instead.
+  // Print a document. Open a throwaway tab synchronously (to survive popup
+  // blockers), switch the editor to Preview so the rendered HTML is in the DOM,
+  // grab it, restore the previous view, then hand the HTML to that tab where
+  // Paged.js paginates and prints it. The gmist window is never mutated, so a
+  // print or a cancel leaves nothing behind. If the popup is blocked, fall back
+  // to a plain window.print() of the live preview. Decks use printDeck instead.
   const printDoc = useCallback(() => {
     if (deck) return;
+    const win = window.open("", "_blank");
+    if (win) {
+      win.document.write(
+        '<!doctype html><meta charset="utf-8"><title>Preparing PDF…</title>' +
+          '<body style="font:14px system-ui,sans-serif;margin:0;display:grid;place-items:center;height:100vh;color:#555">Preparing PDF…</body>',
+      );
+    }
+    const prevView = viewRef.current;
     setView("preview");
     let tries = 0;
     const tick = () => {
       const el = document.querySelector(".preview");
-      if ((el && el.textContent && el.textContent.trim()) || tries > 30) {
-        void printDocumentPaged(title).then((ok) => {
-          if (!ok) window.print();
-        });
+      if (el && el.textContent && el.textContent.trim()) {
+        const html = el.innerHTML;
+        if (prevView !== "preview") setView(prevView);
+        if (win) fillPrintTab(win, html, title, frontmatter);
+        else window.print(); // popup blocked: plain in-window fallback
+      } else if (tries > 60) {
+        if (prevView !== "preview") setView(prevView);
+        win?.close();
       } else {
         tries++;
         requestAnimationFrame(tick);
       }
     };
     requestAnimationFrame(tick);
-  }, [deck, setView, title]);
+  }, [deck, setView, title, frontmatter]);
 
   // The deck iframe forwards F (plain) as a present request and Ctrl/Cmd+P as a
   // print request, since the sandboxed iframe can neither fullscreen the app nor

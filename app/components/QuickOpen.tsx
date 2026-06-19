@@ -32,9 +32,24 @@ interface Row {
   parentId?: string | null;
   trail?: { id: string; name: string }[];
   isFolder: boolean;
+  /** A markdown file gmist can open in the editor (else open in Drive). */
+  openInMist: boolean;
+  /** Drive web link, for opening non-markdown kinds in a new tab. */
+  webViewLink?: string | null;
   /** Surfaced via a parent-folder name match, not its own name. */
   viaParent?: boolean;
 }
+
+/** The kind filters, mirroring the Find sidebar. Markdown and folders are on by
+ *  default so data junk does not crowd out documents. */
+const TYPES: { kind: DriveKind; label: string }[] = [
+  { kind: "markdown", label: "Markdown" },
+  { kind: "folder", label: "Folders" },
+  { kind: "doc", label: "Docs" },
+  { kind: "sheet", label: "Sheets" },
+  { kind: "slides", label: "Slides" },
+  { kind: "pdf", label: "PDF" },
+];
 
 /** The folder the search is scoped into, with its ancestors (top -> parent) for
  *  the breadcrumb. null is the whole Drive. */
@@ -45,7 +60,7 @@ interface Context {
 }
 
 function recentToRow(r: RecentItem): Row {
-  return { id: r.id, name: r.name, kind: "markdown", path: r.path, parentId: r.parentId, trail: r.trail, isFolder: false };
+  return { id: r.id, name: r.name, kind: "markdown", path: r.path, parentId: r.parentId, trail: r.trail, isFolder: false, openInMist: true };
 }
 
 function resultToRow(r: SearchResult): Row {
@@ -57,6 +72,8 @@ function resultToRow(r: SearchResult): Row {
     parentId: r.parentId,
     trail: r.trail,
     isFolder: r.kind === "folder",
+    openInMist: r.openInMist,
+    webViewLink: r.webViewLink,
     viaParent: r.viaParent,
   };
 }
@@ -66,6 +83,7 @@ export function QuickOpen({ onClose }: { onClose?: () => void }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const reqId = useRef(0);
   const [query, setQuery] = useState("");
+  const [types, setTypes] = useState<DriveKind[]>(["markdown", "folder"]);
   const [context, setContext] = useState<Context | null>(null);
   const [rows, setRows] = useState<Row[]>([]);
   const [sel, setSel] = useState(0);
@@ -99,7 +117,8 @@ export function QuickOpen({ onClose }: { onClose?: () => void }) {
     const mine = ++reqId.current;
     const t = setTimeout(async () => {
       try {
-        const p = new URLSearchParams({ types: "markdown,folder" });
+        const p = new URLSearchParams();
+        if (types.length) p.set("types", types.join(","));
         if (q) p.set("q", q);
         if (context) p.set("folder", context.id);
         else p.set("parents", "1");
@@ -130,7 +149,11 @@ export function QuickOpen({ onClose }: { onClose?: () => void }) {
       }
     }, 250);
     return () => clearTimeout(t);
-  }, [query, context, recent]);
+  }, [query, context, types, recent]);
+
+  const toggleType = useCallback((kind: DriveKind) => {
+    setTypes((prev) => (prev.includes(kind) ? prev.filter((k) => k !== kind) : [...prev, kind]));
+  }, []);
 
   const open = useCallback(
     async (row: Row) => {
@@ -177,9 +200,15 @@ export function QuickOpen({ onClose }: { onClose?: () => void }) {
   const activate = useCallback(
     (row: Row) => {
       if (row.isFolder) enterFolder(row);
-      else if (!busy) void open(row);
+      else if (row.openInMist) {
+        if (!busy) void open(row);
+      } else if (row.webViewLink) {
+        // Docs/sheets/slides/PDFs are not gmist documents: open them in Drive.
+        window.open(row.webViewLink, "_blank", "noopener,noreferrer");
+        onClose?.();
+      }
     },
-    [busy, enterFolder, open],
+    [busy, enterFolder, open, onClose],
   );
 
   const onKeyDown = useCallback(
@@ -263,6 +292,28 @@ export function QuickOpen({ onClose }: { onClose?: () => void }) {
             className="flex-1 bg-transparent py-3 text-lg outline-none placeholder:text-muted"
           />
           {(loading || busy) && <Spinner />}
+        </div>
+
+        {/* Kind filters, mirroring the Find sidebar. */}
+        <div className="flex flex-wrap gap-1 border-b border-border px-2 py-1.5">
+          {TYPES.map((t) => {
+            const on = types.includes(t.kind);
+            return (
+              <button
+                key={t.kind}
+                type="button"
+                onClick={() => toggleType(t.kind)}
+                aria-pressed={on}
+                title={t.label}
+                className={`flex cursor-pointer items-center gap-1 rounded border px-1.5 py-0.5 text-xs transition-colors ${
+                  on ? "border-ink bg-ink text-paper" : "border-border text-muted hover:border-ink"
+                }`}
+              >
+                <KindIcon kind={t.kind} />
+                {t.label}
+              </button>
+            );
+          })}
         </div>
 
         {error && <div className="border-b border-border px-3 py-2 text-sm text-red-600">{error}</div>}
