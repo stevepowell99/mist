@@ -13,13 +13,19 @@
   position: absolute; top: 3.5%; right: 3.5%; left: auto; width: 12%;
   aspect-ratio: var(--brand-ar, 962 / 571);
   margin: 0; border: 0; box-shadow: none; z-index: 30;
-  background: center / contain no-repeat var(--brand-logo);
+  /* White chip behind the logo so a transparent or dark mark reads on the dark
+     divider/title slides too (it is invisible on a white slide). Works for every
+     theme's --brand-logo. An author-supplied <img class="brand"> keeps its own
+     pixels via the background:none rule below. */
+  background: center / contain no-repeat var(--brand-logo) #fff;
+  padding: 0.6%; border-radius: 6px;
   transform: scale(var(--scale, 1)); transform-origin: top right;
 }
 /* An author-supplied <img class="brand"> shows its own pixels, not the var. */
 .reveal img.brand { background: none; width: 11%; aspect-ratio: auto; }
 .preview .brand {
   display: inline-block; width: 150px; aspect-ratio: var(--brand-ar, 962 / 571);
-  background: center / contain no-repeat var(--brand-logo);
+  background: center / contain no-repeat var(--brand-logo) #fff;
+  padding: 0.6%; border-radius: 6px;
   transform: scale(var(--scale, 1)); transform-origin: top left;
 }
