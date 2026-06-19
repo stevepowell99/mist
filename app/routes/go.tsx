@@ -4,9 +4,10 @@ import { QuickOpen } from "~/components/QuickOpen";
 
 /**
  * Bare launcher page: nothing but the Spotlight quick-open palette, full screen
- * and autofocused. An OS hotkey (see scripts/gmist-launcher.ahk) opens this URL;
- * the signed-in browser session handles auth and the import, so the launcher
- * itself holds no credentials. Opening a file navigates this tab to the room.
+ * and autofocused. An OS hotkey opens this URL (Steve's is Ctrl+Alt+K, bound in
+ * stevekeys.ahk); the signed-in browser session handles auth and the import, so
+ * the launcher itself holds no credentials. Opening a file navigates this tab to
+ * the room.
  */
 
 export function meta(_args: Route.MetaArgs) {
