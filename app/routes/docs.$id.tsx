@@ -982,7 +982,11 @@ function DocumentLayout({ id }: { id: string }) {
             aria-label="Toggle comments panel"
             aria-pressed={!asideCollapsed}
             className={`hidden shrink-0 cursor-pointer items-center border-l border-border px-3 transition-colors lg:flex ${
-              !asideCollapsed ? "bg-ink text-paper" : "hover:bg-border hover:text-ink"
+              !asideCollapsed
+                ? "bg-ink text-paper"
+                : asidePeek
+                  ? "bg-muted text-paper"
+                  : "hover:bg-border hover:text-ink"
             }`}
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
