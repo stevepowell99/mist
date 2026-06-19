@@ -20,6 +20,12 @@ function stripPandocAttrs(text: string): string {
 /** Replace CriticMarkup delimiters with styled HTML spans before markdown rendering */
 function renderCriticMarkup(text: string): string {
   return text
+    // Substitution first, so its ~~ delimiters never reach the markdown parser
+    // (which would treat them as GFM strikethrough and corrupt nearby ** bold).
+    .replace(
+      /\{~~(.*?)~>(.*?)~~\}/g,
+      '<span class="cm-deletion">$1</span><span class="cm-addition">$2</span>',
+    )
     .replace(/\{--(.+?)--\}/g, '<span class="cm-deletion">$1</span>')
     .replace(/\{\+\+(.+?)\+\+\}/g, '<span class="cm-addition">$1</span>')
     .replace(/\{>>(.+?)<<\}/g, '')
