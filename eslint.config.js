@@ -1,6 +1,7 @@
 import eslint from "@eslint/js";
 import tseslint from "typescript-eslint";
 import reactHooks from "eslint-plugin-react-hooks";
+import globals from "globals";
 
 export default tseslint.config(
   eslint.configs.recommended,
@@ -21,6 +22,12 @@ export default tseslint.config(
         { allowTaggedTemplates: true },
       ],
     },
+  },
+  {
+    // Node CLI scripts (build helpers, the headless gmist client): Node globals,
+    // not the browser/worker environment the app sources assume.
+    files: ["scripts/**/*.mjs"],
+    languageOptions: { globals: globals.node },
   },
   {
     ignores: [
