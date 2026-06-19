@@ -381,6 +381,13 @@ function DocumentLayout({ id }: { id: string }) {
   useEffect(() => {
     if (asideCollapsed) setAsidePeek(commentActive);
   }, [commentActive, asideCollapsed]);
+  // Replying to a comment from the editor toolbar pins the panel open (not a
+  // peek), so it stays put while the reply is typed.
+  useEffect(() => {
+    const onReply = () => setAsideCollapsedPersist(false);
+    window.addEventListener("mist-reply", onReply);
+    return () => window.removeEventListener("mist-reply", onReply);
+  }, [setAsideCollapsedPersist]);
 
   // Per-file UI settings (divider, view, follow-cursor, clean view, comments
   // collapsed): remember the layout each file was left in, and default a new

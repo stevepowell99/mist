@@ -361,22 +361,27 @@ body {
   background: #1f1f36;
   box-shadow: 0 3px 12px rgb(0 0 0 / 0.35);
 }
+/* Each button is a self-contained dark chip: its own background and colour
+   (with !important) so legibility never depends on the tooltip bar's
+   background, which CodeMirror's own .cm-tooltip base style can repaint light. */
 .cm-sel-toolbar button.cm-sel-btn {
   appearance: none;
   -webkit-appearance: none;
   margin: 0;
   border: 0;
   cursor: pointer;
-  background: transparent;
-  color: #ffffff;
+  background: #1f1f36 !important;
+  color: #ffffff !important;
   padding: 5px 11px;
   border-radius: 4px;
-  font: 500 12px/1.2 inherit;
+  font-weight: 500;
+  font-size: 12px;
+  line-height: 1.2;
   white-space: nowrap;
 }
 .cm-sel-toolbar button.cm-sel-btn:hover {
-  background: var(--color-chartreuse);
-  color: #1a1a1a;
+  background: var(--color-chartreuse) !important;
+  color: #1a1a1a !important;
 }
 
 /* Preview styles */

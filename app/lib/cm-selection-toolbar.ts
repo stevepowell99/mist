@@ -1,5 +1,6 @@
 import { EditorView, showTooltip, type Tooltip } from "@codemirror/view";
 import { StateField, Transaction } from "@codemirror/state";
+import { commentTextAt } from "./cm-comments";
 
 /**
  * A floating toolbar over a non-empty selection (the Google-Docs gesture), so
@@ -59,6 +60,15 @@ function buildToolbar(view: EditorView): { dom: HTMLElement } {
     b.addEventListener("click", run);
     dom.appendChild(b);
   };
+  // If the selection sits on an existing comment, offer a direct reply to it
+  // (the highlighted text or the comment span both count as "on" the comment).
+  const { from, to } = view.state.selection.main;
+  const text = view.state.doc.toString();
+  const onComment = commentTextAt(text, from) ?? commentTextAt(text, to);
+  if (onComment) {
+    add("Reply", "Reply to this comment", () =>
+      window.dispatchEvent(new CustomEvent("mist-reply", { detail: onComment })));
+  }
   add("Comment", "Comment on the selection", () => window.dispatchEvent(new CustomEvent("mist-comment")));
   add("Delete", "Suggest deleting the selection", () => applySuggestion(view, "delete"));
   add("Replace", "Suggest replacing the selection", () => applySuggestion(view, "replace"));

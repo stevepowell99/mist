@@ -23,6 +23,8 @@ interface ThreadPanelProps {
   onReply: (threadId: string, text: string) => void;
   onResolve: (threadId: string) => void;
   onDelete: (threadId: string) => void;
+  /** Increments when the editor toolbar asks to reply here; opens the input. */
+  openReplyNonce?: number;
 }
 
 export default function ThreadPanel({
@@ -32,16 +34,26 @@ export default function ThreadPanel({
   onReply,
   onResolve,
   onDelete,
+  openReplyNonce,
 }: ThreadPanelProps) {
   const [replyText, setReplyText] = useState("");
   const [showReplyInput, setShowReplyInput] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (showReplyInput && inputRef.current) {
       inputRef.current.focus();
     }
   }, [showReplyInput]);
+
+  // Asked from the editor toolbar: reveal the reply input and bring it into view.
+  useEffect(() => {
+    if (openReplyNonce && openReplyNonce > 0) {
+      setShowReplyInput(true); // eslint-disable-line react-hooks/set-state-in-effect
+      panelRef.current?.scrollIntoView({ block: "nearest" });
+    }
+  }, [openReplyNonce]);
 
   const handleReplySubmit = useCallback(() => {
     if (!replyText.trim()) return;
@@ -65,6 +77,7 @@ export default function ThreadPanel({
 
   return (
     <div
+      ref={panelRef}
       className={`cursor-pointer p-3 ${active ? "bg-canary/15" : ""}`}
       onClick={() => onSelect(active ? null : thread.id)}
     >

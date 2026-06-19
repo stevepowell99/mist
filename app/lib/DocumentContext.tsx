@@ -106,6 +106,8 @@ export interface DocumentContextValue {
   threads: MatchedThread[];
   activeThreadId: string | null;
   setActiveThreadId: (id: string | null) => void;
+  /** Bumped to ask a thread's panel to open its reply input (editor "Reply"). */
+  replySignal: { id: string; n: number } | null;
   activeCommentRange: { from: number; to: number } | null;
   addReply: (threadId: string, text: string) => void;
   resolveThread: (threadId: string) => void;
@@ -204,6 +206,9 @@ export function DocumentProvider({
   const [commentSelection, setCommentSelection] = useState<CapturedSelection | null>(null);
   const [commentHighlight, setCommentHighlight] = useState<{ from: number; to: number } | null>(null);
   const [cleanView, setCleanView] = useState(true);
+  // Bumped when the editor toolbar asks to reply to a thread; ThreadList passes
+  // the count to the matching panel, which opens its reply input on a change.
+  const [replySignal, setReplySignal] = useState<{ id: string; n: number } | null>(null);
 
   const showPreview = previewToggled || previewHeld;
 
@@ -533,6 +538,20 @@ export function DocumentProvider({
     return () => window.removeEventListener("mist-comment", onComment);
   }, [openCommentInput]);
 
+  // The editor toolbar's "Reply" (selection over a comment) posts this: activate
+  // that thread and signal its panel to open a reply input.
+  useEffect(() => {
+    const onReply = (e: Event) => {
+      const commentText = (e as CustomEvent<string>).detail;
+      const match = threads.find((t) => t.commentText === commentText);
+      if (!match) return;
+      setActiveThreadId(match.id);
+      setReplySignal((s) => ({ id: match.id, n: (s?.n ?? 0) + 1 }));
+    };
+    window.addEventListener("mist-reply", onReply);
+    return () => window.removeEventListener("mist-reply", onReply);
+  }, [threads, setActiveThreadId]);
+
   // Insert a comment on the captured selection (or a point at the cursor).
   const insertComment = useCallback(
     (text: string) => {
@@ -648,6 +667,7 @@ export function DocumentProvider({
     threads,
     activeThreadId,
     setActiveThreadId,
+    replySignal,
     activeCommentRange,
     addReply: addReplyEdited,
     resolveThread: resolveThreadEdited,

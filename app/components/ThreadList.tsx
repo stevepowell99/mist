@@ -12,6 +12,7 @@ export default function ThreadList() {
     deleteThread: onDelete,
     openCommentInput: onNewComment,
     commentActive,
+    replySignal,
   } = useDocument();
 
   const [showResolved, setShowResolved] = useState(false);
@@ -55,6 +56,7 @@ export default function ThreadList() {
             onReply={onReply}
             onResolve={onResolve}
             onDelete={onDelete}
+            openReplyNonce={replySignal?.id === thread.id ? replySignal.n : 0}
           />
         </div>
       ))}
