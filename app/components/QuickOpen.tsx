@@ -381,11 +381,12 @@ export function QuickOpen({ onClose }: { onClose?: () => void }) {
 }
 
 /**
- * Mounts the palette as a Cmd/Ctrl+Alt+K overlay anywhere it is dropped in. Plain
+ * Mounts the palette as a Cmd/Ctrl+Alt+J overlay anywhere it is dropped in. Plain
  * Ctrl/Cmd-K is unusable in a browser tab (Chrome steals it for the address-bar
- * search), so this matches the OS launcher hotkey and gmist's other mod+alt
- * chords. The listener is capture-phase so it fires even when CodeMirror has
- * focus. Drop one <QuickOpenTrigger/> into a page; it renders nothing until open.
+ * search); Ctrl+Alt+J keeps the in-page overlay distinct from the OS launcher
+ * hotkey (Ctrl+Alt+K), which a global tool grabs to open a fresh /go window. The
+ * listener is capture-phase so it fires even when CodeMirror has focus. Drop one
+ * <QuickOpenTrigger/> into a page; it renders nothing until open.
  */
 export function QuickOpenTrigger() {
   const [open, setOpen] = useState(false);
@@ -393,7 +394,7 @@ export function QuickOpenTrigger() {
     const onKey = (e: KeyboardEvent) => {
       // e.code (physical key) survives the Windows Ctrl+Alt = AltGr remap that
       // can change e.key on some layouts.
-      if ((e.metaKey || e.ctrlKey) && e.altKey && !e.shiftKey && (e.key === "k" || e.key === "K" || e.code === "KeyK")) {
+      if ((e.metaKey || e.ctrlKey) && e.altKey && !e.shiftKey && (e.key === "j" || e.key === "J" || e.code === "KeyJ")) {
         e.preventDefault();
         setOpen((v) => !v);
       }
