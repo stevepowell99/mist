@@ -1,14 +1,14 @@
 // Typeset-ish print for documents using Paged.js. It paginates the already
 // rendered preview into real pages (A4, margins, running title, page numbers,
-// controlled breaks) and hands the result to the browser's print dialog. A step
-// up from a plain window.print() dump without needing a server: still
-// browser-driven, but proper pagination. Decks keep their own /slides path.
+// controlled breaks) and shows them as a dismissable print-preview overlay with
+// its own Print and Close controls, then opens the browser's print dialog. A
+// step up from a plain window.print() dump without needing a server.
 //
 // Paged.js renders into the SAME document, so the paginated `.preview` inherits
 // all the preview/grammar/theme CSS already in the page head for free; the only
 // stylesheet we feed it is the @page rules below (page size, margin boxes,
 // break hints). Loaded only on demand (dynamic import) so it stays out of the
-// initial bundle and never runs during SSR.
+// initial bundle and never runs during SSR. Decks keep their own /slides path.
 
 const PRINT_ROOT_ID = "paged-print-root";
 const PRINTING_CLASS = "is-paged-printing";
@@ -33,9 +33,11 @@ function pageCss(title: string): string {
 }
 
 /**
- * Paginate the live `.preview` element and open the print dialog. Returns false
- * if there is nothing to print or Paged.js fails, so the caller can fall back to
- * a plain window.print().
+ * Paginate the live `.preview` element into an overlay and open the print
+ * dialog. The overlay is its own modal with Print and Close controls, so it can
+ * never be left stuck even if the print dialog is cancelled (the afterprint
+ * event is unreliable across browsers). Returns false if there is nothing to
+ * print or Paged.js fails, so the caller can fall back to a plain window.print().
  */
 export async function printDocumentPaged(title: string): Promise<boolean> {
   const source = document.querySelector(".preview");
@@ -49,15 +51,40 @@ export async function printDocumentPaged(title: string): Promise<boolean> {
     return false;
   }
 
-  // Fresh container each run; a full-screen overlay on screen (a print preview),
-  // and the only thing printed (see the @media print block in app.css).
+  // Fresh overlay each run: a top bar (screen only) plus the paginated pages.
   document.getElementById(PRINT_ROOT_ID)?.remove();
   const root = document.createElement("div");
   root.id = PRINT_ROOT_ID;
+
+  const bar = document.createElement("div");
+  bar.className = "paged-print-bar";
+  const label = document.createElement("span");
+  label.className = "paged-print-name";
+  label.textContent = title;
+  const printBtn = document.createElement("button");
+  printBtn.type = "button";
+  printBtn.className = "paged-print-go";
+  printBtn.textContent = "Print / Save as PDF";
+  const closeBtn = document.createElement("button");
+  closeBtn.type = "button";
+  closeBtn.className = "paged-print-close";
+  closeBtn.textContent = "Close";
+  bar.appendChild(label);
+  bar.appendChild(printBtn);
+  bar.appendChild(closeBtn);
+
+  const pages = document.createElement("div");
+  pages.className = "paged-print-pages";
+
+  root.appendChild(bar);
+  root.appendChild(pages);
   document.body.appendChild(root);
   document.body.classList.add(PRINTING_CLASS);
 
+  let done = false;
   const cleanup = () => {
+    if (done) return;
+    done = true;
     document.body.classList.remove(PRINTING_CLASS);
     document.getElementById(PRINT_ROOT_ID)?.remove();
     window.removeEventListener("afterprint", cleanup);
@@ -67,19 +94,28 @@ export async function printDocumentPaged(title: string): Promise<boolean> {
     if (e.key === "Escape") cleanup();
   };
 
+  closeBtn.addEventListener("click", cleanup);
+  printBtn.addEventListener("click", () => window.print());
+  // A click on the grey backdrop (the page gaps, not a page) dismisses too.
+  pages.addEventListener("click", (e) => {
+    if (e.target === pages) cleanup();
+  });
+  window.addEventListener("afterprint", cleanup);
+  document.addEventListener("keydown", onKey);
+
   const content = `<div class="preview">${source.innerHTML}</div>`;
   try {
     const previewer = new Previewer();
-    await previewer.preview(content, [{ print: pageCss(title) }], root);
+    await previewer.preview(content, [{ print: pageCss(title) }], pages);
   } catch (err) {
     console.error("Paged.js pagination failed", err);
     cleanup();
     return false;
   }
 
-  window.addEventListener("afterprint", cleanup);
-  document.addEventListener("keydown", onKey);
-  // Let the paginated pages lay out before invoking print.
+  // Let the paginated pages lay out, then open the dialog once. If it is
+  // cancelled the overlay stays, dismissable by its Close button, the backdrop
+  // or Esc.
   requestAnimationFrame(() => requestAnimationFrame(() => window.print()));
   return true;
 }
