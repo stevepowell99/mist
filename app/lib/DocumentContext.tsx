@@ -525,6 +525,14 @@ export function DocumentProvider({
     setCommentActive(true);
   }, [view]);
 
+  // The editor selection toolbar's "Comment" posts this; open the sidebar input
+  // on the live selection (same path as the header "New" button).
+  useEffect(() => {
+    const onComment = () => openCommentInput();
+    window.addEventListener("mist-comment", onComment);
+    return () => window.removeEventListener("mist-comment", onComment);
+  }, [openCommentInput]);
+
   // Insert a comment on the captured selection (or a point at the cursor).
   const insertComment = useCallback(
     (text: string) => {

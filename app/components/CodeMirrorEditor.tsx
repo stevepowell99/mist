@@ -21,6 +21,7 @@ import { highlightSelectionMatches, searchKeymap } from "@codemirror/search";
 import { markdown } from "@codemirror/lang-markdown";
 import { yCollab, yUndoManagerKeymap } from "y-codemirror.next";
 import { criticMarkup } from "~/lib/cm-criticmarkup";
+import { selectionToolbar } from "~/lib/cm-selection-toolbar";
 import { markdownLineStyle } from "~/lib/cm-markdown-style";
 import { fencedDivStyle } from "~/lib/cm-fenced-divs";
 import { suggestMode } from "~/lib/cm-suggest";
@@ -239,6 +240,7 @@ export default function CodeMirrorEditor({
         markdownLineStyle,
         fencedDivStyle,
         criticMarkup,
+        selectionToolbar(),
         activeCommentField,
         EditorView.domEventHandlers({
           paste: (event, v) => handleImagePaste(event, v, onImagePasteRef.current),
