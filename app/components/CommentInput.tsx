@@ -82,9 +82,14 @@ export default function CommentInput() {
       <div className="mt-1.5 flex gap-1">
         <button
           onClick={handleSubmit}
-          className="flex-1 cursor-pointer border border-border px-2 py-1 text-sm uppercase tracking-wider text-muted transition-colors hover:bg-border"
+          disabled={!comment.trim()}
+          className={`flex-1 px-2 py-1 text-sm font-medium uppercase tracking-wider transition-colors ${
+            comment.trim()
+              ? "cursor-pointer bg-canary text-[#1a1a1a] hover:opacity-85"
+              : "cursor-not-allowed border border-border text-muted opacity-60"
+          }`}
         >
-          Add
+          Save
         </button>
         <button
           onClick={handleCancel}

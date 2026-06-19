@@ -11,6 +11,7 @@ export default function ThreadList() {
     resolveThread: onResolve,
     deleteThread: onDelete,
     openCommentInput: onNewComment,
+    commentActive,
   } = useDocument();
 
   const [showResolved, setShowResolved] = useState(false);
@@ -27,10 +28,15 @@ export default function ThreadList() {
         </span>
         <button
           onClick={onNewComment}
-          className="cursor-pointer bg-canary px-2 py-0.5 text-sm font-medium uppercase tracking-wider text-[#1a1a1a] transition-opacity hover:opacity-85"
+          disabled={commentActive}
+          className={`px-2 py-0.5 text-sm font-medium uppercase tracking-wider transition-opacity ${
+            commentActive
+              ? "cursor-not-allowed border border-border text-muted opacity-50"
+              : "cursor-pointer bg-canary text-[#1a1a1a] hover:opacity-85"
+          }`}
           aria-label="New comment"
         >
-          + Add
+          New
         </button>
       </div>
 
