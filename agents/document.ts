@@ -369,6 +369,10 @@ class DocumentAgent extends Agent {
    *  handler broadcasts it. */
   private replaceBodyFromText(text: string) {
     const body = this.doc!.getText("body");
+    // LF only: never let a CRLF adopt put \r into the Y.Text (CodeMirror drops it,
+    // which desyncs editor positions). driveRead already normalises, this is a
+    // backstop for any other caller.
+    text = text.replace(/\r\n?/g, "\n");
     const old = body.toString();
     if (old === text) return;
     let p = 0;
@@ -641,7 +645,10 @@ class DocumentAgent extends Agent {
             // ytext.toString() (an identity), so the round-trip is byte-faithful.
             const ytextBody = doc.getText("body");
             if (ytextBody.length === 0) {
-              ytextBody.insert(0, body.content);
+              // LF only: CodeMirror drops \r, so CRLF in the Y.Text desyncs editor
+              // positions. Normalise here too, for seeds that skip driveRead (an
+              // uploaded/dragged file, the demo).
+              ytextBody.insert(0, body.content.replace(/\r\n?/g, "\n"));
             }
             // The seed came from the backend at driveVersion, so record it as the
             // baseline: the upstream-sync check treats a body still equal to this

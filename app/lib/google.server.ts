@@ -139,7 +139,13 @@ export async function driveRead(token: string, fileId: string): Promise<{ text: 
     headers: authHeaders(token),
   });
   if (!res.ok) throw new Error(`Drive read failed (${res.status})`);
-  return { text: await res.text(), version: meta.version };
+  // Canonicalise to LF. CodeMirror represents its document with \n only (it drops
+  // \r), so a CRLF file in the Y.Text desyncs every editor position after a line
+  // break and corrupts edits. Every read flows through here (initial open and the
+  // agent's upstream check), so normalising here keeps the CRDT, the editor, the
+  // body comparison and the next save all on \n. A CRLF file becomes LF on its
+  // first gmist save, which is standard and harmless.
+  return { text: (await res.text()).replace(/\r\n?/g, "\n"), version: meta.version };
 }
 
 /** Overwrite a file's content, returning the new version token. */
