@@ -448,10 +448,20 @@ export async function driveFiles(
   const clauses = ["trashed = false"];
   if (opts.folderId) clauses.push(`'${escapeQ(opts.folderId)}' in parents`);
   if (opts.nameQuery) {
-    const q = escapeQ(opts.nameQuery);
-    // fullText also matches a file's CONTENT, so a deck whose filename is generic
-    // (slides.qmd) still matches on its title/body text.
-    clauses.push(opts.fullText ? `(name contains '${q}' or fullText contains '${q}')` : `name contains '${q}'`);
+    // Drive's `name contains` matches a prefix of the whole name OR of any WORD
+    // in it (words split on punctuation), so a hyphenated/multi-word query like
+    // "synthesis-d" matches no single word of "...-synthesis-deck" and returns
+    // nothing. Split the query into word tokens and require each as a word-prefix
+    // (AND); the client fuzzy-ranks the superset. fullText keeps the raw phrase
+    // so a deck with a generic filename still matches on its title/body text.
+    const tokens = opts.nameQuery.split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+    const terms = tokens.length ? tokens : [opts.nameQuery];
+    const nameClause = terms.map((t) => `name contains '${escapeQ(t)}'`).join(" and ");
+    clauses.push(
+      opts.fullText
+        ? `((${nameClause}) or fullText contains '${escapeQ(opts.nameQuery)}')`
+        : nameClause,
+    );
   }
   const typeParts = (opts.types ?? []).map((t) => KIND_CLAUSE[t]).filter(Boolean);
   if (typeParts.length) clauses.push(`(${typeParts.join(" or ")})`);
