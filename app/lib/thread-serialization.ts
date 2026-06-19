@@ -1,10 +1,7 @@
 import { stringify, parse } from "yaml";
 import type { ThreadData } from "~/shared/types";
 
-// Tolerate CRLF as well as LF: a Drive/Obsidian file edited on Windows has \r\n
-// line endings, and an LF-only fence match left the YAML unstripped (garbled in
-// Preview). Mirrors the slides builder's stripFrontmatter.
-const FRONTMATTER_RE = /^---\r?\n([\s\S]*?\n)---\r?\n(?:\r?\n)?/;
+const FRONTMATTER_RE = /^---\n([\s\S]*?\n)---\n\n?/;
 
 /** Parse a bare YAML string (no `---` fences) to an object, tolerating errors. */
 function parseYaml(yamlStr: string): Record<string, unknown> {

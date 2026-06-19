@@ -5,9 +5,8 @@ import { useDocument } from "~/lib/DocumentContext";
 import { rewriteImages } from "~/lib/asset-urls";
 import { runMermaid } from "~/lib/mermaid";
 import { convertCitations, formatReferenceList } from "~/lib/citations";
-import { applyGrammar } from "~/lib/slides-build";
+import { applyGrammar, stripFrontmatter } from "~/lib/slides-build";
 import { themeCss } from "~/lib/themes";
-import { stripFrontmatter } from "~/lib/thread-serialization";
 import { stripMistBanner } from "~/shared/mist-banner";
 
 /** Strip pandoc attribute blocks left on heading lines, e.g. "## Title {#anchor}".
@@ -55,7 +54,10 @@ export default function Preview() {
     };
     // The editor body now carries the document's YAML frontmatter (so it is
     // visible and editable), but it is metadata, so strip it from the preview.
-    const resolved = rewriteImages(stripFrontmatter(stripMistBanner(markdown)), ctx);
+    // slides-build's stripFrontmatter is CRLF-aware and display-only; it must not
+    // be the sync-path thread-serialization one (changing that splits CRLF docs
+    // differently and corrupts the editor/save round-trip).
+    const resolved = rewriteImages(stripFrontmatter(stripMistBanner(markdown)).body, ctx);
     // The shared composable-grammar pipeline (callouts/spans/divs/bignums, code
     // masked) plus wikilinks and a heading-attr strip, so a doc reads exactly like
     // a deck slide and the three call sites cannot drift.
