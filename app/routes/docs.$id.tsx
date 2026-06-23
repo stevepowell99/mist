@@ -814,7 +814,12 @@ function DocumentLayout({ id }: { id: string }) {
   }, [splitOpen, slidesMode, editorView]);
 
   return (
-    <div className="flex h-screen flex-col">
+    // h-screen + overflow-hidden pins the editor to exactly the viewport: this is
+    // a fixed-frame app whose own regions (editor, preview, aside) scroll
+    // internally, so the body must never scroll. Without the clip, any descendant
+    // a few px past the edge (a deck preview's letterbox rounding, a wide navbar)
+    // gives the whole page a stray x/y scrollbar.
+    <div className="flex h-screen flex-col overflow-hidden">
       <QuickOpenTrigger />
       {!present && (
       <header ref={headerRef} className="flex items-stretch border-b border-border">
