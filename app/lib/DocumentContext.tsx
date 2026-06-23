@@ -129,6 +129,19 @@ export interface DocumentContextValue {
 /** Idle delay before a live save flushes to the backend. */
 const AUTOSAVE_DEBOUNCE_MS = 2500;
 
+/**
+ * A genuine save-conflict (Drive's body diverged from our last save) pauses
+ * auto-save. The common cause is transient: Google Drive for Desktop pushing a
+ * stale local copy up, which then self-heals back to our content within seconds.
+ * The relay's save recovery only rewrites once Drive has converged back to our
+ * baseline, so simply re-attempting the save resolves that churn (no sibling
+ * clutter). Re-attempt on a widening backoff while conflicted; a real external
+ * edit keeps diverging and stays conflicted (the badge then offers a manual
+ * reload), so cap the attempts rather than poll forever.
+ */
+const CONFLICT_RETRY_BASE_MS = 8000;
+const CONFLICT_RETRY_LIMIT = 5;
+
 // Named _DocumentContext so test helpers can provide mock values directly
 export const _DocumentContext = createContext<DocumentContextValue | null>(null);
 
@@ -435,6 +448,26 @@ export function DocumentProvider({
     const t = setTimeout(saveNow, AUTOSAVE_DEBOUNCE_MS);
     return () => clearTimeout(t);
   }, [autoSave, unsaved, conflict, upstreamChanged, saveNow]);
+
+  // Self-heal a conflict caused by transient Drive-for-Desktop churn. While
+  // conflicted, re-attempt the save on a widening backoff: the relay only
+  // rewrites once Drive has converged back to our content, so a churn clears
+  // itself and emits `committed` (which clears `conflict`, cancelling this loop).
+  // A real external edit keeps diverging, so the attempts are capped; the user
+  // then resolves it manually via the badge. saveNow is read through its ref so
+  // this does not re-subscribe on every keystroke.
+  useEffect(() => {
+    if (!autoSave || !conflict) return;
+    let attempt = 0;
+    let timer: ReturnType<typeof setTimeout>;
+    const tick = () => {
+      attempt += 1;
+      saveNowRef.current();
+      if (attempt < CONFLICT_RETRY_LIMIT) timer = setTimeout(tick, CONFLICT_RETRY_BASE_MS * attempt);
+    };
+    timer = setTimeout(tick, CONFLICT_RETRY_BASE_MS);
+    return () => clearTimeout(timer);
+  }, [autoSave, conflict]);
 
   // Fetch and parse the Drive folder's BibTeX library once, so the `@`-citation
   // picker and rendering work. Resolved through the Drive asset proxy.

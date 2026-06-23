@@ -64,15 +64,20 @@ export default function SaveStatus() {
     );
   }
 
+  // The Drive file diverged from our last save. gmist keeps retrying in the
+  // background (a transient Drive-for-Desktop churn self-heals), so this often
+  // clears on its own. If it is a real external edit it persists; clicking loads
+  // the Drive version, snapshotting any unsaved edits to a recovery copy first.
   if (conflict) {
     return (
-      <span
-        className="flex h-full items-center gap-2 bg-amber-500/15 px-3 text-sm uppercase tracking-wider text-amber-600"
-        title="This file was also changed in Obsidian/Drive. gmist will not overwrite it, and your edits are kept in this session. Auto-save is paused until the two versions are reconciled (auto-merge is not built yet)."
+      <button
+        onClick={reloadFromDrive}
+        className="flex h-full cursor-pointer items-center gap-2 bg-amber-500/15 px-3 text-sm uppercase tracking-wider text-amber-600 hover:bg-amber-500/25"
+        title="This file was also changed in Obsidian/Drive. gmist will not overwrite it and keeps your edits in this session, retrying automatically in case the change was a transient Drive sync blip. If it persists it is a real external edit: click to load the Drive version (your unsaved edits are saved alongside as a recovery copy first)."
       >
         <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-amber-500" />
         Conflict
-      </span>
+      </button>
     );
   }
 
