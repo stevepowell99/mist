@@ -431,6 +431,13 @@ html,body{margin:0;height:100%}
    white; a slide with its own colour/image background keeps it (reveal sets that
    inline). Scoped to .mist-embedded so the print/PDF page stays plain white. */
 html.mist-embedded{background:#ececec !important}
+/* Clip the embedded deck to the iframe. Reveal scales the 16:9 stage to fit, but
+   sub-pixel layout rounding can leave the canvas a hair larger than the viewport,
+   which shows as a slight x/y scrollbar in the preview and Present. The slide
+   itself fits (it is the letterbox/rounding that spills), so clipping is WYSIWYG
+   with fullscreen. Scoped to the embedded surface so the standalone present page
+   and the print-to-PDF paging (both not embedded) keep their normal scrolling. */
+html.mist-embedded,html.mist-embedded body{overflow:hidden}
 /* The slide canvas reads --slide-bg (set by the theme, default white), so a
    theme's background shows in the embedded preview AND in fullscreen/PDF. The
    grey above is only the letterbox around the 16:9 slide. These three rules are

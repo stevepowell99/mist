@@ -484,8 +484,22 @@ class DocumentAgent extends Agent {
       return;
     }
 
-    // Unsaved edits here AND Drive's body diverged: keep the live editor, preserve
-    // the incoming Drive version as a sibling so nothing is lost, re-anchor to the
+    // Drive's body equals our OWN last save (just with a new revision id): this is
+    // a Drive-for-Desktop re-upload churn, not an independent external edit. The
+    // editor's unsaved edits sit on top of that same baseline, so there is no
+    // third version to preserve. Re-anchor to the new revision and keep editing;
+    // forking here is what littered the folder with identical "drive copy"
+    // siblings on every reconnect during a churn. (Mirror of doCommit's churn
+    // recovery, which the connect-time path was missing.)
+    if (base != null && driveBody === stripFrontmatter(base)) {
+      setBaseline();
+      this.logSync("churn-reanchored", "drive == last save, new revision id; kept editor");
+      return;
+    }
+
+    // Unsaved edits here AND Drive's body is a genuine THIRD version (differs from
+    // both the editor and our last save): keep the live editor, preserve the
+    // incoming Drive version as a sibling so nothing is lost, re-anchor to the
     // current Drive version so our own save lands, and tell the client.
     let savedAs: string | null = null;
     try {
