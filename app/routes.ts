@@ -3,6 +3,7 @@ import { type RouteConfig, index, route } from "@react-router/dev/routes";
 export default [
   index("routes/home.tsx"),
   route("new", "routes/new.ts"),
+  route("open", "routes/open.ts"),
   route("go", "routes/go.tsx"),
   route("docs/:id", "routes/docs.$id.tsx"),
   route("docs/:id/folder", "routes/docs.$id.folder.ts"),
