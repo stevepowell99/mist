@@ -142,3 +142,10 @@ itself in the hub `CLAUDE.md`).
   breadcrumb, table of contents, search, backlinks, theme pages, PDF export, and
   the page-type styling (`.banner*`, `.rounded*`, `.paper-page`).
 - On any class-name collision the Garden's version is canonical; gmist adapts.
+- **Mermaid nesting.** The table above marks Mermaid `yes/yes`, but only the Garden
+  renders a ` ```mermaid ` block nested inside a `::: {…}` panel or column: its
+  `preprocess_mermaid_fences` plus a runtime promotion of any leftover
+  `code.language-mermaid` to a `.mermaid` div catches it wherever it is authored. In a
+  gmist document a fence inside a `:::` div is emitted as raw HTML before `marked` can
+  tag it, so it shows as literal source. In gmist keep Mermaid at the top level of a
+  slide or document, or use inline SVG inside panels.
