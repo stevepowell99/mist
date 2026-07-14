@@ -7,6 +7,7 @@
 import { driveAssetUrl, resolveAssetSrc, rewriteImages, type AssetCtx } from "~/lib/asset-urls";
 import { convertCitations, formatReferenceList, type BibLibrary } from "~/lib/citations";
 import { renderWikiLinks } from "~/lib/wikilinks";
+import { stripCritic } from "~/lib/critic";
 import { hasIcon, renderIcon } from "~/lib/icons";
 import type { DriveMeta } from "~/shared/types";
 // The house framework, served as the default stylesheet for every deck BEFORE
@@ -43,14 +44,6 @@ export function stripFrontmatter(md: string): { frontmatter: string; body: strin
 export function isSlideDeck(markdown: string, frontmatter = ""): boolean {
   const fm = frontmatter || stripFrontmatter(markdown).frontmatter;
   return /revealjs/i.test(fm) || /^\s*format:\s*['"]?slides?['"]?\s*$/im.test(fm);
-}
-
-function stripCritic(md: string): string {
-  return md
-    .replace(/\{\+\+([\s\S]*?)\+\+\}/g, "$1")
-    .replace(/\{--[\s\S]*?--\}/g, "")
-    .replace(/\{==([\s\S]*?)==\}/g, "$1")
-    .replace(/\{>>[\s\S]*?<<\}/g, "");
 }
 
 /** Split into slides at level-1/2 headings and standalone `---` rules, Quarto-style. */

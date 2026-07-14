@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { suggestEdit, type SuggestResult } from "~/lib/cm-suggest";
-import { criticSpans, spanContentAt } from "~/lib/cm-criticmarkup";
+import { criticSpans, spanContentAt } from "~/lib/critic";
 
 /** Apply a suggestEdit result to `doc` and return the resulting text + cursor,
  *  with the cursor shown as a `|` marker for readable assertions. */

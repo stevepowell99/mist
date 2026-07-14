@@ -47,6 +47,13 @@ export default function ThreadPanel({
     }
   }, [showReplyInput]);
 
+  // The panel tracks the editor: when this thread becomes the active one (the
+  // cursor moved into its comment), bring it into view. "nearest" so a panel
+  // already on screen, including one the user just clicked, does not jump.
+  useEffect(() => {
+    if (active) panelRef.current?.scrollIntoView({ block: "nearest" });
+  }, [active]);
+
   // Asked from the editor toolbar: reveal the reply input and bring it into view.
   useEffect(() => {
     if (openReplyNonce && openReplyNonce > 0) {

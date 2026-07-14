@@ -6,6 +6,7 @@ import { rewriteImages } from "~/lib/asset-urls";
 import { runMermaid } from "~/lib/mermaid";
 import { convertCitations, formatReferenceList } from "~/lib/citations";
 import { applyGrammar } from "~/lib/slides-build";
+import { renderCriticHtml } from "~/lib/critic";
 import { themeCss } from "~/lib/themes";
 import { stripFrontmatter } from "~/lib/thread-serialization";
 import { stripMistBanner } from "~/shared/mist-banner";
@@ -15,15 +16,6 @@ import { stripMistBanner } from "~/shared/mist-banner";
  * Only blocks starting with # or . are removed, so CriticMarkup ({++ ++} etc.) is left alone. */
 function stripPandocAttrs(text: string): string {
   return text.replace(/[ \t]*\{[#.][^}]*\}[ \t]*$/gm, "");
-}
-
-/** Replace CriticMarkup delimiters with styled HTML spans before markdown rendering */
-function renderCriticMarkup(text: string): string {
-  return text
-    .replace(/\{--(.+?)--\}/g, '<span class="cm-deletion">$1</span>')
-    .replace(/\{\+\+(.+?)\+\+\}/g, '<span class="cm-addition">$1</span>')
-    .replace(/\{>>(.+?)<<\}/g, '')
-    .replace(/\{==(.+?)==\}/g, '<span class="cm-highlight">$1</span>');
 }
 
 export default function Preview() {
@@ -61,7 +53,7 @@ export default function Preview() {
       body = text;
       references = formatReferenceList(usedKeys, bibLib);
     }
-    const withCritic = renderCriticMarkup(body);
+    const withCritic = renderCriticHtml(body);
     const raw = (marked.parse(withCritic, { async: false }) as string) + references;
     return DOMPurify.sanitize(raw);
   }, [mounted, markdown, drive, bibLib, assetToken]);

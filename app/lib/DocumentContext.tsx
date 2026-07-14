@@ -4,6 +4,7 @@ import type { CapturedSelection, DocMode, DocRole, DriveMeta } from "~/shared/ty
 import type { MatchedThread } from "~/lib/comment-threads";
 import type { useYjsEditor } from "~/lib/useYjsEditor";
 import { useTextThreads } from "~/lib/useTextThreads";
+import { commentTextAt } from "~/lib/cm-comments";
 import { serializeThreads, rawFrontmatter } from "~/lib/thread-serialization";
 import { quickHash } from "~/shared/hash";
 import { driveAssetUrl } from "~/lib/asset-urls";
@@ -106,6 +107,8 @@ export interface DocumentContextValue {
   threads: MatchedThread[];
   activeThreadId: string | null;
   setActiveThreadId: (id: string | null) => void;
+  /** Activate a thread AND scroll the editor to its markup (the panel click). */
+  jumpToThread: (thread: MatchedThread) => void;
   /** Bumped to ask a thread's panel to open its reply input (editor "Reply"). */
   replySignal: { id: string; n: number } | null;
   activeCommentRange: { from: number; to: number } | null;
@@ -236,7 +239,23 @@ export function DocumentProvider({
     activeThreadId,
     setActiveThreadId,
     activeRange,
+    jumpToThread,
   } = useTextThreads({ doc: yjs.doc, view, text: markdown, user: yjs.user });
+
+  // The comments panel tracks the editor: when the cursor lands inside a comment
+  // (or its highlight), that thread becomes active, and its panel scrolls itself
+  // into view. Only re-evaluated when the cursor itself moves, so activating a
+  // thread that has no markup left (a resolved one) is not undone by this.
+  const lastCursorRef = useRef(-1);
+  useEffect(() => {
+    if (cursorOffset === lastCursorRef.current) return;
+    lastCursorRef.current = cursorOffset;
+    const commentText = commentTextAt(markdown, cursorOffset);
+    const id = commentText
+      ? threads.find((t) => t.commentText === commentText)?.id ?? null
+      : null;
+    setActiveThreadId((prev) => (prev === id ? prev : id));
+  }, [cursorOffset, markdown, threads, setActiveThreadId]);
 
   const toggleMode = useCallback(() => {
     if (role !== "edit") return;
@@ -715,6 +734,7 @@ export function DocumentProvider({
     threads,
     activeThreadId,
     setActiveThreadId,
+    jumpToThread,
     replySignal,
     activeCommentRange,
     addReply: addReplyEdited,

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useDocument } from "~/lib/DocumentContext";
 import ThreadPanel from "~/components/ThreadPanel";
 
@@ -6,7 +6,8 @@ export default function ThreadList() {
   const {
     threads,
     activeThreadId,
-    setActiveThreadId: onSelectThread,
+    setActiveThreadId,
+    jumpToThread,
     addReply: onReply,
     resolveThread: onResolve,
     deleteThread: onDelete,
@@ -16,6 +17,17 @@ export default function ThreadList() {
   } = useDocument();
 
   const [showResolved, setShowResolved] = useState(false);
+
+  // Clicking a thread scrolls the editor to its markup (and selects it); clicking
+  // the active one again just deselects.
+  const onSelectThread = useCallback(
+    (id: string | null) => {
+      const thread = id ? threads.find((t) => t.id === id) : null;
+      if (thread) jumpToThread(thread);
+      else setActiveThreadId(null);
+    },
+    [threads, jumpToThread, setActiveThreadId],
+  );
 
   const openThreads = threads.filter((t) => !t.resolved);
   const resolvedThreads = threads.filter((t) => t.resolved);

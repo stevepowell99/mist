@@ -1,4 +1,4 @@
-import { criticSpans, type CriticSpan } from "./cm-criticmarkup";
+import { criticSpans, type CriticSpan } from "./critic";
 
 /**
  * Accept/reject CriticMarkup suggestions for the CodeMirror 6 / Y.Text core.

@@ -1,5 +1,5 @@
 import { EditorState, Transaction, Annotation } from "@codemirror/state";
-import { criticSpans } from "./cm-criticmarkup";
+import { criticSpans } from "./critic";
 
 /**
  * Suggest mode for the CodeMirror 6 / Y.Text core (#13). In the text model a

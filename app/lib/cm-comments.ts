@@ -1,4 +1,4 @@
-import { criticSpans } from "./cm-criticmarkup";
+import { criticSpans } from "./critic";
 import type { DocumentComment } from "./comment-threads";
 
 /**

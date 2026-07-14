@@ -1,7 +1,7 @@
 import { EditorView, showTooltip, type Tooltip } from "@codemirror/view";
 import { StateField, Transaction } from "@codemirror/state";
 import { commentTextAt } from "./cm-comments";
-import { criticSpans, type CriticSpan } from "./cm-criticmarkup";
+import { criticSpans, type CriticSpan } from "./critic";
 import { resolveAtCursor } from "./cm-suggestion-actions";
 
 /**
