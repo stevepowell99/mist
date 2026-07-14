@@ -85,6 +85,9 @@ export default function ThreadPanel({
   return (
     <div
       ref={panelRef}
+      // The comments pane follows the document's scroll (docs.$id), which needs
+      // each card's position in the source.
+      data-pos={thread.position}
       className={`cursor-pointer p-3 ${active ? "bg-canary/15" : ""}`}
       onClick={() => onSelect(active ? null : thread.id)}
     >

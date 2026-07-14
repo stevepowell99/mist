@@ -7,6 +7,7 @@ import { runMermaid } from "~/lib/mermaid";
 import { convertCitations, formatReferenceList } from "~/lib/citations";
 import { applyGrammar } from "~/lib/slides-build";
 import { renderCriticHtml } from "~/lib/critic";
+import { insertPosAnchors, POS_ANCHOR_CSS } from "~/lib/source-anchors";
 import { themeCss } from "~/lib/themes";
 import { stripFrontmatter } from "~/lib/thread-serialization";
 import { stripMistBanner } from "~/shared/mist-banner";
@@ -41,7 +42,14 @@ export default function Preview() {
     };
     // The editor body now carries the document's YAML frontmatter (so it is
     // visible and editable), but it is metadata, so strip it from the preview.
-    const resolved = rewriteImages(stripFrontmatter(stripMistBanner(markdown)), ctx);
+    const source = stripFrontmatter(stripMistBanner(markdown));
+    // Both strips take content off the FRONT, so what is left is a suffix and the
+    // length difference is the offset back into the editor document. The check
+    // keeps the anchors honest if that ever stops being true.
+    const base = markdown.endsWith(source) ? markdown.length - source.length : 0;
+    // Scroll anchors: one hidden marker per block, carrying its source offset, so
+    // the split view can map editor position <-> preview pixels (source-anchors.ts).
+    const resolved = rewriteImages(insertPosAnchors(source, base), ctx);
     // The shared composable-grammar pipeline (callouts/spans/divs/bignums, code
     // masked) plus wikilinks and a heading-attr strip, so a doc reads exactly like
     // a deck slide and the three call sites cannot drift.
@@ -75,7 +83,7 @@ export default function Preview() {
 
   return (
     <>
-      <style>{themeStyle}</style>
+      <style>{`${POS_ANCHOR_CSS}\n${themeStyle}`}</style>
       <div ref={containerRef} className="preview font-serif" dangerouslySetInnerHTML={inner} />
     </>
   );

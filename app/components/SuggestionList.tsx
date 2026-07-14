@@ -143,6 +143,7 @@ function SuggestionCard({
   return (
     <div
       ref={ref}
+      data-pos={item.from}
       onClick={() => onJump(item)}
       className={`cursor-pointer border-b border-border p-3 ${active ? "bg-canary/15" : ""}`}
     >

@@ -38,7 +38,6 @@ import LibraryGallery from "~/components/LibraryGallery";
 import GoogleSignIn from "~/components/GoogleSignIn";
 import SlidesView, { isSlideDeck } from "~/components/SlidesView";
 import { fillPrintTab } from "~/lib/print-paged.client";
-import { extractOutlineFromText } from "~/lib/outline";
 
 // useLayoutEffect on the client (so scroll is restored before paint, no flash),
 // useEffect on the server (avoids the SSR warning).
@@ -695,9 +694,30 @@ function DocumentLayout({ id }: { id: string }) {
   // empty then fills in, which changes the scroll height).
   const mainRef = useRef<HTMLElement>(null);
   const previewScrollRef = useRef<HTMLDivElement>(null);
+  const asideScrollRef = useRef<HTMLDivElement>(null);
   const syncingScroll = useRef(false);
   const scrollFraction = useRef(0);
   const restoring = useRef(false);
+
+  /** Scroll the comments pane so the first card at or after `pos` is at its top. */
+  const syncAside = useCallback((pos: number) => {
+    const aside = asideScrollRef.current;
+    if (!aside) return;
+    const cards = Array.from(aside.querySelectorAll<HTMLElement>("[data-pos]"));
+    if (!cards.length) return;
+    // Above the first card there is nothing to follow, so show the pane's own head
+    // (the Accept all / Reject all row, the comment input) rather than scrolling it
+    // out of reach.
+    if (pos <= Number(cards[0].dataset.pos)) {
+      aside.scrollTop = 0;
+      return;
+    }
+    const next = cards.find((c) => Number(c.dataset.pos) >= pos);
+    const target = next
+      ? next.getBoundingClientRect().top - aside.getBoundingClientRect().top + aside.scrollTop - 8
+      : aside.scrollHeight;
+    aside.scrollTop = Math.max(0, Math.min(target, aside.scrollHeight - aside.clientHeight));
+  }, []);
 
   const applyFraction = useCallback(() => {
     const m = mainRef.current;
@@ -747,23 +767,29 @@ function DocumentLayout({ id }: { id: string }) {
     };
   }, [showPreview, applyFraction]);
 
-  // In the desktop split with the document preview, sync the two panes' y-scroll.
+  // Scroll sync across the three panes (editor, preview, comments).
   //
-  // The map between the two is a list of headings: each one is a document offset
-  // on the editor side and a real element on the preview side. NOTHING here uses
-  // editor PIXELS away from the viewport, and that is the whole point: CodeMirror
-  // renders only the lines near the viewport and merely ESTIMATES the height of
-  // the rest (a wrapped paragraph is guessed at one line), so any y it reports for
-  // a line further down is far too small. Measuring that way put the preview
-  // thousands of pixels out. Character offsets are exact everywhere, so the
-  // position within a section is taken as a character fraction, and pixels are
-  // read only where they are real: the preview (fully laid out) and the editor's
-  // own viewport top. The reverse direction hands the target position to
-  // CodeMirror's scrollIntoView, which measures it properly itself.
+  // ONE shared coordinate: the source character offset. Whichever pane the user
+  // scrolls, gmist reads the offset at the TOP of that pane and puts the same
+  // offset at the top of the others, so "scroll to X" means X is at the top
+  // everywhere.
   //
-  // Proportional scroll is the fallback when the two sides do not line up (no
-  // headings, or a different count because of a fence or an attribute block).
-  // A flag breaks the feedback loop between the two listeners.
+  // Nothing here uses editor PIXELS away from the viewport, and that is the point:
+  // CodeMirror renders only the lines near the viewport and merely ESTIMATES the
+  // height of the rest (a wrapped paragraph is guessed at one line), so any y it
+  // reports for a line further down is far too small. Pixels are read only where
+  // they are real (the preview, fully laid out; the editor's own viewport top),
+  // and the reverse direction hands the position to CodeMirror's scrollIntoView,
+  // which measures it properly itself.
+  //
+  // The offset <-> preview-pixel map comes from the anchors Preview emits: one
+  // hidden marker per BLOCK, not per heading (see app/lib/source-anchors.ts). With
+  // heading anchors the position inside a section was a character fraction, and a
+  // section holding an image, a table or a code block is tall on the page and short
+  // in characters, which is what left the two panes hundreds of pixels apart.
+  //
+  // Proportional scroll is the fallback when there are no anchors at all.
+  // A flag breaks the feedback loop between the listeners.
   useEffect(() => {
     if (!splitOpen || slidesMode) return;
     const ed = mainRef.current;
@@ -774,17 +800,32 @@ function DocumentLayout({ id }: { id: string }) {
     const offsetIn = (el: Element, container: HTMLElement) =>
       el.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop;
 
-    /** Heading anchors: source offset <-> preview y. Bracketed by both extremes. */
+    // Rebuilding the map means a rect per block, so it is cached and thrown away
+    // whenever the preview's height changes (an edit, an image or a diagram
+    // landing) or the document's length does.
+    let cache: { pts: { pos: number; y: number }[] | null; h: number; len: number } | null = null;
+
+    /** Block anchors: source offset <-> preview y. Bracketed by both extremes. */
     const anchors = (): { pos: number; y: number }[] | null => {
-      const pvHeads = Array.from(pv.querySelectorAll("h1,h2,h3,h4,h5,h6"));
-      const text = view.state.doc.toString();
-      const heads = extractOutlineFromText(text);
-      if (!heads.length || heads.length !== pvHeads.length) return null;
-      return [
-        { pos: 0, y: 0 },
-        ...heads.map((h, i) => ({ pos: h.pos, y: offsetIn(pvHeads[i], pv) })),
-        { pos: text.length, y: pv.scrollHeight },
-      ];
+      const len = view.state.doc.length;
+      if (cache && cache.h === pv.scrollHeight && cache.len === len) return cache.pts;
+
+      const pts: { pos: number; y: number }[] = [{ pos: 0, y: 0 }];
+      for (const marker of Array.from(pv.querySelectorAll<HTMLElement>("br[data-pos]"))) {
+        const block = marker.nextElementSibling;
+        if (!block) continue;
+        const pos = Number(marker.dataset.pos);
+        const y = offsetIn(block, pv);
+        const last = pts[pts.length - 1];
+        // Both axes must increase together or the interpolation is nonsense; a
+        // column layout, where two blocks share a y, is the case that breaks it.
+        if (!Number.isFinite(pos) || pos <= last.pos || y < last.y) continue;
+        pts.push({ pos, y });
+      }
+      pts.push({ pos: len, y: pv.scrollHeight });
+      const result = pts.length > 2 ? pts : null;
+      cache = { pts: result, h: pv.scrollHeight, len };
+      return result;
     };
 
     /** Interpolate x through the anchors, in either direction. */
@@ -821,21 +862,22 @@ function DocumentLayout({ id }: { id: string }) {
       }, 120);
     };
 
+    /** The source position at the top of the editor viewport. */
+    const editorTop = () => {
+      const rect = ed.getBoundingClientRect();
+      return view.posAtCoords({ x: rect.left + 24, y: rect.top + 1 }, false);
+    };
+
     // Editor -> preview: the source position at the top of the editor viewport.
     const onEd = () => {
       if (syncingScroll.current) return;
       hold();
       const pts = anchors();
       const toMax = pv.scrollHeight - pv.clientHeight;
-      let target: number;
-      if (pts) {
-        const rect = ed.getBoundingClientRect();
-        const pos = view.posAtCoords({ x: rect.left + 24, y: rect.top + 1 }, false);
-        target = map(pos, pts, "pos", "y");
-      } else {
-        target = proportional(ed, pv);
-      }
+      const pos = editorTop();
+      const target = pts ? map(pos, pts, "pos", "y") : proportional(ed, pv);
       pv.scrollTop = Math.max(0, Math.min(target, toMax));
+      syncAside(pos);
     };
 
     // Preview -> editor: the source position for the top of the preview viewport,
@@ -854,6 +896,7 @@ function DocumentLayout({ id }: { id: string }) {
           y: "start",
         }),
       });
+      syncAside(pos);
     };
 
     ed.addEventListener("scroll", onEd);
@@ -862,7 +905,25 @@ function DocumentLayout({ id }: { id: string }) {
       ed.removeEventListener("scroll", onEd);
       pv.removeEventListener("scroll", onPv);
     };
-  }, [splitOpen, slidesMode, editorView]);
+  }, [splitOpen, slidesMode, editorView, syncAside]);
+
+  // The comments pane is the third panel. It follows the document rather than
+  // driving it (a review reads the text and looks aside at the notes on it, not
+  // the other way round), so scrolling the editor or the preview brings the cards
+  // for what is at the top of the page to the top of the list. Each card carries
+  // its own source offset in `data-pos`. Clicking a card still jumps the editor to
+  // it, which is the reverse direction, done deliberately.
+  useEffect(() => {
+    const ed = mainRef.current;
+    const view = editorView;
+    if (!ed || !view || splitOpen) return; // in split view the effect above drives it
+    const onEd = () => {
+      const rect = ed.getBoundingClientRect();
+      syncAside(view.posAtCoords({ x: rect.left + 24, y: rect.top + 1 }, false));
+    };
+    ed.addEventListener("scroll", onEd);
+    return () => ed.removeEventListener("scroll", onEd);
+  }, [splitOpen, editorView, syncAside]);
 
   return (
     // h-screen + overflow-hidden pins the editor to exactly the viewport: this is
@@ -1257,7 +1318,7 @@ function DocumentLayout({ id }: { id: string }) {
                 Comments
               </span>
             </div>
-            <div className="flex-1 overflow-y-auto">
+            <div ref={asideScrollRef} className="flex-1 overflow-y-auto">
               <OnboardingBanner />
               <SuggestionList />
               {mode === "suggest" && <CleanViewToggle />}
