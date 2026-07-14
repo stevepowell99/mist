@@ -60,25 +60,49 @@ export interface SuggestionItem {
   removed: string;
   /** Text being added (addition, and the new half of a substitution). */
   added: string;
+  /** A comment written alongside this edit (the reviewer's reason for it), if
+   *  one sits immediately either side of the markup. */
+  commentText?: string;
+}
+
+/** The comment written alongside a suggestion: a `{>>...<<}` touching the span,
+ *  on either side (a space between is still "alongside"). Reviewers habitually
+ *  write the edit and its reason together, so the panel must show both. */
+function adjacentComment(text: string, spans: CriticSpan[], i: number): string | undefined {
+  const gapIsBlank = (from: number, to: number) => /^[ \t]*$/.test(text.slice(from, to));
+  const s = spans[i];
+  const after = spans[i + 1];
+  if (after?.type === "comment" && gapIsBlank(s.to, after.from)) {
+    return text.slice(after.contentFrom, after.contentTo);
+  }
+  const before = spans[i - 1];
+  if (before?.type === "comment" && gapIsBlank(before.to, s.from)) {
+    return text.slice(before.contentFrom, before.contentTo);
+  }
+  return undefined;
 }
 
 /** Every suggestion in the document, in document order. */
 export function listSuggestions(text: string): SuggestionItem[] {
-  return criticSpans(text)
-    .filter(isSuggestion)
-    .map((s) => {
-      const content = text.slice(s.contentFrom, s.contentTo);
-      const type = s.type as SuggestionItem["type"];
-      if (type === "addition") return { type, from: s.from, to: s.to, removed: "", added: content };
-      if (type === "deletion") return { type, from: s.from, to: s.to, removed: content, added: "" };
-      return {
-        type,
-        from: s.from,
-        to: s.to,
+  const spans = criticSpans(text);
+  const items: SuggestionItem[] = [];
+  for (let i = 0; i < spans.length; i++) {
+    const s = spans[i];
+    if (!isSuggestion(s)) continue;
+    const content = text.slice(s.contentFrom, s.contentTo);
+    const type = s.type as SuggestionItem["type"];
+    const base = { type, from: s.from, to: s.to, commentText: adjacentComment(text, spans, i) };
+    if (type === "addition") items.push({ ...base, removed: "", added: content });
+    else if (type === "deletion") items.push({ ...base, removed: content, added: "" });
+    else {
+      items.push({
+        ...base,
         removed: text.slice(s.contentFrom, s.sep!.from),
         added: text.slice(s.sep!.to, s.contentTo),
-      };
-    });
+      });
+    }
+  }
+  return items;
 }
 
 /** Accept or reject the suggestion at the cursor; null if none there. */

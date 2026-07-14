@@ -22,27 +22,50 @@ function truncate(text: string, max = 120): string {
 }
 
 export default function SuggestionList() {
-  const { view, markdown, mode, role, cursorOffset } = useDocument();
+  const { view, markdown, mode, role, cursorOffset, threads, resolveThread } = useDocument();
   const items = useMemo(() => listSuggestions(markdown), [markdown]);
 
+  // Accept or reject, then clear up after it: the comment the reviewer wrote
+  // alongside the edit is resolved with it (it exists to explain the edit, so
+  // leaving it behind just means the same decision twice), and the cursor moves
+  // to the next edit in the queue so a review is a run of Accept/Reject presses.
   const resolve = useCallback(
-    (item: SuggestionItem, accept: boolean) => {
+    (item: SuggestionItem, accept: boolean, index: number) => {
       if (!view) return;
       const change = resolveAtCursor(view.state.doc.toString(), item.from, accept);
       if (change) view.dispatch({ changes: change, userEvent: "input.accept" });
+
+      if (item.commentText) {
+        const thread = threads.find((t) => t.commentText === item.commentText && !t.resolved);
+        // Re-scans the live text for the markup, so it is safe after the edit above.
+        if (thread) resolveThread(thread.id);
+      }
+
+      // The list has shifted up by one, so the same index IS the next edit.
+      const remaining = listSuggestions(view.state.doc.toString());
+      const next = remaining[Math.min(index, remaining.length - 1)];
+      if (next) view.dispatch({ selection: { anchor: next.from }, scrollIntoView: true });
       view.focus();
     },
-    [view],
+    [view, threads, resolveThread],
   );
 
   const all = useCallback(
     (accept: boolean) => {
       if (!view) return;
-      const changes = resolveAll(view.state.doc.toString(), accept);
+      const text = view.state.doc.toString();
+      const paired = listSuggestions(text)
+        .map((s) => s.commentText)
+        .filter((c): c is string => !!c);
+      const changes = resolveAll(text, accept);
       if (changes.length) view.dispatch({ changes, userEvent: "input.accept" });
+      for (const commentText of paired) {
+        const thread = threads.find((t) => t.commentText === commentText && !t.resolved);
+        if (thread) resolveThread(thread.id);
+      }
       view.focus();
     },
-    [view],
+    [view, threads, resolveThread],
   );
 
   const jump = useCallback(
@@ -85,13 +108,13 @@ export default function SuggestionList() {
         </div>
       </div>
 
-      {items.map((item) => (
+      {items.map((item, i) => (
         <SuggestionCard
           key={`${item.from}-${item.to}`}
           item={item}
           active={cursorOffset >= item.from && cursorOffset <= item.to}
           onJump={jump}
-          onResolve={resolve}
+          onResolve={(it, accept) => resolve(it, accept, i)}
         />
       ))}
     </div>
@@ -129,6 +152,11 @@ function SuggestionCard({
         {item.removed && item.added && " "}
         {item.added && <span className="cm-addition">{truncate(item.added)}</span>}
       </div>
+      {item.commentText && (
+        <p className="mt-1 border-l-2 border-border pl-2 text-base text-muted">
+          {truncate(item.commentText, 240)}
+        </p>
+      )}
       <div className="mt-2 flex border border-border" onClick={(e) => e.stopPropagation()}>
         <button
           onClick={() => onResolve(item, true)}

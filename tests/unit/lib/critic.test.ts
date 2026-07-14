@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { renderCriticHtml, stripCritic } from "~/lib/critic";
+import { listSuggestions } from "~/lib/cm-suggestion-actions";
 
 describe("renderCriticHtml", () => {
   it("renders additions, deletions and highlights, and drops comments", () => {
@@ -30,5 +31,19 @@ describe("stripCritic", () => {
   it("accepts suggestions and drops comments", () => {
     expect(stripCritic("a {++new++} {--old--} {==hi==} {>>note<<}b")).toBe("a new  hi b");
     expect(stripCritic("would {~~like~>likely~~} code")).toBe("would likely code");
+  });
+});
+
+describe("listSuggestions", () => {
+  it("pairs an edit with the comment written beside it, either side", () => {
+    const items = listSuggestions("a {--old--}{>>why<<} b {>>because<<} {++new++} c");
+    expect(items.map((i) => [i.type, i.commentText])).toEqual([
+      ["deletion", "why"],
+      ["addition", "because"],
+    ]);
+  });
+
+  it("does not pair a comment that is not touching the edit", () => {
+    expect(listSuggestions("{--old--} some text {>>unrelated<<}")[0].commentText).toBeUndefined();
   });
 });
