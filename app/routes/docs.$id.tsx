@@ -23,7 +23,7 @@ import UserName from "~/components/UserName";
 import SaveStatus from "~/components/SaveStatus";
 import ShareButton from "~/components/ShareButton";
 import CleanViewToggle from "~/components/CleanViewToggle";
-import SuggestionActions from "~/components/SuggestionActions";
+import SuggestionList from "~/components/SuggestionList";
 import CommentInput from "~/components/CommentInput";
 import ThreadList from "~/components/ThreadList";
 import ThemeSelector from "~/components/ThemeSelector";
@@ -38,6 +38,7 @@ import LibraryGallery from "~/components/LibraryGallery";
 import GoogleSignIn from "~/components/GoogleSignIn";
 import SlidesView, { isSlideDeck } from "~/components/SlidesView";
 import { fillPrintTab } from "~/lib/print-paged.client";
+import { extractOutlineFromText } from "~/lib/outline";
 
 // useLayoutEffect on the client (so scroll is restored before paint, no flash),
 // useEffect on the server (avoids the SSR warning).
@@ -755,20 +756,29 @@ function DocumentLayout({ id }: { id: string }) {
     if (!splitOpen || slidesMode) return;
     const ed = mainRef.current;
     const pv = previewScrollRef.current;
-    const edRoot = editorView?.contentDOM as HTMLElement | undefined;
-    if (!ed || !pv || !edRoot) return;
+    const view = editorView;
+    if (!ed || !pv || !view) return;
 
     const offsetIn = (el: Element, container: HTMLElement) =>
       el.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop;
 
     // Anchor pairs (editorTop, previewTop), bracketed by the scroll extremes.
+    // The editor headings come from the DOCUMENT, not the rendered lines:
+    // CodeMirror only mounts the lines near the viewport, so reading its DOM
+    // children found a handful of headings against the preview's full set, the
+    // counts never matched on a real document, and every scroll silently fell
+    // through to the proportional fallback (which drifts badly once comments and
+    // CriticMarkup make the source longer than the render). `lineBlockAt` gives a
+    // y for any line, rendered or not.
     const anchors = (): { from: number; to: number }[] | null => {
-      const edHeads = Array.from(edRoot.children).filter((c) =>
-        /^#{1,6}\s/.test((c.textContent ?? "").trimStart()),
-      );
       const pvHeads = Array.from(pv.querySelectorAll("h1,h2,h3,h4,h5,h6"));
-      if (edHeads.length < 1 || edHeads.length !== pvHeads.length) return null;
-      const pairs = edHeads.map((e, i) => ({ from: offsetIn(e, ed), to: offsetIn(pvHeads[i], pv) }));
+      const heads = extractOutlineFromText(view.state.doc.toString());
+      if (!heads.length || heads.length !== pvHeads.length) return null;
+      const edTop = ed.getBoundingClientRect().top - ed.scrollTop;
+      const pairs = heads.map((h, i) => ({
+        from: view.documentTop + view.lineBlockAt(h.pos).top - edTop,
+        to: offsetIn(pvHeads[i], pv),
+      }));
       return [{ from: 0, to: 0 }, ...pairs];
     };
 
@@ -1208,7 +1218,7 @@ function DocumentLayout({ id }: { id: string }) {
             </div>
             <div className="flex-1 overflow-y-auto">
               <OnboardingBanner />
-              <SuggestionActions />
+              <SuggestionList />
               {mode === "suggest" && <CleanViewToggle />}
               <div className="border-t border-border" />
               <CommentInput />

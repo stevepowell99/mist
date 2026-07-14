@@ -49,6 +49,38 @@ function resolveSpan(text: string, s: CriticSpan, accept: boolean): TextChange {
   return { from: s.from, to: s.to, insert };
 }
 
+/** One suggestion, for the review list in the panel. `from` is the span start,
+ *  so it doubles as the position to scroll the editor to and the `pos` to pass
+ *  back to `resolveAtCursor`. */
+export interface SuggestionItem {
+  type: "addition" | "deletion" | "substitution";
+  from: number;
+  to: number;
+  /** Text being removed (deletion, and the old half of a substitution). */
+  removed: string;
+  /** Text being added (addition, and the new half of a substitution). */
+  added: string;
+}
+
+/** Every suggestion in the document, in document order. */
+export function listSuggestions(text: string): SuggestionItem[] {
+  return criticSpans(text)
+    .filter(isSuggestion)
+    .map((s) => {
+      const content = text.slice(s.contentFrom, s.contentTo);
+      const type = s.type as SuggestionItem["type"];
+      if (type === "addition") return { type, from: s.from, to: s.to, removed: "", added: content };
+      if (type === "deletion") return { type, from: s.from, to: s.to, removed: content, added: "" };
+      return {
+        type,
+        from: s.from,
+        to: s.to,
+        removed: text.slice(s.contentFrom, s.sep!.from),
+        added: text.slice(s.sep!.to, s.contentTo),
+      };
+    });
+}
+
 /** Accept or reject the suggestion at the cursor; null if none there. */
 export function resolveAtCursor(text: string, pos: number, accept: boolean): TextChange | null {
   const s = suggestionAt(text, pos);

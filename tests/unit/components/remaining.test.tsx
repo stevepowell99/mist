@@ -4,7 +4,7 @@ import { createElement } from "react";
 import { fireEvent } from "@testing-library/react";
 import { renderWithDocument } from "../../helpers/document-context";
 import CleanViewToggle from "~/components/CleanViewToggle";
-import SuggestionActions from "~/components/SuggestionActions";
+import SuggestionList from "~/components/SuggestionList";
 import ShareButton from "~/components/ShareButton";
 import ConnectionStatus from "~/components/ConnectionStatus";
 import Preview from "~/components/Preview";
@@ -26,16 +26,25 @@ describe("CleanViewToggle", () => {
   });
 });
 
-describe("SuggestionActions", () => {
-  it("renders action buttons in suggest mode", () => {
-    const { getByText } = renderWithDocument(
-      createElement(SuggestionActions),
-      { context: { mode: "suggest" } },
+describe("SuggestionList", () => {
+  it("lists each suggestion with its own accept/reject", () => {
+    const { getByText, getAllByText } = renderWithDocument(
+      createElement(SuggestionList),
+      { context: { markdown: "a {--old--} b {++new++} c", mode: "edit" } },
     );
-    expect(getByText("Accept")).toBeTruthy();
-    expect(getByText("Reject")).toBeTruthy();
+    expect(getByText("Delete")).toBeTruthy();
+    expect(getByText("Insert")).toBeTruthy();
+    expect(getAllByText("Accept")).toHaveLength(2);
     expect(getByText("Accept all")).toBeTruthy();
     expect(getByText("Reject all")).toBeTruthy();
+  });
+
+  it("prompts in suggest mode when there is nothing to review", () => {
+    const { queryByText } = renderWithDocument(
+      createElement(SuggestionList),
+      { context: { markdown: "plain text", mode: "suggest" } },
+    );
+    expect(queryByText("Accept all")).toBeNull();
   });
 });
 

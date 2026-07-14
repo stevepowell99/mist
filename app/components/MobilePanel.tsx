@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import CommentInput from "~/components/CommentInput";
 import ThreadList from "~/components/ThreadList";
-import SuggestionActions from "~/components/SuggestionActions";
+import SuggestionList from "~/components/SuggestionList";
 import OnboardingBanner from "~/components/OnboardingBanner";
 import { useDocument } from "~/lib/DocumentContext";
 
@@ -43,7 +43,7 @@ export default function MobilePanel({ className }: { className?: string }) {
       {open && (
         <div className="overflow-y-auto pb-2" style={{ height: "calc(50vh - 48px)" }}>
           <OnboardingBanner />
-          <SuggestionActions />
+          <SuggestionList />
           <CommentInput />
           <ThreadList />
         </div>
