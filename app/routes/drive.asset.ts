@@ -55,7 +55,21 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     const meta = await driveGetMeta(token, deck);
     const folder = meta.parents?.[0];
     if (!folder) return new Response("deck has no folder", { status: 404 });
-    const fileId = await driveResolvePath(token, folder, path);
+    // Resolve against the document's own folder first. Obsidian, though, writes an
+    // embed's path from the VAULT root ("001 Working Papers/img/x.jpg"), which is
+    // not a path from the note's folder, so retry from each parent folder up the
+    // tree: whichever ancestor the vault root is, one of these hits it. Bounded, so
+    // a genuinely missing image still 404s quickly.
+    let fileId: string | null = null;
+    let base: string | null = folder;
+    for (let up = 0; up <= 3 && base && !fileId; up++) {
+      try {
+        fileId = await driveResolvePath(token, base, path);
+      } catch {
+        fileId = null; // path not under this folder; try the parent
+      }
+      if (!fileId) base = (await driveGetMeta(token, base)).parents?.[0] ?? null;
+    }
     if (!fileId) return new Response("asset not found", { status: 404 });
     const body = await driveDownload(token, fileId);
     return new Response(body, {

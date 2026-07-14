@@ -36,10 +36,35 @@ export function resolveAssetSrc(path: string, ctx: AssetCtx): string {
   return path;
 }
 
-/** Rewrite every `![alt](src "title")` so relative srcs resolve for the backend. */
+/**
+ * Rewrite every image so a relative src resolves through the backend. Two forms
+ * of markdown image are handled, plus Obsidian's embed:
+ *   ![alt](path "title")      the plain form
+ *   ![alt](<path with spaces>)  the angle-bracket form, which is how a path with
+ *                               spaces MUST be written, and how Obsidian writes
+ *                               one; the old pattern demanded a space-free src,
+ *                               so these were left relative and 404ed
+ *   ![[path]] / ![[path|alt]]   Obsidian's embed, which nothing here rendered at
+ *                               all: it fell through to the wikilink converter
+ *                               and came out as the path in plain text
+ * The embed is rewritten to a markdown image first, so it takes the same route.
+ */
 export function rewriteImages(md: string, ctx: AssetCtx): string {
-  return md.replace(
-    /!\[([^\]]*)\]\(([^)\s]+)((?:\s+"[^"]*")?)\)/g,
-    (_m, alt: string, url: string, title: string) => `![${alt}](${resolveAssetSrc(url, ctx)}${title})`,
+  const embedded = md.replace(
+    /!\[\[([^\]|]+?)(?:\|([^\]]*))?\]\]/g,
+    (whole, target: string, alias: string | undefined) => {
+      // Only an image embed becomes an image; ![[note]] stays a wikilink.
+      if (!/\.(png|jpe?g|gif|webp|svg|avif)$/i.test(target.trim())) return whole;
+      return `![${alias ?? ""}](<${target.trim()}>)`;
+    },
+  );
+  return embedded.replace(
+    /!\[([^\]]*)\]\(\s*(?:<([^>]+)>|([^)\s]+))((?:\s+"[^"]*")?)\s*\)/g,
+    (_m, alt: string, angled: string | undefined, plain: string | undefined, title: string) => {
+      const src = resolveAssetSrc((angled ?? plain ?? "").trim(), ctx);
+      // Angle brackets only where they are needed (a src that kept its spaces
+      // because it did not resolve), so the common case stays plain markdown.
+      return `![${alt}](${/\s/.test(src) ? `<${src}>` : src}${title})`;
+    },
   );
 }
