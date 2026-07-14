@@ -29,9 +29,25 @@ function loadMermaid(): Promise<MermaidApi> {
   return mermaidPromise;
 }
 
+/** Mermaid's own opening keywords, so a diagram is recognised by WHAT IT IS and
+ *  not by the class on its code block. Matching only the class missed real
+ *  diagrams (a fence written Quarto-style as ```{mermaid} carries the class
+ *  `language-{mermaid}`, and any renderer or sanitizer that drops the class takes
+ *  the diagram with it): the block then rendered as its own source text. */
+const MERMAID_START =
+  /^\s*(?:%%\{|graph\s|flowchart\s|sequenceDiagram\b|classDiagram\b|stateDiagram(?:-v2)?\b|erDiagram\b|journey\b|gantt\b|pie\b|mindmap\b|timeline\b|quadrantChart\b|gitGraph\b|xychart-beta\b|block-beta\b|sankey-beta\b|C4Context\b)/;
+
+function isMermaidBlock(code: Element): boolean {
+  const cls = code.className || "";
+  if (/\blanguage-\{?mermaid\}?\b/.test(cls)) return true;
+  // No class to go on: read the source. Only inside a fenced block, so a prose
+  // paragraph that happens to start with "graph " is never touched.
+  return code.closest("pre") !== null && MERMAID_START.test(code.textContent ?? "");
+}
+
 export async function runMermaid(root: HTMLElement | null): Promise<void> {
   if (!root) return;
-  const blocks = Array.from(root.querySelectorAll("code.language-mermaid"));
+  const blocks = Array.from(root.querySelectorAll("code")).filter(isMermaidBlock);
   if (blocks.length === 0) return;
   const nodes: HTMLElement[] = [];
   for (const c of blocks) {
