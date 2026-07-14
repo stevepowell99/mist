@@ -747,11 +747,23 @@ function DocumentLayout({ id }: { id: string }) {
     };
   }, [showPreview, applyFraction]);
 
-  // In the desktop split with the document preview, sync the two panes'
-  // y-scroll. Pure proportional drifts on long docs because headings/images
-  // expand differently, so anchor on headings (which exist in both) and
-  // interpolate between them, falling back to proportional when they do not
-  // line up. A flag breaks the feedback loop between the two listeners.
+  // In the desktop split with the document preview, sync the two panes' y-scroll.
+  //
+  // The map between the two is a list of headings: each one is a document offset
+  // on the editor side and a real element on the preview side. NOTHING here uses
+  // editor PIXELS away from the viewport, and that is the whole point: CodeMirror
+  // renders only the lines near the viewport and merely ESTIMATES the height of
+  // the rest (a wrapped paragraph is guessed at one line), so any y it reports for
+  // a line further down is far too small. Measuring that way put the preview
+  // thousands of pixels out. Character offsets are exact everywhere, so the
+  // position within a section is taken as a character fraction, and pixels are
+  // read only where they are real: the preview (fully laid out) and the editor's
+  // own viewport top. The reverse direction hands the target position to
+  // CodeMirror's scrollIntoView, which measures it properly itself.
+  //
+  // Proportional scroll is the fallback when the two sides do not line up (no
+  // headings, or a different count because of a fence or an attribute block).
+  // A flag breaks the feedback loop between the two listeners.
   useEffect(() => {
     if (!splitOpen || slidesMode) return;
     const ed = mainRef.current;
@@ -762,59 +774,88 @@ function DocumentLayout({ id }: { id: string }) {
     const offsetIn = (el: Element, container: HTMLElement) =>
       el.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop;
 
-    // Anchor pairs (editorTop, previewTop), bracketed by the scroll extremes.
-    // The editor headings come from the DOCUMENT, not the rendered lines:
-    // CodeMirror only mounts the lines near the viewport, so reading its DOM
-    // children found a handful of headings against the preview's full set, the
-    // counts never matched on a real document, and every scroll silently fell
-    // through to the proportional fallback (which drifts badly once comments and
-    // CriticMarkup make the source longer than the render). `lineBlockAt` gives a
-    // y for any line, rendered or not.
-    const anchors = (): { from: number; to: number }[] | null => {
+    /** Heading anchors: source offset <-> preview y. Bracketed by both extremes. */
+    const anchors = (): { pos: number; y: number }[] | null => {
       const pvHeads = Array.from(pv.querySelectorAll("h1,h2,h3,h4,h5,h6"));
-      const heads = extractOutlineFromText(view.state.doc.toString());
+      const text = view.state.doc.toString();
+      const heads = extractOutlineFromText(text);
       if (!heads.length || heads.length !== pvHeads.length) return null;
-      const edTop = ed.getBoundingClientRect().top - ed.scrollTop;
-      const pairs = heads.map((h, i) => ({
-        from: view.documentTop + view.lineBlockAt(h.pos).top - edTop,
-        to: offsetIn(pvHeads[i], pv),
-      }));
-      return [{ from: 0, to: 0 }, ...pairs];
+      return [
+        { pos: 0, y: 0 },
+        ...heads.map((h, i) => ({ pos: h.pos, y: offsetIn(pvHeads[i], pv) })),
+        { pos: text.length, y: pv.scrollHeight },
+      ];
     };
 
-    const interp = (top: number, pairs: { from: number; to: number }[], toMax: number) => {
-      for (let i = pairs.length - 1; i >= 0; i--) {
-        if (top >= pairs[i].from) {
-          const next = pairs[i + 1];
-          if (!next) return Math.min(pairs[i].to + (top - pairs[i].from), toMax);
-          const span = next.from - pairs[i].from || 1;
-          const frac = (top - pairs[i].from) / span;
-          return pairs[i].to + frac * (next.to - pairs[i].to);
+    /** Interpolate x through the anchors, in either direction. */
+    const map = (
+      x: number,
+      pts: { pos: number; y: number }[],
+      from: "pos" | "y",
+      to: "pos" | "y",
+    ): number => {
+      for (let i = pts.length - 1; i >= 0; i--) {
+        if (x >= pts[i][from]) {
+          const next = pts[i + 1];
+          if (!next) return pts[i][to];
+          const span = next[from] - pts[i][from] || 1;
+          const frac = Math.max(0, Math.min(1, (x - pts[i][from]) / span));
+          return pts[i][to] + frac * (next[to] - pts[i][to]);
         }
       }
-      return top;
+      return pts[0][to];
     };
 
-    const sync = (from: HTMLElement, to: HTMLElement, dir: "fromEd" | "fromPv") => {
-      if (syncingScroll.current) return;
-      syncingScroll.current = true;
+    const proportional = (from: HTMLElement, to: HTMLElement) => {
+      const fromMax = from.scrollHeight - from.clientHeight;
       const toMax = to.scrollHeight - to.clientHeight;
-      const pairs = anchors();
-      let target: number;
-      if (pairs) {
-        const mapped = dir === "fromEd" ? pairs : pairs.map((p) => ({ from: p.to, to: p.from }));
-        target = interp(from.scrollTop, mapped, toMax);
-      } else {
-        const fromMax = from.scrollHeight - from.clientHeight;
-        target = fromMax > 0 ? (from.scrollTop / fromMax) * toMax : 0;
-      }
-      to.scrollTop = Math.max(0, Math.min(target, toMax));
-      requestAnimationFrame(() => {
+      return fromMax > 0 ? (from.scrollTop / fromMax) * toMax : 0;
+    };
+
+    const hold = () => {
+      syncingScroll.current = true;
+      // CodeMirror's scrollIntoView lands on a later frame, so hold the guard past
+      // the scroll it causes, or the two panes chase each other.
+      setTimeout(() => {
         syncingScroll.current = false;
+      }, 120);
+    };
+
+    // Editor -> preview: the source position at the top of the editor viewport.
+    const onEd = () => {
+      if (syncingScroll.current) return;
+      hold();
+      const pts = anchors();
+      const toMax = pv.scrollHeight - pv.clientHeight;
+      let target: number;
+      if (pts) {
+        const rect = ed.getBoundingClientRect();
+        const pos = view.posAtCoords({ x: rect.left + 24, y: rect.top + 1 }, false);
+        target = map(pos, pts, "pos", "y");
+      } else {
+        target = proportional(ed, pv);
+      }
+      pv.scrollTop = Math.max(0, Math.min(target, toMax));
+    };
+
+    // Preview -> editor: the source position for the top of the preview viewport,
+    // scrolled to by CodeMirror (which can measure a line it has not rendered).
+    const onPv = () => {
+      if (syncingScroll.current) return;
+      hold();
+      const pts = anchors();
+      if (!pts) {
+        ed.scrollTop = proportional(pv, ed);
+        return;
+      }
+      const pos = Math.round(map(pv.scrollTop, pts, "y", "pos"));
+      view.dispatch({
+        effects: EditorView.scrollIntoView(Math.max(0, Math.min(pos, view.state.doc.length)), {
+          y: "start",
+        }),
       });
     };
-    const onEd = () => sync(ed, pv, "fromEd");
-    const onPv = () => sync(pv, ed, "fromPv");
+
     ed.addEventListener("scroll", onEd);
     pv.addEventListener("scroll", onPv);
     return () => {

@@ -81,8 +81,13 @@ export function moveSection(
 export function extractOutlineFromText(text: string): OutlineItem[] {
   const items: OutlineItem[] = [];
   let offset = 0;
+  // A `# comment` inside a fenced code block is not a heading, in the outline or
+  // in the rendered preview, so skip fences (the scroll sync pairs this list with
+  // the preview's headings and needs the two to agree).
+  let inFence = false;
   for (const line of text.split("\n")) {
-    const m = HEADING_RE.exec(line);
+    if (/^\s*(```|~~~)/.test(line)) inFence = !inFence;
+    const m = inFence ? null : HEADING_RE.exec(line);
     if (m) {
       items.push({
         level: m[1].length,

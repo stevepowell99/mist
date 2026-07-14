@@ -1,0 +1,12 @@
+
+> predev
+> node scripts/vendor-pagedjs.mjs
+
+vendored pagedjs polyfill -> C:\dev\mist\public\vendor\paged.polyfill.js
+
+> dev
+> react-router dev
+
+  [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5173[22m/[39m
+[2m  [32m➜[39m  [1mNetwork[22m[2m: use [22m[1m--host[22m[2m to expose[22m
+  [32m➜[39m  [1mDebug[22m:   [2m[33mhttp://localhost:[1m5173[22m[2m/__debug[39m[22m
