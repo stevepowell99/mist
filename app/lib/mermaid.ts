@@ -8,15 +8,25 @@
  * text, with nothing on the page to say why. It is still a dynamic import, so the
  * weight only lands on a document that actually has a diagram.
  *
- * Each diagram is rendered on its own, so one that fails to parse shows its error
- * and the rest of the page still gets its diagrams.
+ * Rendered SVG is CACHED by diagram source and re-applied synchronously. The
+ * preview re-sets its innerHTML whenever the markdown re-renders, which throws
+ * away the injected SVG and leaves the code block behind; the diagram then had to
+ * be parsed again from scratch, and a re-render arriving mid-parse wrote the
+ * result into a node that was already detached, so the diagram appeared and then
+ * vanished for good. From the cache it comes straight back in the same frame.
+ *
+ * Each diagram is rendered on its own, so one that fails to parse keeps its
+ * source and the rest of the page still gets its diagrams.
  */
 type MermaidApi = {
   initialize: (cfg: Record<string, unknown>) => void;
-  run: (opts: { nodes: HTMLElement[] }) => Promise<void>;
+  render: (id: string, text: string) => Promise<{ svg: string }>;
 };
 
 let mermaidPromise: Promise<MermaidApi> | null = null;
+/** diagram source -> rendered SVG, so a re-render costs nothing. */
+const svgCache = new Map<string, string>();
+let idSeq = 0;
 
 function loadMermaid(): Promise<MermaidApi> {
   if (!mermaidPromise) {
@@ -49,14 +59,24 @@ export async function runMermaid(root: HTMLElement | null): Promise<void> {
   if (!root) return;
   const blocks = Array.from(root.querySelectorAll("code")).filter(isMermaidBlock);
   if (blocks.length === 0) return;
-  const nodes: HTMLElement[] = [];
-  for (const c of blocks) {
+
+  // Swap every block for its container first, filling in from the cache as we go,
+  // so an already-seen diagram is back on the page in this frame.
+  const pending: { div: HTMLElement; src: string }[] = [];
+  for (const code of blocks) {
+    const src = (code.textContent ?? "").trim();
     const div = document.createElement("div");
     div.className = "mermaid";
-    div.textContent = c.textContent ?? "";
-    (c.closest("pre") ?? c).replaceWith(div);
-    nodes.push(div);
+    const cached = svgCache.get(src);
+    if (cached) {
+      div.innerHTML = cached;
+    } else {
+      div.textContent = src;
+      pending.push({ div, src });
+    }
+    (code.closest("pre") ?? code).replaceWith(div);
   }
+  if (pending.length === 0) return;
 
   let mermaid: MermaidApi;
   try {
@@ -64,9 +84,13 @@ export async function runMermaid(root: HTMLElement | null): Promise<void> {
   } catch {
     return; // leave the source text in place if mermaid itself fails to load
   }
-  for (const node of nodes) {
+  for (const { div, src } of pending) {
     try {
-      await mermaid.run({ nodes: [node] });
+      const { svg } = await mermaid.render(`mermaid-${idSeq++}`, src);
+      svgCache.set(src, svg);
+      // The preview may have re-rendered while this was parsing, detaching the
+      // node. The cache above means the next pass picks the SVG up regardless.
+      if (div.isConnected) div.innerHTML = svg;
     } catch {
       // A diagram mermaid cannot parse keeps its source; the others still render.
     }

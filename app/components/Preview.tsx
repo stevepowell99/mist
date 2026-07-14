@@ -63,14 +63,20 @@ export default function Preview() {
     void runMermaid(containerRef.current);
   }, [html]);
 
+  // React compares the dangerouslySetInnerHTML prop BY REFERENCE, so a fresh
+  // `{__html}` object each render made it re-set the innerHTML on every re-render
+  // of this component, even when the HTML was identical. That threw away anything
+  // written into the DOM afterwards (the mermaid SVGs), while the effect above,
+  // keyed on the unchanged html, never ran again to put them back: a diagram
+  // rendered, then a stray re-render (a cursor move, a save-status tick) silently
+  // turned it back into a code block. Holding the object stable fixes it at the
+  // source: the DOM is only rewritten when the HTML really changes.
+  const inner = useMemo(() => ({ __html: html }), [html]);
+
   return (
     <>
       <style>{themeStyle}</style>
-      <div
-        ref={containerRef}
-        className="preview font-serif"
-        dangerouslySetInnerHTML={{ __html: html }}
-      />
+      <div ref={containerRef} className="preview font-serif" dangerouslySetInnerHTML={inner} />
     </>
   );
 }
