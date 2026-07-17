@@ -19,3 +19,11 @@ SESSION_SECRET=
 # Fathom analytics (optional, omit to disable).
 VITE_FATHOM_SITE_ID=
 VITE_FATHOM_DOMAINS=
+
+# Local-fs mode (optional, dev only): edit files in a local folder instead of
+# Google Drive; no Google secrets, sign-in or internet needed (SESSION_SECRET
+# is still required). Set BOTH, then start with `npm run dev:local`, which runs
+# the localfs sidecar and the dev server together. Production never sets these.
+# LOCAL_FS_ROOT is the folder to serve, e.g. a Drive-mirror or Obsidian folder.
+LOCAL_FS_ROOT=
+LOCAL_FS_URL=http://127.0.0.1:5199

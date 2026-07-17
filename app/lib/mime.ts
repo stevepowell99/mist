@@ -23,6 +23,7 @@ const MIME_BY_EXT: Record<string, string> = {
   gif: "image/gif",
   webp: "image/webp",
   svg: "image/svg+xml",
+  pdf: "application/pdf",
   woff: "font/woff",
   woff2: "font/woff2",
   ttf: "font/ttf",

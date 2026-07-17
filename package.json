@@ -8,6 +8,8 @@
 		"cf-typegen": "wrangler types",
 		"deploy": "npm run build && wrangler deploy",
 		"dev": "react-router dev",
+		"dev:local": "node scripts/dev-local.mjs",
+		"localfs": "node scripts/localfs-server.mjs",
 		"predev": "node scripts/vendor-pagedjs.mjs",
 		"gen:styles": "node scripts/gen-styles.mjs",
 		"lint": "eslint .",

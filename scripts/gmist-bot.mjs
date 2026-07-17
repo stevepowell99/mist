@@ -76,7 +76,8 @@ if (!docUrl || !session) {
 const u = new URL(docUrl);
 const docId = u.pathname.split("/").filter(Boolean).pop(); // .../docs/<id>
 const key = u.searchParams.get("k") ?? "";
-const wsUrl = `wss://${u.host}/agents/document-agent/${encodeURIComponent(docId)}?k=${encodeURIComponent(key)}`;
+const wsScheme = u.protocol === "http:" ? "ws" : "wss"; // plain ws for a localhost doc URL
+const wsUrl = `${wsScheme}://${u.host}/agents/document-agent/${encodeURIComponent(docId)}?k=${encodeURIComponent(key)}`;
 
 const doc = new Y.Doc();
 const body = doc.getText("body"); // the raw-markdown CRDT the editor binds to
