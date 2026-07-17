@@ -15,6 +15,8 @@ import {
   driveRoleCanEdit,
   getDriveAccessToken,
   driveConfigured,
+  isLocalMode,
+  LOCAL_USER_EMAIL,
   type DriveEnv,
 } from "./google.server";
 import { json } from "./http.server";
@@ -31,8 +33,11 @@ export interface DriveAccess {
   email: string | null;
 }
 
-/** The verified signed-in email from the session cookie, or null. */
+/** The verified signed-in email from the session cookie, or null. In local-fs
+ *  mode there is no Google sign-in: every request is the local user, whose
+ *  files these are, so a fixed synthetic identity stands in. */
 export async function getRequestEmail(request: Request, env: DriveSessionEnv): Promise<string | null> {
+  if (isLocalMode(env)) return LOCAL_USER_EMAIL;
   return verifySession(readSessionCookie(request), env.SESSION_SECRET ?? "");
 }
 
