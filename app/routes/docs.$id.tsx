@@ -5,6 +5,7 @@ import { getAgentByName } from "agents";
 import { APP_NAME, isValidDocumentId } from "~/shared/constants";
 import type { DocRole, DriveMeta } from "~/shared/types";
 import { getCloudflare } from "~/lib/cloudflare.server";
+import { isLocalMode } from "~/lib/google.server";
 import { mintAssetToken, mintAssetTokenForDoc, authorizeDoc, type DriveSessionEnv } from "~/lib/drive-access.server";
 import { EditorView } from "@codemirror/view";
 import { useChordListener } from "~/lib/useChordListener";
@@ -108,6 +109,9 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
     drive,
     initialPreview,
     assetToken,
+    // Storage mode, so the UI can name the target ("file" locally, "Drive" on
+    // the deployed worker) instead of always saying Drive.
+    local: isLocalMode(env),
     gate: null,
   };
 }
@@ -166,6 +170,7 @@ type EditorData = {
   drive: DriveMeta | null;
   initialPreview: boolean;
   assetToken: string | null;
+  local: boolean;
   gate: null;
 };
 
@@ -216,6 +221,7 @@ function DocumentRoot({
   drive,
   initialPreview,
   assetToken,
+  local,
 }: EditorData) {
   const yjs = useYjsEditor(id, docKey);
 
@@ -231,12 +237,12 @@ function DocumentRoot({
       initialPreview={initialPreview}
       assetToken={assetToken}
     >
-      <DocumentLayout id={id} />
+      <DocumentLayout id={id} local={local} />
     </DocumentProvider>
   );
 }
 
-function DocumentLayout({ id }: { id: string }) {
+function DocumentLayout({ id, local }: { id: string; local: boolean }) {
   const {
     yjs,
     view: editorView,
@@ -1332,8 +1338,8 @@ function DocumentLayout({ id }: { id: string }) {
               <div className="shrink-0 border-t border-border pb-14">
                 {backed && (
                   <label className="flex cursor-pointer items-center justify-between gap-2 px-3 py-2 text-sm text-muted hover:text-ink">
-                    <span title="When off, edits do not write to Drive automatically. Manual save (Ctrl/Cmd+S or the Saving badge) still works.">
-                      Autosave to Drive
+                    <span title={`When off, edits do not write to the ${local ? "file" : "Drive file"} automatically. Manual save (Ctrl/Cmd+S or the Saving badge) still works.`}>
+                      {local ? "Autosave to file" : "Autosave to Drive"}
                     </span>
                     <input
                       type="checkbox"

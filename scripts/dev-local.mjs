@@ -1,19 +1,33 @@
 /**
  * Start gmist in local-fs mode: the localfs sidecar plus the normal dev
  * server, one command (`npm run dev:local`), dying together. Config comes
- * from .dev.vars (LOCAL_FS_ROOT, LOCAL_FS_URL); see .dev.vars.example.
+ * from .dev.vars (LOCAL_FS_URL, LOCAL_FS_TOKEN); see .dev.vars.example.
  */
 import { spawn } from "node:child_process";
+import { appendFileSync, readFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 import { readDevVars, repoRoot } from "./dev-vars.mjs";
 
-const vars = readDevVars();
+let vars = readDevVars();
+
+// The sidecar's token is its whole access control, but it is not something to
+// make the user manage: generate one into .dev.vars the first time and never
+// ask again. Both the sidecar and the worker read it from .dev.vars, so it must
+// live there (the worker does not see process.env), which is why this writes the
+// file rather than passing an ephemeral value. .dev.vars is gitignored.
 if (!vars.LOCAL_FS_TOKEN) {
-  console.error(
-    "dev:local needs LOCAL_FS_URL and LOCAL_FS_TOKEN in .dev.vars; see\n" +
-      ".dev.vars.example. For plain Drive-backed dev use `npm run dev`.",
-  );
-  process.exit(1);
+  const devVarsPath = resolve(repoRoot, ".dev.vars");
+  let existing = "";
+  try {
+    existing = readFileSync(devVarsPath, "utf8");
+  } catch {
+    /* no .dev.vars yet; appendFileSync creates it */
+  }
+  const prefix = existing && !existing.endsWith("\n") ? "\n" : "";
+  appendFileSync(devVarsPath, `${prefix}LOCAL_FS_TOKEN=${randomUUID()}${randomUUID()}\n`);
+  console.log("dev:local: generated a LOCAL_FS_TOKEN in .dev.vars (one-time).");
+  vars = readDevVars();
 }
 
 // A sidecar left running from an earlier session holds the port, and node's

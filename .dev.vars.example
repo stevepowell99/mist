@@ -28,8 +28,9 @@ VITE_FATHOM_DOMAINS=
 #
 # There is no folder to configure and no search: any file on the machine is
 # reachable by path, and TagFox (its "Open in gmist" row button) is how you
-# open one. LOCAL_FS_TOKEN is the ONLY access control on the sidecar (loopback
-# bind is not enough: a web page you visit could otherwise POST to it). Use any
-# long random string, e.g. `node -e "console.log(crypto.randomUUID())"`.
+# open one. LOCAL_FS_TOKEN is the sidecar's access control (loopback bind is not
+# enough: a web page you visit could otherwise POST to it). You do NOT need to
+# set it: `npm run dev:local` generates one into .dev.vars the first time. Set
+# it by hand only to pin a specific value.
 LOCAL_FS_URL=http://127.0.0.1:5199
-LOCAL_FS_TOKEN=
+# LOCAL_FS_TOKEN=  (auto-generated on first run)
