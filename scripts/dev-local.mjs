@@ -16,6 +16,21 @@ if (!vars.LOCAL_FS_ROOT) {
   process.exit(1);
 }
 
+// A sidecar left running from an earlier session holds the port, and node's
+// raw EADDRINUSE stack does not say so. Check first and say what to do.
+const sidecarUrl = vars.LOCAL_FS_URL || "http://127.0.0.1:5199";
+const alive = await fetch(new URL("/stat?path=", sidecarUrl), { method: "GET" })
+  .then((r) => r.ok)
+  .catch(() => false);
+if (alive) {
+  console.error(
+    `dev:local: a localfs sidecar is already listening on ${sidecarUrl}.\n` +
+      "Stop it (or close the other dev:local window) and retry; `npm run dev` alone\n" +
+      "will not start one.",
+  );
+  process.exit(1);
+}
+
 const children = [];
 let closing = false;
 function shutdown(code) {
