@@ -5,6 +5,7 @@ import {
   driveFiles,
   driveFilesUnderFolders,
   driveTrail,
+  isLocalMode,
   type DriveKind,
   type DriveSearchEntry,
 } from "~/lib/google.server";
@@ -66,6 +67,13 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     const url = new URL(request.url);
     const q = (url.searchParams.get("q") ?? "").trim();
     const folder = url.searchParams.get("folder") ?? undefined;
+
+    // Local mode has no name/full-text search (there is no index; TagFox is the
+    // way into a local file). Folder BROWSING still works. Tell the client so a
+    // typed query shows an explanation, not a silently empty list.
+    if (isLocalMode(env) && q && !folder) {
+      return Response.json({ results: [], folder: null, searchUnavailable: "local" });
+    }
     const requested = (url.searchParams.get("types") ?? "")
       .split(",")
       .map((t) => t.trim())

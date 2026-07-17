@@ -15,7 +15,7 @@
  */
 import * as gdrive from "./google-drive.server";
 import * as localfs from "./google-localfs.server";
-import { LOCAL_TOKEN_PREFIX, isLocalToken } from "./google-localfs.server";
+import { isLocalToken, packLocalToken, resolveLocalPath } from "./google-localfs.server";
 import type {
   DriveEntry,
   DriveEnv,
@@ -38,11 +38,23 @@ export function driveConfigured(env: DriveEnv): boolean {
   return isLocalMode(env) || gdrive.driveConfigured(env);
 }
 
-/** The per-call backend token: local mode encodes the sidecar URL; Drive mints
- *  a Google access token from the stored refresh token. */
+/** The per-call backend token: local mode packs the sidecar URL and its shared
+ *  secret; Drive mints a Google access token from the stored refresh token. */
 export async function getDriveAccessToken(env: DriveEnv): Promise<string> {
-  if (env.LOCAL_FS_URL) return LOCAL_TOKEN_PREFIX + env.LOCAL_FS_URL;
+  if (env.LOCAL_FS_URL) return packLocalToken(env.LOCAL_FS_URL, env.LOCAL_FS_TOKEN ?? "");
   return gdrive.getDriveAccessToken(env);
+}
+
+/** Local mode only: an absolute path on this machine to a { id, name }, or null
+ *  if the sidecar refuses it. The /open?path= route uses this to turn a path
+ *  from an external tool (TagFox) into a room. Throws in Drive mode, which has
+ *  no filesystem paths. */
+export async function resolveLocalFilePath(
+  env: DriveEnv,
+  absPath: string,
+): Promise<{ id: string; name: string } | null> {
+  if (!env.LOCAL_FS_URL) throw new Error("resolveLocalFilePath is local-mode only");
+  return resolveLocalPath(await getDriveAccessToken(env), absPath);
 }
 
 /** The operations both implementations provide; assigning localfs here is the

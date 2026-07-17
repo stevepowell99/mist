@@ -8,10 +8,10 @@ import { resolve } from "node:path";
 import { readDevVars, repoRoot } from "./dev-vars.mjs";
 
 const vars = readDevVars();
-if (!vars.LOCAL_FS_ROOT) {
+if (!vars.LOCAL_FS_TOKEN) {
   console.error(
-    "dev:local needs LOCAL_FS_ROOT (the folder to serve) and LOCAL_FS_URL in .dev.vars;\n" +
-      "see .dev.vars.example. For plain Drive-backed dev use `npm run dev`.",
+    "dev:local needs LOCAL_FS_URL and LOCAL_FS_TOKEN in .dev.vars; see\n" +
+      ".dev.vars.example. For plain Drive-backed dev use `npm run dev`.",
   );
   process.exit(1);
 }
@@ -19,7 +19,9 @@ if (!vars.LOCAL_FS_ROOT) {
 // A sidecar left running from an earlier session holds the port, and node's
 // raw EADDRINUSE stack does not say so. Check first and say what to do.
 const sidecarUrl = vars.LOCAL_FS_URL || "http://127.0.0.1:5199";
-const alive = await fetch(new URL("/stat?path=", sidecarUrl), { method: "GET" })
+const alive = await fetch(new URL("/health", sidecarUrl), {
+  headers: { "X-Localfs-Token": vars.LOCAL_FS_TOKEN },
+})
   .then((r) => r.ok)
   .catch(() => false);
 if (alive) {

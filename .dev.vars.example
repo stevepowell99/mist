@@ -20,10 +20,16 @@ SESSION_SECRET=
 VITE_FATHOM_SITE_ID=
 VITE_FATHOM_DOMAINS=
 
-# Local-fs mode (optional, dev only): edit files in a local folder instead of
+# Local-fs mode (optional, dev only): edit this machine's own files instead of
 # Google Drive; no Google secrets, sign-in or internet needed (SESSION_SECRET
-# is still required). Set BOTH, then start with `npm run dev:local`, which runs
-# the localfs sidecar and the dev server together. Production never sets these.
-# LOCAL_FS_ROOT is the folder to serve, e.g. a Drive-mirror or Obsidian folder.
-LOCAL_FS_ROOT=
+# is still required). Start with `npm run dev:local`, which runs the localfs
+# sidecar and the dev server together. Production never sets these, so the
+# deployed worker is Drive-only.
+#
+# There is no folder to configure and no search: any file on the machine is
+# reachable by path, and TagFox (its "Open in gmist" row button) is how you
+# open one. LOCAL_FS_TOKEN is the ONLY access control on the sidecar (loopback
+# bind is not enough: a web page you visit could otherwise POST to it). Use any
+# long random string, e.g. `node -e "console.log(crypto.randomUUID())"`.
 LOCAL_FS_URL=http://127.0.0.1:5199
+LOCAL_FS_TOKEN=

@@ -91,6 +91,9 @@ export function QuickOpen({ onClose }: { onClose?: () => void }) {
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Local mode has no search, only folder browsing. When a typed query comes
+  // back flagged, show that instead of an empty list.
+  const [searchOff, setSearchOff] = useState(false);
   // A 401 from the search: this browser profile is not signed into gmist. Show a
   // sign-in button inline so the launcher page is self-contained (no need to find
   // the home page first). `reload` re-runs the search after signing in.
@@ -152,8 +155,13 @@ export function QuickOpen({ onClose }: { onClose?: () => void }) {
           return;
         }
         setNeedAuth(false);
-        const body = (await readJson(res)) as { results?: SearchResult[]; error?: string };
+        const body = (await readJson(res)) as {
+          results?: SearchResult[];
+          error?: string;
+          searchUnavailable?: string;
+        };
         if (!res.ok) throw new Error(body.error ?? "search failed");
+        setSearchOff(Boolean(body.searchUnavailable));
         let next = (body.results ?? []).map(resultToRow);
         // Rank by name hit first, parent/path hit a distant second. The folder
         // listing (no query) keeps the server's folder-then-name order.
@@ -266,11 +274,13 @@ export function QuickOpen({ onClose }: { onClose?: () => void }) {
 
   const emptyMsg = loading
     ? ""
-    : query.trim()
-      ? "No matches"
-      : context
-        ? "This folder is empty"
-        : "Recently opened files appear here";
+    : searchOff
+      ? "Search is off in local mode. Open files from TagFox, or browse folders here."
+      : query.trim()
+        ? "No matches"
+        : context
+          ? "This folder is empty"
+          : "Recently opened files appear here";
 
   return (
     <div

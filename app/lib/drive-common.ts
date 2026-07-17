@@ -10,8 +10,11 @@ export interface DriveEnv {
   GOOGLE_CLIENT_SECRET?: string;
   GOOGLE_REFRESH_TOKEN?: string;
   /** Local-fs mode: base URL of the localfs sidecar (dev only, from .dev.vars).
-   *  When set, storage is a local folder and Google is never contacted. */
+   *  When set, storage is the local filesystem and Google is never contacted. */
   LOCAL_FS_URL?: string;
+  /** Shared secret sent to the sidecar; the sidecar refuses requests without it.
+   *  The only real access control on local mode (see scripts/localfs-server.mjs). */
+  LOCAL_FS_TOKEN?: string;
 }
 
 /** The synthetic signed-in identity in local-fs mode (no Google sign-in). */
