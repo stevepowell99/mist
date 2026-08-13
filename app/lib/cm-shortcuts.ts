@@ -28,7 +28,7 @@ const WRAP_PAIRS: Record<string, [string, string]> = {
 };
 
 /** Wrap every selection range with open/close, keeping the text selected. */
-function wrap(open: string, close: string): Command {
+export function wrap(open: string, close: string): Command {
   return (view) => {
     const changes: ChangeSpec[] = [];
     const ranges = view.state.selection.ranges.map((r) => {

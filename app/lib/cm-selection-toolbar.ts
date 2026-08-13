@@ -3,6 +3,7 @@ import { StateField, Transaction } from "@codemirror/state";
 import { commentTextAt } from "./cm-comments";
 import { criticSpans, type CriticSpan } from "./critic";
 import { resolveAtCursor } from "./cm-suggestion-actions";
+import { wrap } from "./cm-shortcuts";
 
 /**
  * A floating toolbar over a non-empty selection (the Google-Docs gesture), so
@@ -115,6 +116,36 @@ function buildToolbar(view: EditorView, canEdit: boolean): { dom: HTMLElement } 
         window.dispatchEvent(new CustomEvent("mist-comment-delete", { detail: onComment })));
     }
     return { dom };
+  }
+
+  // Formatting, for the people who reach for a toolbar rather than Ctrl+B. It
+  // writes literal markdown (`**`, `*`, backticks, a link), which is a plain
+  // edit, so it is offered only to edit-role users; a suggest-only link keeps
+  // the suggestion actions below.
+  if (canEdit) {
+    const format = (label: string, title: string, open: string, close: string, style?: string) => {
+      add(label, title, () => {
+        wrap(open, close)(view);
+        view.focus();
+      });
+      if (style) (dom.lastChild as HTMLElement).style.cssText += style;
+    };
+    format("B", "Bold (Ctrl/Cmd+B)", "**", "**", "font-weight:700");
+    format("I", "Italic (Ctrl/Cmd+I)", "*", "*", "font-style:italic");
+    format("Code", "Inline code", "`", "`");
+    add("Link", "Wrap as a link, then type the address", () => {
+      const { from, to } = view.state.selection.main;
+      const text = view.state.sliceDoc(from, to);
+      const insert = `[${text}]()`;
+      view.dispatch({
+        changes: { from, to, insert },
+        // Cursor inside the empty parens, ready for the address.
+        selection: { anchor: from + insert.length - 1 },
+        userEvent: "input.wrap",
+        scrollIntoView: true,
+      });
+      view.focus();
+    });
   }
 
   add("Comment", "Comment on the selection", () => window.dispatchEvent(new CustomEvent("mist-comment")));
