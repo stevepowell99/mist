@@ -6,13 +6,17 @@ import {
   type DecorationSet,
   type ViewUpdate,
 } from "@codemirror/view";
-import { RangeSetBuilder } from "@codemirror/state";
+import { RangeSetBuilder, StateField, type EditorState } from "@codemirror/state";
 import { syntaxTree, HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { markdownLanguage } from "@codemirror/lang-markdown";
 import { tags } from "@lezer/highlight";
 import type { SyntaxNodeRef, Tree } from "@lezer/common";
+import { marked } from "marked";
+import DOMPurify from "dompurify";
+import { runMermaid } from "./mermaid";
 import { criticSpans } from "./critic";
 import { CALLOUT_ALIAS } from "./slides-build";
+import { citationSpans, type BibLibrary } from "./citations";
 
 /**
  * Live preview (the fourth View): the markdown syntax marks recede while you
@@ -41,7 +45,9 @@ export interface HideRange {
     | { bullet: true }
     | { image: { src: string; alt: string } }
     | { fade: true }
-    | { line: string };
+    | { line: string }
+    | { mark: string }
+    | { text: { value: string; cls: string } };
 }
 
 interface Ctx {
@@ -50,6 +56,9 @@ interface Ctx {
   /** The line containing `pos`, in absolute positions. */
   lineAt: (pos: number) => { from: number; to: number };
   sel: readonly { from: number; to: number }[];
+  /** The document's BibTeX library, when it has one, for showing a citation as
+   *  the reference it stands for. */
+  bib?: BibLibrary | null;
 }
 
 /** Does any selection range touch the line holding [from, to]? */
@@ -181,7 +190,9 @@ function collect(tree: Tree, ctx: Ctx, from: number, to: number): HideRange[] {
     },
   });
 
-  // Three things the parser gives no node for, so they are read off the text.
+  const treeCount = out.length;
+
+  // Several things the parser gives no node for, so they are read off the text.
   // All of them skip code, where the same characters are content.
   const slice = ctx.read(from, to);
   const inCode = (pos: number) => {
@@ -191,13 +202,21 @@ function collect(tree: Tree, ctx: Ctx, from: number, to: number): HideRange[] {
     return false;
   };
 
+  // Constructs the markdown parser reads as something else own their characters
+  // outright: inside `[[a wikilink]]` or `[@a citation]` the parser sees a link
+  // label and marks its brackets for hiding, which would fight the decoration
+  // put there here. Anything the tree walk found inside one of these is dropped.
+  const claimed: { from: number; to: number }[] = [];
+
   // Obsidian's embed, `![[picture.png]]` or `![[picture.png|alt]]`, which the
   // markdown parser does not know: only an image target becomes a picture, so
   // `![[a note]]` stays a wikilink.
   for (const m of slice.matchAll(/!\[\[([^\]|\n]+?)(?:\|([^\]\n]*))?\]\]/g)) {
     const start = from + (m.index ?? 0);
     if (!/\.(png|jpe?g|gif|webp|svg|avif)$/i.test(m[1].trim())) continue;
-    if (inCode(start) || selTouchesLine(ctx, start)) continue;
+    if (inCode(start)) continue;
+    claimed.push({ from: start, to: start + m[0].length });
+    if (selTouchesLine(ctx, start)) continue;
     add(start, start + m[0].length, { image: { alt: m[2] ?? "", src: m[1].trim() } });
   }
 
@@ -225,6 +244,38 @@ function collect(tree: Tree, ctx: Ctx, from: number, to: number): HideRange[] {
     p = line.to + 1;
   }
 
+  // Obsidian's wikilink, `[[target]]` or `[[target|the words to show]]`: the
+  // brackets and the target go, leaving the words a reader is meant to read,
+  // styled as a link. The image embed above has already claimed any `![[...]]`.
+  for (const m of slice.matchAll(/(!?)\[\[([^\]|\n]+?)(?:\|([^\]\n]*))?\]\]/g)) {
+    const start = from + (m.index ?? 0);
+    if (m[1] || inCode(start)) continue;
+    claimed.push({ from: start, to: start + m[0].length });
+    if (selTouchesLine(ctx, start)) continue;
+    const end = start + m[0].length;
+    // With an alias, everything up to it goes (`[[target|`); without one, the
+    // target itself is what a reader reads, so only the brackets go.
+    const shownFrom = m[3] === undefined ? start + 2 : end - 2 - m[3].length;
+    add(start, shownFrom);
+    add(shownFrom, end - 2, { mark: "cm-lp-wikilink" });
+    add(end - 2, end); // `]]`
+  }
+
+  // Citations show as the reference they stand for, the same inline APA the
+  // Preview pane renders, when the document has a `.bib` to resolve them. The
+  // markdown parser reads `[@key]` as a link label, so the brackets are already
+  // marked for hiding; a citation therefore takes precedence over anything
+  // inside it (see the filter below), or the two would fight and the citation
+  // would lose.
+  if (ctx.bib) {
+    for (const c of citationSpans(slice, ctx.bib, from)) {
+      if (inCode(c.from)) continue;
+      claimed.push({ from: c.from, to: c.to });
+      if (selTouchesSpan(ctx, c.from, c.to)) continue;
+      add(c.from, c.to, { text: { value: c.text, cls: "cm-lp-cite" } });
+    }
+  }
+
   // Pandoc attributes (`{.rounded}`, `{#id}`, `{width=4cm}`) are dimmed, not
   // hidden: they are authoring detail rather than prose, but you still need to
   // see and edit them. A CriticMarkup span opens `{+`, `{-`, `{~`, `{>`, `{=`,
@@ -237,7 +288,14 @@ function collect(tree: Tree, ctx: Ctx, from: number, to: number): HideRange[] {
     add(start, start + m[0].length, { fade: true });
   }
 
-  out.sort((a, b) => a.from - b.from || a.to - b.to);
+  // Drop what the tree walk found inside a claimed construct, then order the
+  // lot. Everything from `treeCount` on came from the scans above, which own
+  // those characters by definition.
+  const ordered = [
+    ...out.slice(0, treeCount).filter((r) => !claimed.some((c) => r.from < c.to && r.to > c.from)),
+    ...out.slice(treeCount),
+  ];
+  ordered.sort((a, b) => a.from - b.from || a.to - b.to);
   // Drop anything covered by a CriticMarkup span (there the delimiters are the
   // content under review), then merge touching ranges. A link hides as `]`,
   // `(`, the URL and `)`, four ranges in a row: left separate, the caret can sit
@@ -248,7 +306,7 @@ function collect(tree: Tree, ctx: Ctx, from: number, to: number): HideRange[] {
   const kept: HideRange[] = [];
   let prevHide: HideRange | null = null;
   let hiddenTo = -1;
-  for (const r of out) {
+  for (const r of ordered) {
     if (critic.some((s) => r.from < s.to && r.to > s.from)) continue;
     // A line style and a fade hide nothing, so they neither merge with a hide
     // nor conflict with one.
@@ -274,7 +332,11 @@ function collect(tree: Tree, ctx: Ctx, from: number, to: number): HideRange[] {
  * The hide decision as a pure function: parse `text` and return the mark ranges
  * hidden given these selection ranges. Same logic the plugin runs.
  */
-export function hideRanges(text: string, sel: readonly { from: number; to: number }[] = []): HideRange[] {
+export function hideRanges(
+  text: string,
+  sel: readonly { from: number; to: number }[] = [],
+  bib: BibLibrary | null = null,
+): HideRange[] {
   const tree = markdownLanguage.parser.parse(text);
   const lineStarts = [0];
   for (let i = 0; i < text.length; i++) if (text[i] === "\n") lineStarts.push(i + 1);
@@ -288,6 +350,7 @@ export function hideRanges(text: string, sel: readonly { from: number; to: numbe
       return { from: start, to: nl === -1 ? text.length : nl };
     },
     sel,
+    bib,
   };
   return collect(tree, ctx, 0, text.length);
 }
@@ -355,10 +418,43 @@ function lineDeco(cls: string): Decoration {
   return d;
 }
 
+/** Plain text standing in for its markup: a citation shown as the reference. */
+class TextWidget extends WidgetType {
+  constructor(
+    readonly value: string,
+    readonly cls: string,
+  ) {
+    super();
+  }
+  eq(other: TextWidget) {
+    return other.value === this.value && other.cls === this.cls;
+  }
+  toDOM() {
+    const span = document.createElement("span");
+    span.className = this.cls;
+    span.textContent = this.value;
+    return span;
+  }
+}
+
+const marks = new Map<string, Decoration>();
+function markDeco(cls: string): Decoration {
+  let d = marks.get(cls);
+  if (!d) {
+    d = Decoration.mark({ class: cls });
+    marks.set(cls, d);
+  }
+  return d;
+}
+
 function decorationFor(r: HideRange, resolveSrc: (src: string) => string): Decoration {
   if (r.show && "bullet" in r.show) return bullet;
   if (r.show && "fade" in r.show) return faded;
   if (r.show && "line" in r.show) return lineDeco(r.show.line);
+  if (r.show && "mark" in r.show) return markDeco(r.show.mark);
+  if (r.show && "text" in r.show) {
+    return Decoration.replace({ widget: new TextWidget(r.show.text.value, r.show.text.cls) });
+  }
   if (r.show && "image" in r.show) {
     return Decoration.replace({ widget: new ImageWidget(resolveSrc(r.show.image.src), r.show.image.alt) });
   }
@@ -366,9 +462,10 @@ function decorationFor(r: HideRange, resolveSrc: (src: string) => string): Decor
 }
 
 /** Only what actually hides text is atomic: the caret must step over a hidden
- *  `##`, but a faded attribute or a styled line is ordinary text to move through. */
+ *  `##`, but a faded attribute, a styled line or a marked span is ordinary text
+ *  to move through. */
 function isHiding(r: HideRange): boolean {
-  return !r.show || "bullet" in r.show || "image" in r.show;
+  return !r.show || "bullet" in r.show || "image" in r.show || "text" in r.show;
 }
 
 interface Built {
@@ -378,7 +475,7 @@ interface Built {
   atomic: DecorationSet;
 }
 
-function build(view: EditorView, resolveSrc: (src: string) => string): Built {
+function build(view: EditorView, resolveSrc: (src: string) => string, bib: BibLibrary | null): Built {
   const state = view.state;
   const ctx: Ctx = {
     read: (a, b) => state.doc.sliceString(a, b),
@@ -387,6 +484,7 @@ function build(view: EditorView, resolveSrc: (src: string) => string): Built {
       return { from: l.from, to: l.to };
     },
     sel: state.selection.ranges.map((r) => ({ from: r.from, to: r.to })),
+    bib,
   };
   const tree = syntaxTree(state);
   const builder = new RangeSetBuilder<Decoration>();
@@ -419,15 +517,15 @@ function build(view: EditorView, resolveSrc: (src: string) => string): Built {
  * the hidden text, so arrow keys step over a hidden `##` instead of stalling
  * inside it.
  */
-const livePlugin = (resolveSrc: (src: string) => string) =>
+const livePlugin = (resolveSrc: (src: string) => string, getBib: () => BibLibrary | null) =>
   ViewPlugin.fromClass(
     class {
       built: Built;
       constructor(view: EditorView) {
-        this.built = build(view, resolveSrc);
+        this.built = build(view, resolveSrc, getBib());
       }
       update(u: ViewUpdate) {
-        if (u.docChanged || u.viewportChanged || u.selectionSet) this.built = build(u.view, resolveSrc);
+        if (u.docChanged || u.viewportChanged || u.selectionSet) this.built = build(u.view, resolveSrc, getBib());
       }
     },
     {
@@ -453,10 +551,119 @@ const liveHighlight = HighlightStyle.define([
   { tag: tags.url, color: "var(--color-muted)" },
 ]);
 
+/**
+ * The two block constructs: a table shown as a real table, and a mermaid fence
+ * shown as the diagram. Both replace several lines at once, and a decoration
+ * that changes the vertical layout cannot come from a ViewPlugin (plugins are
+ * computed after the layout they would change), so these live in a state field
+ * over the whole document rather than the visible range.
+ *
+ * Putting the cursor anywhere in the block drops the decoration, which is the
+ * whole editing story: the table becomes its own source, you edit the pipes, you
+ * move away and it is a table again. Clicking the rendered block does the same,
+ * because a widget swallows the click that would otherwise place the cursor.
+ */
+class BlockWidget extends WidgetType {
+  constructor(
+    readonly source: string,
+    readonly kind: "table" | "mermaid",
+    readonly from: number,
+  ) {
+    super();
+  }
+  eq(other: BlockWidget) {
+    return other.source === this.source && other.kind === this.kind;
+  }
+  toDOM(view: EditorView) {
+    const wrap = document.createElement("div");
+    wrap.className = `cm-lp-block cm-lp-${this.kind}`;
+    if (this.kind === "table") {
+      wrap.innerHTML = DOMPurify.sanitize(marked.parse(this.source, { async: false }) as string);
+    } else {
+      const pre = document.createElement("pre");
+      const code = document.createElement("code");
+      code.className = "language-mermaid";
+      code.textContent = this.source;
+      pre.appendChild(code);
+      wrap.appendChild(pre);
+      void runMermaid(wrap);
+    }
+    // Click to edit: put the cursor at the start of the block, which reveals the
+    // source in the same update.
+    wrap.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      view.dispatch({ selection: { anchor: this.from }, scrollIntoView: true });
+      view.focus();
+    });
+    return wrap;
+  }
+  get estimatedHeight() {
+    return this.kind === "mermaid" ? 220 : 40 + 28 * this.source.split("\n").length;
+  }
+  ignoreEvent() {
+    return false;
+  }
+}
+
+/** Line-span of every table and mermaid fence the selection is not inside. */
+function blockRanges(state: EditorState): { from: number; to: number; widget: BlockWidget }[] {
+  const out: { from: number; to: number; widget: BlockWidget }[] = [];
+  const sel = state.selection.ranges;
+  const add = (from: number, to: number, kind: "table" | "mermaid", source: string) => {
+    if (sel.some((r) => r.from <= to && r.to >= from)) return;
+    out.push({ from, to, widget: new BlockWidget(source, kind, from) });
+  };
+  syntaxTree(state).iterate({
+    enter: (n) => {
+      if (n.name === "Table") {
+        const from = state.doc.lineAt(n.from).from;
+        const to = state.doc.lineAt(n.to).to;
+        add(from, to, "table", state.doc.sliceString(from, to));
+      } else if (n.name === "FencedCode") {
+        const from = state.doc.lineAt(n.from).from;
+        const to = state.doc.lineAt(n.to).to;
+        const lines = state.doc.sliceString(from, to).split("\n");
+        const body = lines.slice(1, lines[lines.length - 1].trim().startsWith("```") ? -1 : undefined);
+        const info = lines[0].replace(/^\s*`{3,}\s*/, "").trim();
+        const src = body.join("\n");
+        if (/^\{?mermaid\}?$/i.test(info) || MERMAID_START.test(src)) add(from, to, "mermaid", src);
+      }
+    },
+  });
+  return out;
+}
+
+/** Mermaid's own opening keywords, so a fence with no language is still read as
+ *  a diagram (the same rule `app/lib/mermaid.ts` applies in the preview). */
+const MERMAID_START =
+  /^\s*(?:%%\{|graph\s|flowchart\s|sequenceDiagram\b|classDiagram\b|stateDiagram(?:-v2)?\b|erDiagram\b|journey\b|gantt\b|pie\b|mindmap\b|timeline\b|quadrantChart\b|gitGraph\b|xychart-beta\b|block-beta\b|sankey-beta\b|C4Context\b)/;
+
+const blockField = StateField.define<DecorationSet>({
+  create: (state) => buildBlocks(state),
+  update(value, tr) {
+    if (!tr.docChanged && tr.selection === undefined) return value;
+    return buildBlocks(tr.state);
+  },
+  provide: (f) => EditorView.decorations.from(f),
+});
+
+function buildBlocks(state: EditorState): DecorationSet {
+  const builder = new RangeSetBuilder<Decoration>();
+  for (const b of blockRanges(state)) {
+    builder.add(b.from, b.to, Decoration.replace({ widget: b.widget, block: true }));
+  }
+  return builder.finish();
+}
+
 /** The live preview extension. `resolveSrc` turns an image's markdown src into a
  *  loadable URL (the document's asset proxy); without one, images stay literal
- *  markup rather than pointing at a path the browser cannot fetch. */
-export const livePreview = (resolveSrc?: (src: string) => string) => [
-  livePlugin(resolveSrc ?? ((s) => s)),
+ *  markup rather than pointing at a path the browser cannot fetch. `getBib`
+ *  gives the document's BibTeX library, so citations show as references. */
+export const livePreview = (opts: {
+  resolveSrc?: (src: string) => string;
+  getBib?: () => BibLibrary | null;
+} = {}) => [
+  livePlugin(opts.resolveSrc ?? ((s) => s), opts.getBib ?? (() => null)),
+  blockField,
   syntaxHighlighting(liveHighlight),
 ];

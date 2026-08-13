@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { hideRanges } from "~/lib/cm-live-preview";
+import { parseBib } from "~/lib/citations";
 
 /** The text each hidden range covers, which is easier to read than offsets. */
 function hidden(text: string, sel: { from: number; to: number }[] = []): string[] {
@@ -144,6 +145,35 @@ describe("live preview hide ranges", () => {
     const lines = marks.filter((r) => r.show && "line" in r.show);
     expect(lines.length).toBe(1);
     expect((lines[0].show as { line: string }).line).toContain("cm-lp-callout-tip");
+  });
+
+  it("shows a wikilink's words, not its target", () => {
+    const text = "See [[Some page|the words to show]] and [[Another page]].\n";
+    const marked_ = hideRanges(text).filter((r) => r.show && "mark" in r.show);
+    expect(marked_.map((r) => text.slice(r.from, r.to))).toEqual(["the words to show", "Another page"]);
+    // The brackets and the target go; the cursor on the line brings them back.
+    expect(hideRanges(text).filter((r) => !r.show).map((r) => text.slice(r.from, r.to)))
+      .toEqual(["[[Some page|", "]]", "[[", "]]"]);
+    expect(hideRanges(text, at(6))).toEqual([]);
+  });
+
+  it("shows a citation as its reference, and wins over the link brackets", () => {
+    const bib = parseBib(
+      "@article{powell2020causal,\n title = {Causal mapping},\n author = {Powell, Stephen and Copestake, James},\n year = {2020}\n}",
+    );
+    const text = "In brackets [@powell2020causal] and bare @powell2020causal here.\n";
+    const cites = hideRanges(text, [], bib).filter((r) => r.show && "text" in r.show);
+    expect(cites.map((c) => (c.show as { text: { value: string } }).text.value)).toEqual([
+      "(Powell & Copestake 2020)",
+      "Powell & Copestake (2020)",
+    ]);
+    // Nothing else is left decorating the bracket citation's own characters.
+    const inside = hideRanges(text, [], bib).filter(
+      (r) => r.from >= text.indexOf("[@") && r.to <= text.indexOf("]") + 1 && !(r.show && "text" in r.show),
+    );
+    expect(inside).toEqual([]);
+    // No library, no change: the key stays as written.
+    expect(hideRanges(text).some((r) => r.show && "text" in r.show)).toBe(false);
   });
 
   it("hides nothing in a plain paragraph", () => {

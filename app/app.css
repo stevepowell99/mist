@@ -362,6 +362,44 @@ body {
   max-height: 24rem;
   margin: 0.35em 0;
 }
+/* A wikilink shows the words it points at, coloured like a link, and a citation
+   shows the reference it stands for. */
+.cm-lp-wikilink {
+  color: var(--color-coral);
+}
+.cm-lp-cite {
+  color: var(--color-muted);
+}
+
+/* A table and a mermaid diagram stand in for their source until the cursor goes
+   into them. Both are block widgets, so they own their vertical space. */
+.cm-lp-block {
+  margin: 0.6em 0;
+  cursor: text;
+}
+.cm-lp-table table {
+  border-collapse: collapse;
+  font-size: 0.92em;
+}
+.cm-lp-table th,
+.cm-lp-table td {
+  border: 1px solid var(--color-border);
+  padding: 0.3em 0.6em;
+  text-align: left;
+}
+.cm-lp-table th {
+  background: color-mix(in srgb, var(--color-ink) 5%, transparent);
+}
+.cm-lp-mermaid pre {
+  font-family: var(--font-mono);
+  font-size: 0.8em;
+  color: var(--color-muted);
+}
+.cm-lp-mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+
 /* Pandoc attributes (`{.rounded}`, `{#id}`, `{width=4cm}`) dim rather than
    hide: they are authoring detail, but you still need to see and edit them. */
 .cm-lp-attr {
