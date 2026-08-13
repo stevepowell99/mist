@@ -178,6 +178,19 @@ export default function CodeMirrorEditor({
   liveRef.current = live;
   const spellcheckExt = (l: string) =>
     EditorView.contentAttributes.of({ spellcheck: "true", autocorrect: "off", autocapitalize: "off", lang: l });
+  // The two view-wide classes (clean view's hidden delimiters, live preview's
+  // typography) go through CodeMirror's own attribute facet, NOT
+  // `view.dom.classList`. CodeMirror rewrites that class attribute wholesale
+  // whenever its own attributes change, so a foreign class is dropped the moment
+  // the editor takes focus: click once and the styling vanishes.
+  const attrsCompRef = useRef<Compartment | null>(null);
+  if (!attrsCompRef.current) attrsCompRef.current = new Compartment();
+  const cleanRef = useRef(cleanView);
+  cleanRef.current = cleanView;
+  const editorClasses = (clean: boolean, isLive: boolean) =>
+    EditorView.editorAttributes.of({
+      class: [clean ? "clean-view" : "", isLive ? "live-preview" : ""].filter(Boolean).join(" "),
+    });
 
   useEffect(() => {
     const parent = ref.current;
@@ -248,6 +261,7 @@ export default function CodeMirrorEditor({
         EditorView.lineWrapping,
         langCompRef.current!.of(spellcheckExt(langRef.current)),
         liveCompRef.current!.of(liveRef.current ? livePreview : []),
+        attrsCompRef.current!.of(editorClasses(cleanRef.current, liveRef.current)),
         autocompletion({
           override: [
             slashSource(),
@@ -312,19 +326,19 @@ export default function CodeMirrorEditor({
     view.dispatch({ effects: setActiveComment.of(activeComment) });
   }, [activeComment]);
 
-  // Clean view hides CriticMarkup delimiters (reuses the `.clean-view` CSS).
+  // Clean view (hides CriticMarkup delimiters) and live preview both style the
+  // whole editor through one class attribute, kept in step here.
   useEffect(() => {
     const view = viewRef.current;
-    if (!view) return;
-    view.dom.classList.toggle("clean-view", cleanView);
-  }, [cleanView]);
+    if (!view || !attrsCompRef.current) return;
+    view.dispatch({ effects: attrsCompRef.current.reconfigure(editorClasses(cleanView, live)) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cleanView, live]);
 
-  // Live preview: swap the decoration extension in, and carry the class the
-  // typography hangs off.
+  // Live preview: swap the decoration extension in.
   useEffect(() => {
     const view = viewRef.current;
     if (!view || !liveCompRef.current) return;
-    view.dom.classList.toggle("live-preview", live);
     view.dispatch({ effects: liveCompRef.current.reconfigure(live ? livePreview : []) });
   }, [live]);
 
