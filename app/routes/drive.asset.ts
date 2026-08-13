@@ -60,13 +60,23 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     // not a path from the note's folder, so retry from each parent folder up the
     // tree: whichever ancestor the vault root is, one of these hits it. Bounded, so
     // a genuinely missing image still 404s quickly.
+    //
+    // A bare filename (`![[INTRAC MAP.png]]`, Obsidian's embed, which resolves by
+    // basename across the whole vault) also gets the usual picture folders tried
+    // beneath each of those folders. `img/` is first because that is where this
+    // app puts a pasted image, so what gmist writes is what gmist can find.
+    const attachmentDirs = ["img", "attachments", "assets", "media"];
+    const candidates = path.includes("/") ? [path] : [path, ...attachmentDirs.map((d) => `${d}/${path}`)];
     let fileId: string | null = null;
     let base: string | null = folder;
     for (let up = 0; up <= 3 && base && !fileId; up++) {
-      try {
-        fileId = await driveResolvePath(token, base, path);
-      } catch {
-        fileId = null; // path not under this folder; try the parent
+      for (const candidate of candidates) {
+        try {
+          fileId = await driveResolvePath(token, base, candidate);
+        } catch {
+          fileId = null; // not under this folder; try the next candidate, then the parent
+        }
+        if (fileId) break;
       }
       if (!fileId) base = (await driveGetMeta(token, base)).parents?.[0] ?? null;
     }
