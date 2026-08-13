@@ -67,6 +67,9 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
   const searchParams = new URL(request.url).searchParams;
   const docKey = searchParams.get("k");
   const initialPreview = searchParams.get("view") === "preview";
+  // Decided here, not from `window` on the client, so the server renders the
+  // same View pill the client will and hydration matches.
+  const initialLive = searchParams.get("view") === "live";
   const { env } = getCloudflare(context);
   const stub = await getAgentByName(env.DocumentAgent, id);
   const res = await stub.fetch(
@@ -108,6 +111,7 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
     docKey,
     drive,
     initialPreview,
+    initialLive,
     assetToken,
     // Storage mode, so the UI can name the target ("file" locally, "Drive" on
     // the deployed worker) instead of always saying Drive.
@@ -125,8 +129,14 @@ const svg = (paths: React.ReactNode) => (
 const IconEditing = () => svg(<><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></>);
 const IconSuggesting = () => svg(<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z" />);
 const IconEditorOnly = () => svg(<><path d="M4 6h16M4 10h16M4 14h10M4 18h10" /></>);
+// Live preview: the same lines as the editor icon, but the top one is a heading
+// bar, so the pair reads as "source" then "typeset".
+const IconLive = () => svg(<><path d="M4 6h9" strokeWidth="3.5" /><path d="M4 11h16M4 15h16M4 19h10" /></>);
 const IconSplit = () => svg(<><rect x="3" y="4" width="18" height="16" rx="1" /><path d="M12 4v16" /></>);
 const IconPreviewOnly = () => svg(<><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" /><circle cx="12" cy="12" r="3" /></>);
+
+/** The four exclusive layouts the navbar, keyboard and URL all name. */
+type DocView = "editor" | "live" | "split" | "preview";
 
 /** A segmented navbar toggle, kept DRY across the Mode and View groups. */
 function ToolbarToggle({
@@ -169,6 +179,7 @@ type EditorData = {
   docKey: string | null;
   drive: DriveMeta | null;
   initialPreview: boolean;
+  initialLive: boolean;
   assetToken: string | null;
   local: boolean;
   gate: null;
@@ -220,6 +231,7 @@ function DocumentRoot({
   docKey,
   drive,
   initialPreview,
+  initialLive,
   assetToken,
   local,
 }: EditorData) {
@@ -237,12 +249,12 @@ function DocumentRoot({
       initialPreview={initialPreview}
       assetToken={assetToken}
     >
-      <DocumentLayout id={id} local={local} />
+      <DocumentLayout id={id} local={local} initialLive={initialLive} />
     </DocumentProvider>
   );
 }
 
-function DocumentLayout({ id, local }: { id: string; local: boolean }) {
+function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean; initialLive: boolean }) {
   const {
     yjs,
     view: editorView,
@@ -325,15 +337,19 @@ function DocumentLayout({ id, local }: { id: string; local: boolean }) {
   // Present mode only applies to a deck; it fills the app and hides the chrome.
   const present = presenting && deck;
 
-  // The View is one of three exclusive layouts. It is derived from the preview
-  // toggle and split ratio, and setView drives both, so the navbar, keyboard and
-  // URL all speak the same three-state language.
-  const view: "editor" | "split" | "preview" = splitOpen ? "split" : showPreview ? "preview" : "editor";
+  // The View is one of four exclusive layouts. It is derived from the preview
+  // toggle, the split ratio and the live flag, and setView drives all three, so
+  // the navbar, keyboard and URL all speak the same four-state language. Live is
+  // an editor-only View with the markdown syntax marks hidden away from the
+  // cursor, so it sits between Editor and Split.
+  const [livePreview, setLivePreview] = useState(initialLive);
+  const view: DocView = splitOpen ? "split" : showPreview ? "preview" : livePreview ? "live" : "editor";
   // Read inside printDoc to restore the view after grabbing the preview HTML.
   const viewRef = useRef(view);
   viewRef.current = view;
   const setView = useCallback(
-    (v: "editor" | "split" | "preview") => {
+    (v: DocView) => {
+      setLivePreview(v === "live");
       if (v === "preview") {
         setPreview(true);
         setEditorPct(100);
@@ -413,6 +429,7 @@ function DocumentLayout({ id, local }: { id: string; local: boolean }) {
     if (!hasUrlView) {
       if (typeof s.showPreview === "boolean") setPreview(s.showPreview);
       if (typeof s.editorPct === "number") setEditorPct(s.editorPct);
+      if (typeof s.livePreview === "boolean") setLivePreview(s.livePreview);
     }
     if (typeof s.followCursor === "boolean") setFollowCursor(s.followCursor);
     if (typeof s.followSlide === "boolean") setFollowSlide(s.followSlide);
@@ -426,10 +443,10 @@ function DocumentLayout({ id, local }: { id: string; local: boolean }) {
     // Debounced so a divider drag (editorPct changes per frame) writes once, on
     // settle. previewToggled, not showPreview, so a hover-peek is not persisted.
     const t = setTimeout(() => {
-      saveDocSettings(fileKey, { editorPct, showPreview: previewToggled, followCursor, followSlide, cleanView, asideCollapsed });
+      saveDocSettings(fileKey, { editorPct, showPreview: previewToggled, livePreview, followCursor, followSlide, cleanView, asideCollapsed });
     }, 200);
     return () => clearTimeout(t);
-  }, [fileKey, editorPct, previewToggled, followCursor, followSlide, cleanView, asideCollapsed]);
+  }, [fileKey, editorPct, previewToggled, livePreview, followCursor, followSlide, cleanView, asideCollapsed]);
 
   // Collaborative presence: broadcast the slide this user is on (the deck's
   // current slide when its preview is visible, otherwise the editor cursor's
@@ -507,7 +524,7 @@ function DocumentLayout({ id, local }: { id: string; local: boolean }) {
   // matters: the window (page/toolbar), the editor (a CodeMirror keydown
   // handler), and the sandboxed slides iframe (which forwards chords by
   // postMessage, since its keys never reach this window). Mode: E/S. View:
-  // 1/2/3. Panels: O outline, C comments, F Drive sidebar, / help. Resize: - =.
+  // 1/2/3/4. Panels: O outline, C comments, F Drive sidebar, / help. Resize: - =.
   // The folder and help panels own their open state, so they are toggled by a
   // custom event rather than reaching into them here.
   // Move the editor cursor to a slide's source heading. `focus` says whether to
@@ -662,6 +679,7 @@ function DocumentLayout({ id, local }: { id: string; local: boolean }) {
         case "1": setView("editor"); return true;
         case "2": if (isDesktop) setView("split"); return true;
         case "3": setView("preview"); return true;
+        case "4": setView("live"); return true;
         // D opens the outline / slide list (the slide-out TOC).
         case "d": setOutlineOpen((v) => !v); return true;
         case "c": setAsideCollapsedPersist(!asideCollapsed); return true;
@@ -1062,6 +1080,14 @@ function DocumentLayout({ id, local }: { id: string; local: boolean }) {
             >
               <IconEditorOnly />
             </ToolbarToggle>
+            <ToolbarToggle
+              active={view === "live"}
+              onClick={() => setView("live")}
+              title="Live preview (Ctrl/Cmd+Alt+4)"
+              activeClass="bg-ink text-paper"
+            >
+              <IconLive />
+            </ToolbarToggle>
             {isDesktop && (
               <ToolbarToggle
                 active={view === "split"}
@@ -1233,6 +1259,7 @@ function DocumentLayout({ id, local }: { id: string; local: boolean }) {
                 mode={mode}
                 canEdit={role === "edit"}
                 cleanView={cleanView}
+                live={view === "live"}
                 activeComment={activeCommentRange}
                 bibLibrary={bibLib}
                 classList={cssClasses}

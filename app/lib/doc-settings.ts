@@ -14,6 +14,9 @@ export interface DocSettings {
   editorPct?: number;
   /** Whether the Preview pane is showing (with editorPct, this gives the View). */
   showPreview?: boolean;
+  /** Live preview: editor-only, with the markdown syntax marks hidden away from
+   *  the cursor (the fourth View). */
+  livePreview?: boolean;
   /** Slide preview follows the editor cursor (decks). */
   followCursor?: boolean;
   /** Editor cursor follows the deck's slide when you navigate it (decks). */

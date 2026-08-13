@@ -27,6 +27,7 @@ const LAYOUT: Shortcut[] = [
   { keys: [MOD, "Alt", "1"], label: "Editor only" },
   { keys: [MOD, "Alt", "2"], label: "Split editor + preview" },
   { keys: [MOD, "Alt", "3"], label: "Preview only" },
+  { keys: [MOD, "Alt", "4"], label: "Live preview (editor, syntax hidden)" },
   { keys: [MOD, "Alt", "P"], label: "Present (deck: fullscreen)" },
   { keys: [MOD, "Alt", "N"], label: "Present: presenter card (next slide, notes, timer)" },
   { keys: [MOD, "Alt", "-"], label: "Shrink editor pane" },

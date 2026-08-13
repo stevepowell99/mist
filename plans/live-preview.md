@@ -1,6 +1,6 @@
 # Plan: live preview, a fourth View alongside Editor / Split / Preview
 
-Status: design, 13 August 2026. No code yet. Steve asked for the Obsidian feel and nothing more: the markdown syntax recedes while you write, and the marks come back on the line you are working on. Everything listed under "Not in this version" stays out.
+Status: BUILT, 13 August 2026. Steve asked for the Obsidian feel and nothing more: the markdown syntax recedes while you write, and the marks come back on the line you are working on. Everything listed under "Not in this version" stays out. What shipped, and what the build taught, is under "As built" at the end; the design below is what was followed.
 
 ## What this is
 
@@ -108,8 +108,21 @@ Images inline, mermaid inline, tables as grids, callouts and `:::` fenced divs r
 
 Export the reveal and hide logic as a pure function, `hideRanges(text, selectionRanges)`, so it tests without a DOM: parse with `markdown().language.parser.parse(text)` and assert the ranges. `tests/unit/lib/live-preview.test.ts`, covering a heading mark hidden with the cursor elsewhere and revealed with the cursor on the line, `**bold**` marks revealed only from inside, a mark inside a CriticMarkup span never hidden, and a `#` inside a fenced code block never treated as a heading.
 
-## Three questions for Steve
+## Three questions for Steve, and his answers
 
-1. Exclusive fourth View, as planned here, or a flag that can combine with Split (live editor on the left, rendered preview on the right)? Exclusive is simpler and matches how the other three behave.
-2. `Ctrl/Cmd+Alt+4` for Live, or renumber so Live is `2` and Split and Preview shift to `3` and `4`?
-3. Keep Live available while suggesting, or drop back to the source View automatically in suggest mode?
+1. Exclusive fourth View, as planned here, or a flag that can combine with Split (live editor on the left, rendered preview on the right)? **Exclusive**, as planned.
+2. `Ctrl/Cmd+Alt+4` for Live, or renumber so Live is `2` and Split and Preview shift to `3` and `4`? **`Ctrl/Cmd+Alt+4`**, so the three shortcuts he already has in his fingers stay put.
+3. Keep Live available while suggesting, or drop back to the source View automatically in suggest mode? **Keep it**. CriticMarkup is never hidden, so a suggestion stays literal while the markdown around it recedes.
+
+## As built
+
+Files: `app/lib/cm-live-preview.ts` (new), `tests/unit/lib/live-preview.test.ts` (new), plus the wiring in `docs.$id.tsx`, `CodeMirrorEditor.tsx`, `doc-settings.ts`, `HelpPanel.tsx`, `cm-markdown-style.ts` and `app.css`. Verified in a browser against `npm run dev:local`: hide and reveal both directions, the URL round-trip, per-file persistence, and typing into a line whose marks are hidden landing where it looks like it will.
+
+Four things the plan did not foresee.
+
+- **Touching hidden ranges must merge into ONE range.** A link hides as four ranges in a row (`]`, `(`, the URL, `)`). Left separate, the caret can sit at a boundary BETWEEN two of them, which is invisible and puts typed text inside the URL: pressing End on a line ending in a link and typing wrote the character into the href. `atomicRanges` does not help, because each range is individually atomic and the boundary is outside all of them. `collect` now merges any contiguous run.
+- **The editor had no syntax highlighting at all.** With the `**` hidden there was nothing left to carry the emphasis, so live preview also switches on a small `HighlightStyle` (strong, emphasis, strikethrough, inline code, link) inside its own compartment. Source view still has none, which is the point of it.
+- **The parser was CommonMark, so `~~strikethrough~~` did not exist.** `markdown()` now takes `base: markdownLanguage` (GFM), which also gives tables a real tree.
+- **`markdownLineStyle` styled a `#` inside a fenced code block as a heading.** Tolerable at one constant size in source view, glaring once live preview gives `.cm-h1` a real size, so that plugin now tracks fences and skips them. The live-preview layer never had the fault, because it reads the tree.
+
+Still out, and now cheap to add if wanted: hiding the frontmatter block, list bullets as real bullets, and images. An image's `![alt](src)` markup is currently coloured like a link, because the markdown parser gives `Link` and `Image` the same highlight tag.
