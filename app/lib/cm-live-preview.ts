@@ -12,6 +12,7 @@ import { markdownLanguage } from "@codemirror/lang-markdown";
 import { tags } from "@lezer/highlight";
 import type { SyntaxNodeRef, Tree } from "@lezer/common";
 import { criticSpans } from "./critic";
+import { CALLOUT_ALIAS } from "./slides-build";
 
 /**
  * Live preview (the fourth View): the markdown syntax marks recede while you
@@ -33,8 +34,14 @@ export interface HideRange {
   from: number;
   to: number;
   /** What replaces the range. Nothing by default; a list mark becomes a real
-   *  bullet and an image becomes the picture itself. */
-  show?: { bullet: true } | { image: { src: string; alt: string } };
+   *  bullet, an image becomes the picture itself, an attribute block is dimmed
+   *  rather than hidden (it is authoring detail, but you need to see it), and a
+   *  line entry styles a whole line (a quote, a callout, a lone picture). */
+  show?:
+    | { bullet: true }
+    | { image: { src: string; alt: string } }
+    | { fade: true }
+    | { line: string };
 }
 
 interface Ctx {
@@ -81,7 +88,8 @@ function spacesBefore(ctx: Ctx, pos: number, limit: number): number {
 function collect(tree: Tree, ctx: Ctx, from: number, to: number): HideRange[] {
   const out: HideRange[] = [];
   const add = (a: number, b: number, show?: HideRange["show"]) => {
-    if (b > a) out.push({ from: a, to: b, ...(show ? { show } : {}) });
+    // A line entry is empty by definition (it styles the line, not a range).
+    if (b > a || (show && "line" in show)) out.push({ from: a, to: b, ...(show ? { show } : {}) });
   };
 
   tree.iterate({
@@ -140,11 +148,94 @@ function collect(tree: Tree, ctx: Ctx, from: number, to: number): HideRange[] {
           add(n.from, n.to, { image: { alt: m[1], src: (m[2] ?? m[3]).trim() } });
           return;
         }
+        case "QuoteMark": {
+          // The `>` of a blockquote, with the line styled as a quote instead.
+          if (selTouchesLine(ctx, n.from)) return;
+          const line = ctx.lineAt(n.from);
+          add(n.from, spacesAfter(ctx, n.to, line.to));
+          return;
+        }
+        case "Blockquote": {
+          // Every line of the quote carries the style, and a callout header
+          // (`> [!tip] Title`) colours the block and drops its `[!tip]` token.
+          const first = ctx.read(n.from, ctx.lineAt(n.from).to);
+          const cm = /^\s*>\s*\[!([\w-]+)\][-+]?/.exec(first);
+          const type = cm ? (CALLOUT_ALIAS[cm[1].toLowerCase()] ?? cm[1].toLowerCase()) : null;
+          const cls = type ? `cm-lp-quote cm-lp-callout cm-lp-callout-${type}` : "cm-lp-quote";
+          for (let p = n.from, first_ = true; p <= n.to; first_ = false) {
+            const line = ctx.lineAt(p);
+            add(line.from, line.from, { line: type && first_ ? `${cls} cm-lp-callout-head` : cls });
+            if (line.to >= n.to) break;
+            p = line.to + 1;
+          }
+          if (cm && !selTouchesLine(ctx, n.from)) {
+            const at = first.indexOf("[!");
+            const end = first.indexOf("]", at) + 1;
+            add(n.from + at, spacesAfter(ctx, n.from + end, ctx.lineAt(n.from).to));
+          }
+          return;
+        }
         default:
           return;
       }
     },
   });
+
+  // Three things the parser gives no node for, so they are read off the text.
+  // All of them skip code, where the same characters are content.
+  const slice = ctx.read(from, to);
+  const inCode = (pos: number) => {
+    for (let n: SyntaxNodeRef | null = tree.resolveInner(pos, 1); n; n = n.node.parent) {
+      if (/^(FencedCode|CodeBlock|CodeText|InlineCode)$/.test(n.name)) return true;
+    }
+    return false;
+  };
+
+  // Obsidian's embed, `![[picture.png]]` or `![[picture.png|alt]]`, which the
+  // markdown parser does not know: only an image target becomes a picture, so
+  // `![[a note]]` stays a wikilink.
+  for (const m of slice.matchAll(/!\[\[([^\]|\n]+?)(?:\|([^\]\n]*))?\]\]/g)) {
+    const start = from + (m.index ?? 0);
+    if (!/\.(png|jpe?g|gif|webp|svg|avif)$/i.test(m[1].trim())) continue;
+    if (inCode(start) || selTouchesLine(ctx, start)) continue;
+    add(start, start + m[0].length, { image: { alt: m[2] ?? "", src: m[1].trim() } });
+  }
+
+  // The Garden's own callout block: a `--{.tip}` line, content, then a `--`.
+  // The markers dim and the block between them takes the callout's colour.
+  const markerLines = new Set<number>();
+  let dashType: string | null = null;
+  for (let p = from; p <= to; ) {
+    const line = ctx.lineAt(p);
+    const text = ctx.read(line.from, line.to);
+    const open = /^\s*--\{\.([A-Za-z][\w-]*)\}\s*$/.exec(text);
+    if (open) {
+      const head = open[1].split("-")[0].toLowerCase();
+      dashType = CALLOUT_ALIAS[head] ?? head;
+      add(line.from, line.to, { fade: true });
+      markerLines.add(line.from);
+    } else if (dashType && text.trim() === "--") {
+      add(line.from, line.to, { fade: true });
+      markerLines.add(line.from);
+      dashType = null;
+    } else if (dashType) {
+      add(line.from, line.from, { line: `cm-lp-callout cm-lp-callout-${dashType}` });
+    }
+    if (line.to >= to) break;
+    p = line.to + 1;
+  }
+
+  // Pandoc attributes (`{.rounded}`, `{#id}`, `{width=4cm}`) are dimmed, not
+  // hidden: they are authoring detail rather than prose, but you still need to
+  // see and edit them. A CriticMarkup span opens `{+`, `{-`, `{~`, `{>`, `{=`,
+  // none of which start an attribute, so the two never collide.
+  for (const m of slice.matchAll(/\{[.#][^{}\n]*\}|\{[a-z-]+=[^{}\n]*\}/g)) {
+    const start = from + (m.index ?? 0);
+    // A `--{.tip}` marker line is faded whole, above; fading its class a second
+    // time would stack two decorations on the same characters.
+    if (inCode(start) || markerLines.has(ctx.lineAt(start).from)) continue;
+    add(start, start + m[0].length, { fade: true });
+  }
 
   out.sort((a, b) => a.from - b.from || a.to - b.to);
   // Drop anything covered by a CriticMarkup span (there the delimiters are the
@@ -155,13 +246,26 @@ function collect(tree: Tree, ctx: Ctx, from: number, to: number): HideRange[] {
   // it and typing appends where it looks like it will.
   const critic = criticSpans(ctx.read(from, to), from);
   const kept: HideRange[] = [];
+  let prevHide: HideRange | null = null;
+  let hiddenTo = -1;
   for (const r of out) {
     if (critic.some((s) => r.from < s.to && r.to > s.from)) continue;
-    const prev = kept[kept.length - 1];
-    // Only plain hides merge. A range that shows something (a bullet, a
-    // picture) has to stay its own decoration.
-    if (prev && !prev.show && !r.show && r.from <= prev.to) prev.to = Math.max(prev.to, r.to);
-    else if (!prev || r.from >= prev.to) kept.push({ ...r });
+    // A line style and a fade hide nothing, so they neither merge with a hide
+    // nor conflict with one.
+    if (r.show && ("line" in r.show || "fade" in r.show)) {
+      kept.push({ ...r });
+      continue;
+    }
+    if (prevHide && !prevHide.show && !r.show && r.from <= prevHide.to) {
+      prevHide.to = Math.max(prevHide.to, r.to);
+      hiddenTo = prevHide.to;
+      continue;
+    }
+    if (r.from < hiddenTo) continue;
+    const copy = { ...r };
+    kept.push(copy);
+    prevHide = copy;
+    hiddenTo = copy.to;
   }
   return kept;
 }
@@ -238,16 +342,43 @@ class ImageWidget extends WidgetType {
 }
 
 const imageLine = Decoration.line({ class: "cm-lp-imgline" });
+const faded = Decoration.mark({ class: "cm-lp-attr" });
+/** Line decorations are per class string, and there are a handful of them, so
+ *  cache rather than allocate one per line per rebuild. */
+const lineDecos = new Map<string, Decoration>();
+function lineDeco(cls: string): Decoration {
+  let d = lineDecos.get(cls);
+  if (!d) {
+    d = Decoration.line({ class: cls });
+    lineDecos.set(cls, d);
+  }
+  return d;
+}
 
 function decorationFor(r: HideRange, resolveSrc: (src: string) => string): Decoration {
   if (r.show && "bullet" in r.show) return bullet;
+  if (r.show && "fade" in r.show) return faded;
+  if (r.show && "line" in r.show) return lineDeco(r.show.line);
   if (r.show && "image" in r.show) {
     return Decoration.replace({ widget: new ImageWidget(resolveSrc(r.show.image.src), r.show.image.alt) });
   }
   return hidden;
 }
 
-function build(view: EditorView, resolveSrc: (src: string) => string): DecorationSet {
+/** Only what actually hides text is atomic: the caret must step over a hidden
+ *  `##`, but a faded attribute or a styled line is ordinary text to move through. */
+function isHiding(r: HideRange): boolean {
+  return !r.show || "bullet" in r.show || "image" in r.show;
+}
+
+interface Built {
+  /** Everything painted. */
+  decorations: DecorationSet;
+  /** Only the ranges that hide text, which is what the caret must skip. */
+  atomic: DecorationSet;
+}
+
+function build(view: EditorView, resolveSrc: (src: string) => string): Built {
   const state = view.state;
   const ctx: Ctx = {
     read: (a, b) => state.doc.sliceString(a, b),
@@ -259,6 +390,7 @@ function build(view: EditorView, resolveSrc: (src: string) => string): Decoratio
   };
   const tree = syntaxTree(state);
   const builder = new RangeSetBuilder<Decoration>();
+  const atomics = new RangeSetBuilder<Decoration>();
   for (const { from, to } of view.visibleRanges) {
     // Whole lines, so a mark starting just above the viewport is still matched.
     const start = state.doc.lineAt(from).from;
@@ -272,10 +404,12 @@ function build(view: EditorView, resolveSrc: (src: string) => string): Decoratio
           builder.add(line.from, line.from, imageLine);
         }
       }
-      builder.add(r.from, r.to, decorationFor(r, resolveSrc));
+      const deco = decorationFor(r, resolveSrc);
+      builder.add(r.from, r.to, deco);
+      if (isHiding(r)) atomics.add(r.from, r.to, deco);
     }
   }
-  return builder.finish();
+  return { decorations: builder.finish(), atomic: atomics.finish() };
 }
 
 /**
@@ -288,18 +422,18 @@ function build(view: EditorView, resolveSrc: (src: string) => string): Decoratio
 const livePlugin = (resolveSrc: (src: string) => string) =>
   ViewPlugin.fromClass(
     class {
-      decorations: DecorationSet;
+      built: Built;
       constructor(view: EditorView) {
-        this.decorations = build(view, resolveSrc);
+        this.built = build(view, resolveSrc);
       }
       update(u: ViewUpdate) {
-        if (u.docChanged || u.viewportChanged || u.selectionSet) this.decorations = build(u.view, resolveSrc);
+        if (u.docChanged || u.viewportChanged || u.selectionSet) this.built = build(u.view, resolveSrc);
       }
     },
     {
-      decorations: (v) => v.decorations,
+      decorations: (v) => v.built.decorations,
       provide: (plugin) =>
-        EditorView.atomicRanges.of((view) => view.plugin(plugin)?.decorations ?? Decoration.none),
+        EditorView.atomicRanges.of((view) => view.plugin(plugin)?.built.atomic ?? Decoration.none),
     },
   );
 

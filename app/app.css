@@ -362,6 +362,42 @@ body {
   max-height: 24rem;
   margin: 0.35em 0;
 }
+/* Pandoc attributes (`{.rounded}`, `{#id}`, `{width=4cm}`) dim rather than
+   hide: they are authoring detail, but you still need to see and edit them. */
+.cm-lp-attr {
+  color: var(--color-muted);
+  opacity: 0.55;
+  font-size: 0.85em;
+}
+
+/* Blockquotes and callouts: the `>` markers go, and the line carries the style.
+   The five colour buckets are the ones `deck-base.css` uses for the rendered
+   callout, so a callout looks like itself in the editor too. */
+.cm-lp-quote {
+  border-left: 3px solid var(--color-border);
+  padding-left: 0.7em;
+  color: var(--color-muted);
+}
+.cm-lp-callout {
+  border-left-width: 4px;
+  color: var(--color-ink);
+}
+/* The `> [!tip] Title` line, which the renderer emits as a callout title. */
+.cm-lp-callout-head {
+  font-weight: 600;
+}
+.cm-lp-callout-note,
+.cm-lp-callout-info { border-left-color: #4a90d9; background: color-mix(in srgb, #4a90d9 7%, transparent); }
+.cm-lp-callout-tip,
+.cm-lp-callout-success { border-left-color: #3aa76d; background: color-mix(in srgb, #3aa76d 7%, transparent); }
+.cm-lp-callout-warning,
+.cm-lp-callout-caution { border-left-color: #e0a800; background: color-mix(in srgb, #e0a800 9%, transparent); }
+.cm-lp-callout-danger,
+.cm-lp-callout-important,
+.cm-lp-callout-error { border-left-color: #e0558a; background: color-mix(in srgb, #e0558a 7%, transparent); }
+.cm-lp-callout-quote,
+.cm-lp-callout-example { border-left-color: var(--color-muted); background: color-mix(in srgb, var(--color-ink) 4%, transparent); }
+
 /* A line holding only a picture drops the text leading, and the zero-width
    buffers CodeMirror puts either side of a widget keep a 1em height of their
    own, which shows up as a blank strip above and below the picture. */
