@@ -18,11 +18,12 @@ import { bracketMatching, codeFolding, foldGutter, foldKeymap } from "@codemirro
 import { mistFolds } from "~/lib/cm-folding";
 import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } from "@codemirror/autocomplete";
 import { highlightSelectionMatches, searchKeymap } from "@codemirror/search";
-import { markdown } from "@codemirror/lang-markdown";
+import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { yCollab, yUndoManagerKeymap } from "y-codemirror.next";
 import { criticMarkup } from "~/lib/cm-criticmarkup";
 import { selectionToolbar } from "~/lib/cm-selection-toolbar";
 import { markdownLineStyle } from "~/lib/cm-markdown-style";
+import { livePreview } from "~/lib/cm-live-preview";
 import { fencedDivStyle } from "~/lib/cm-fenced-divs";
 import { suggestMode } from "~/lib/cm-suggest";
 import { wrapKeymap, wrapOnSelection } from "~/lib/cm-shortcuts";
@@ -92,6 +93,7 @@ export default function CodeMirrorEditor({
   mode = "suggest",
   canEdit = false,
   cleanView = false,
+  live = false,
   activeComment = null,
   bibLibrary = null,
   classList = null,
@@ -111,6 +113,8 @@ export default function CodeMirrorEditor({
    *  accept/reject and comment resolve/delete actions. */
   canEdit?: boolean;
   cleanView?: boolean;
+  /** Live preview: hide the markdown syntax marks away from the cursor. */
+  live?: boolean;
   activeComment?: { from: number; to: number } | null;
   bibLibrary?: BibLibrary | null;
   /** Pandoc class names from the deck CSS, for the `.`-class picker. */
@@ -167,6 +171,11 @@ export default function CodeMirrorEditor({
   if (!langCompRef.current) langCompRef.current = new Compartment();
   const langRef = useRef(lang);
   langRef.current = lang;
+  // Live preview, reconfigured (not rebuilt) when the View changes.
+  const liveCompRef = useRef<Compartment | null>(null);
+  if (!liveCompRef.current) liveCompRef.current = new Compartment();
+  const liveRef = useRef(live);
+  liveRef.current = live;
   const spellcheckExt = (l: string) =>
     EditorView.contentAttributes.of({ spellcheck: "true", autocorrect: "off", autocapitalize: "off", lang: l });
 
@@ -233,9 +242,12 @@ export default function CodeMirrorEditor({
           indentWithTab,
         ]),
         wrapKeymap,
-        markdown(),
+        // GFM base (not plain CommonMark) so tables and `~~strikethrough~~`
+        // parse; live preview reads the same tree.
+        markdown({ base: markdownLanguage }),
         EditorView.lineWrapping,
         langCompRef.current!.of(spellcheckExt(langRef.current)),
+        liveCompRef.current!.of(liveRef.current ? livePreview : []),
         autocompletion({
           override: [
             slashSource(),
@@ -306,6 +318,15 @@ export default function CodeMirrorEditor({
     if (!view) return;
     view.dom.classList.toggle("clean-view", cleanView);
   }, [cleanView]);
+
+  // Live preview: swap the decoration extension in, and carry the class the
+  // typography hangs off.
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view || !liveCompRef.current) return;
+    view.dom.classList.toggle("live-preview", live);
+    view.dispatch({ effects: liveCompRef.current.reconfigure(live ? livePreview : []) });
+  }, [live]);
 
   // Apply a language change (frontmatter `lang:`) without rebuilding the editor.
   useEffect(() => {

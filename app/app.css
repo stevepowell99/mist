@@ -321,6 +321,40 @@ body {
   pointer-events: none;
 }
 
+/* Live preview (the fourth View): with the syntax marks hidden, the editor
+   takes the reading typography the Preview pane uses, so the two agree. The
+   class rides on the editor DOM (`CodeMirrorEditor`), so source view keeps its
+   monospace look untouched. Heading sizes here override the constant size the
+   `.cm-h1`-`.cm-h6` line classes deliberately leave alone in source view. */
+.live-preview .cm-content {
+  font-family: var(--font-serif);
+  max-width: 91ch;
+  margin-inline: auto;
+  line-height: 1.7;
+}
+.live-preview .cm-h1 {
+  font-size: 1.8em;
+  line-height: 1.3;
+  background: none;
+}
+.live-preview .cm-h2 {
+  font-size: 1.45em;
+  line-height: 1.3;
+  background: none;
+}
+.live-preview .cm-h3 {
+  font-size: 1.22em;
+  line-height: 1.35;
+}
+.live-preview .cm-h4 {
+  font-size: 1.08em;
+  color: var(--color-ink);
+}
+.live-preview .cm-h5,
+.live-preview .cm-h6 {
+  color: var(--color-ink);
+}
+
 /* Clean view: hide delimiters and comment text only */
 .clean-view .cm-delimiter {
   display: none;
