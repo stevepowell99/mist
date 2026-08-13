@@ -31,6 +31,20 @@ describe("applyGrammar", () => {
     expect(out).toContain('<span class="y">x</span>');
   });
 
+  it("renders the Garden's --{.tip} callout block", () => {
+    const out = applyGrammar("--{.tip}\nA helpful aside.\n--\n\nAfter.");
+    expect(out).toContain('<div class="callout callout-tip">');
+    expect(out).toContain("A helpful aside.");
+    expect(out).not.toContain("--{.tip}");
+    expect(out).toContain("After.");
+  });
+
+  it("maps a --{.class} type onto its colour bucket and keeps the modifiers", () => {
+    const out = applyGrammar("--{.hint-narrow}\nx\n--");
+    expect(out).toContain("callout-tip");
+    expect(out).toContain("callout-narrow");
+  });
+
   it("runs afterConvert before code is restored", () => {
     // afterConvert sees the converted-but-still-masked text; a heading attr strip
     // must not touch a `{.x}` that lives inside restored code.

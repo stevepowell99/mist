@@ -215,7 +215,7 @@ function attrString(classes: string[], id: string | null, style: string): string
  *  (note/info/tip/success/warning/caution/important/danger/error/quote/example)
  *  are left to deck-base.css and keep their existing look. See
  *  docs/author-grammar.md for the shared grammar contract. */
-const CALLOUT_ALIAS: Record<string, string> = {
+export const CALLOUT_ALIAS: Record<string, string> = {
   abstract: "info", summary: "info", tldr: "info", todo: "info", question: "info", help: "info", faq: "info",
   done: "tip", check: "tip", hint: "tip",
   attention: "warning",
@@ -248,6 +248,40 @@ export function convertCallouts(md: string): string {
     if (title) out.push(`[${title}]{.callout-title}`, "");
     out.push(...body, "", ":::", "");
     i = j - 1;
+  }
+  return out.join("\n");
+}
+
+/** The Causal Map Garden's own callout block:
+ *
+ *      --{.tip}
+ *      content, which may hold lists and other markdown
+ *      --
+ *
+ * The class carries the type first and layout modifiers after it
+ * (`--{.info-narrow-right}`), so only the leading word decides the colour here;
+ * the modifiers are kept as extra classes for whatever styles them. A Garden
+ * page opened in gmist showed these two marker lines as literal text. Converted
+ * to the same `::: {.callout .callout-type}` div `convertCallouts` produces, so
+ * one component styles both. A block with no closing `--` runs to the end. */
+export function convertDashCallouts(md: string): string {
+  const lines = md.split("\n");
+  const out: string[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const m = /^\s*--\{\.([A-Za-z][\w-]*)\}\s*$/.exec(lines[i]);
+    if (!m) {
+      out.push(lines[i]);
+      continue;
+    }
+    const parts = m[1].split("-");
+    const type = CALLOUT_ALIAS[parts[0].toLowerCase()] ?? parts[0].toLowerCase();
+    const modifiers = parts.slice(1).map((p) => `.callout-${p}`);
+    const body: string[] = [];
+    let j = i + 1;
+    for (; j < lines.length && lines[j].trim() !== "--"; j++) body.push(lines[j]);
+    out.push("", `::: {.callout .callout-${type}${modifiers.length ? " " + modifiers.join(" ") : ""}}`, "");
+    out.push(...body, "", ":::", "");
+    i = j; // skip the closing `--` (or land past the end)
   }
   return out.join("\n");
 }
@@ -361,7 +395,7 @@ export function applyGrammar(
   const masked = maskCode(md);
   let t = convertBignums(masked.text);
   if (opts.wikilinks) t = renderWikiLinks(t);
-  t = convertDivs(convertImages(convertSpans(convertCallouts(t))));
+  t = convertDivs(convertImages(convertSpans(convertCallouts(convertDashCallouts(t)))));
   t = convertIcons(t);
   if (opts.afterConvert) t = opts.afterConvert(t);
   return restoreCode(t, masked.tokens);
