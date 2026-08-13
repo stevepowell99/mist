@@ -101,6 +101,35 @@ const BRACKET_RE = /\[([^\]]*@[^\]]+)\](?!\()/g;
 const BARE_RE =
   /(?<![\w[])@([A-Za-z0-9:_-]+)\b(?:\s*,\s*((?:pp?\.|chap?\.|sec\.|§)\s*\w+(?:[.-]\w+)*))?/g;
 
+/**
+ * Every citation in `md`, with its position and the inline APA it renders as.
+ * The editor's live preview shows the formatted citation in place of the key, so
+ * it needs positions rather than a converted string; the patterns and the
+ * formatting stay here, in the one place that knows them. Link markup is
+ * flattened to its text, since the editor shows text rather than HTML. A bracket
+ * group swallows the bare keys inside it, so the two never both fire on the same
+ * characters.
+ */
+export function citationSpans(
+  md: string,
+  lib: BibLibrary,
+  base = 0,
+): { from: number; to: number; text: string }[] {
+  const out: { from: number; to: number; text: string }[] = [];
+  const flatten = (s: string) => s.replace(/\[([^\]]*)\]\([^)]*\)/g, "$1");
+  for (const source of [BRACKET_RE, BARE_RE]) {
+    for (const m of md.matchAll(new RegExp(source.source, source.flags))) {
+      const from = base + (m.index ?? 0);
+      const to = from + m[0].length;
+      if (out.some((o) => from < o.to && to > o.from)) continue;
+      const text = flatten(convertCitations(m[0], lib).text);
+      if (text === m[0]) continue; // nothing to show: leave the source alone
+      out.push({ from, to, text });
+    }
+  }
+  return out.sort((a, b) => a.from - b.from);
+}
+
 /** Convert `[@key; -@key2, p.5]` and bare `@key` to inline APA, returning used keys. */
 export function convertCitations(md: string, lib: BibLibrary): { text: string; usedKeys: Set<string> } {
   const used = new Set<string>();
