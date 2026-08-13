@@ -191,7 +191,11 @@ export default function CodeMirrorEditor({
   // or the file's folder changes.
   const srcRef = useRef(resolveSrc);
   srcRef.current = resolveSrc;
-  const liveExt = () => livePreview((s) => srcRef.current?.(s) ?? s);
+  const liveExt = () =>
+    livePreview({
+      resolveSrc: (s) => srcRef.current?.(s) ?? s,
+      getBib: () => bibRef.current,
+    });
   const spellcheckExt = (l: string) =>
     EditorView.contentAttributes.of({ spellcheck: "true", autocorrect: "off", autocapitalize: "off", lang: l });
   // The two view-wide classes (clean view's hidden delimiters, live preview's
@@ -352,12 +356,16 @@ export default function CodeMirrorEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cleanView, live]);
 
-  // Live preview: swap the decoration extension in.
+  // Live preview: swap the decoration extension in. Also re-run when the bib
+  // library arrives, which is a fetch that lands after the first build: the
+  // plugin only rebuilds on a doc, viewport or selection change, so without this
+  // the citations sit there as `[@key]` until the next keystroke.
   useEffect(() => {
     const view = viewRef.current;
     if (!view || !liveCompRef.current) return;
     view.dispatch({ effects: liveCompRef.current.reconfigure(live ? liveExt() : []) });
-  }, [live]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [live, bibLibrary]);
 
   // Apply a language change (frontmatter `lang:`) without rebuilding the editor.
   useEffect(() => {
