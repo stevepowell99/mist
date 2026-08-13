@@ -61,8 +61,26 @@ describe("live preview hide ranges", () => {
     expect(hidden(text)).toEqual(["_**", "**_"]);
   });
 
-  it("leaves an image alone", () => {
-    expect(hidden("![alt](pic.png)\n")).toEqual([]);
+  it("replaces an image with the picture, and reveals it on the line", () => {
+    const text = "![alt text](img/pic.png)\n";
+    const [r] = hideRanges(text);
+    expect(text.slice(r.from, r.to)).toBe("![alt text](img/pic.png)");
+    expect(r.show).toEqual({ image: { alt: "alt text", src: "img/pic.png" } });
+    expect(hideRanges(text, at(3))).toEqual([]);
+  });
+
+  it("reads an image src written in angle brackets", () => {
+    const [r] = hideRanges("![](<img/a pic.png>)\n");
+    expect(r.show).toEqual({ image: { alt: "", src: "img/a pic.png" } });
+  });
+
+  it("shows a bullet list's dash as a bullet, and its numbers as they are", () => {
+    const text = "- one\n- two\n\n1. first\n2. second\n";
+    const marks = hideRanges(text);
+    expect(marks.map((r) => text.slice(r.from, r.to))).toEqual(["-", "-"]);
+    expect(marks.every((r) => r.show && "bullet" in r.show)).toBe(true);
+    // The cursor on a list line brings its dash back.
+    expect(hideRanges(text, at(2)).length).toBe(1);
   });
 
   it("never hides inside a CriticMarkup span", () => {

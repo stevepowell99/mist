@@ -13,6 +13,7 @@ import { QuickOpenTrigger } from "~/components/QuickOpen";
 import { useSplitDrag } from "~/lib/useSplitDrag";
 import { offsetForSlideIndex, slideIndexForOffset } from "~/lib/slide-cursor";
 import { docFileKey, loadDocSettings, saveDocSettings } from "~/lib/doc-settings";
+import { resolveAssetSrc } from "~/lib/asset-urls";
 import { usePresence } from "~/lib/usePresence";
 import PresenceBar from "~/components/PresenceBar";
 import { useYjsEditor } from "~/lib/useYjsEditor";
@@ -376,6 +377,18 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
     [isDesktop, setPreview, defaultEditorPct],
   );
 
+  // Live preview's inline images resolve exactly as the Preview pane's do,
+  // through the asset proxy, so the same picture shows in both.
+  const resolveEditorSrc = useCallback(
+    (src: string) =>
+      resolveAssetSrc(src, {
+        drive,
+        origin: typeof window !== "undefined" ? window.location.origin : "",
+        driveToken: drive ? assetToken ?? "" : "",
+      }),
+    [drive, assetToken],
+  );
+
   // Publish the header height so the sidebar/overlays can sit below it.
   useEffect(() => {
     const h = headerRef.current;
@@ -429,7 +442,8 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
     if (!hasUrlView) {
       if (typeof s.showPreview === "boolean") setPreview(s.showPreview);
       if (typeof s.editorPct === "number") setEditorPct(s.editorPct);
-      if (typeof s.livePreview === "boolean") setLivePreview(s.livePreview);
+      // Live is the default View for a file with nothing saved.
+      setLivePreview(typeof s.livePreview === "boolean" ? s.livePreview : true);
     }
     if (typeof s.followCursor === "boolean") setFollowCursor(s.followCursor);
     if (typeof s.followSlide === "boolean") setFollowSlide(s.followSlide);
@@ -1260,6 +1274,7 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
                 canEdit={role === "edit"}
                 cleanView={cleanView}
                 live={view === "live"}
+                resolveSrc={resolveEditorSrc}
                 activeComment={activeCommentRange}
                 bibLibrary={bibLib}
                 classList={cssClasses}

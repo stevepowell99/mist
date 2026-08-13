@@ -1,4 +1,11 @@
-import { Decoration, EditorView, ViewPlugin, type DecorationSet, type ViewUpdate } from "@codemirror/view";
+import {
+  Decoration,
+  EditorView,
+  ViewPlugin,
+  WidgetType,
+  type DecorationSet,
+  type ViewUpdate,
+} from "@codemirror/view";
 import { RangeSetBuilder } from "@codemirror/state";
 import { syntaxTree, HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { markdownLanguage } from "@codemirror/lang-markdown";
@@ -25,6 +32,9 @@ import { criticSpans } from "./critic";
 export interface HideRange {
   from: number;
   to: number;
+  /** What replaces the range. Nothing by default; a list mark becomes a real
+   *  bullet and an image becomes the picture itself. */
+  show?: { bullet: true } | { image: { src: string; alt: string } };
 }
 
 interface Ctx {
@@ -70,8 +80,8 @@ function spacesBefore(ctx: Ctx, pos: number, limit: number): number {
  */
 function collect(tree: Tree, ctx: Ctx, from: number, to: number): HideRange[] {
   const out: HideRange[] = [];
-  const add = (a: number, b: number) => {
-    if (b > a) out.push({ from: a, to: b });
+  const add = (a: number, b: number, show?: HideRange["show"]) => {
+    if (b > a) out.push({ from: a, to: b, ...(show ? { show } : {}) });
   };
 
   tree.iterate({
@@ -104,10 +114,32 @@ function collect(tree: Tree, ctx: Ctx, from: number, to: number): HideRange[] {
         case "LinkMark":
         case "URL":
         case "LinkTitle":
-          // A Link only: an image's `![alt](src)` stays literal in this version.
+          // A Link only. An image's own marks are handled by the Image branch,
+          // which replaces the whole thing with the picture.
           if (parent.name !== "Link") return;
           if (!selTouchesSpan(ctx, parent.from, parent.to)) add(n.from, n.to);
           return;
+        case "ListMark": {
+          // A bullet list's `-`, `*` or `+` becomes a real bullet. An ordered
+          // list keeps its numbers, which carry meaning.
+          if (parent.name !== "ListItem" || parent.node.parent?.name !== "BulletList") return;
+          if (selTouchesLine(ctx, n.from)) return;
+          add(n.from, n.to, { bullet: true });
+          return;
+        }
+        case "Image": {
+          // The picture itself, in place of its markup. Line-based reveal, as
+          // for a heading: put the cursor on the line to edit the source. The
+          // pattern is the one `rewriteImages` uses, angle-bracket form included
+          // (which is how a path with spaces must be written).
+          if (selTouchesLine(ctx, n.from)) return;
+          const m = /^!\[([^\]]*)\]\(\s*(?:<([^>]+)>|([^)\s]+))(?:\s+"[^"]*")?\s*\)$/.exec(
+            ctx.read(n.from, n.to),
+          );
+          if (!m) return;
+          add(n.from, n.to, { image: { alt: m[1], src: (m[2] ?? m[3]).trim() } });
+          return;
+        }
         default:
           return;
       }
@@ -126,8 +158,10 @@ function collect(tree: Tree, ctx: Ctx, from: number, to: number): HideRange[] {
   for (const r of out) {
     if (critic.some((s) => r.from < s.to && r.to > s.from)) continue;
     const prev = kept[kept.length - 1];
-    if (prev && r.from <= prev.to) prev.to = Math.max(prev.to, r.to);
-    else kept.push({ ...r });
+    // Only plain hides merge. A range that shows something (a bullet, a
+    // picture) has to stay its own decoration.
+    if (prev && !prev.show && !r.show && r.from <= prev.to) prev.to = Math.max(prev.to, r.to);
+    else if (!prev || r.from >= prev.to) kept.push({ ...r });
   }
   return kept;
 }
@@ -156,7 +190,64 @@ export function hideRanges(text: string, sel: readonly { from: number; to: numbe
 
 const hidden = Decoration.replace({});
 
-function build(view: EditorView): DecorationSet {
+/** A list's real bullet, standing in for its `-`. */
+class BulletWidget extends WidgetType {
+  eq() {
+    return true;
+  }
+  toDOM() {
+    const span = document.createElement("span");
+    span.className = "cm-lp-bullet";
+    span.textContent = "•";
+    return span;
+  }
+}
+const bullet = Decoration.replace({ widget: new BulletWidget() });
+
+/** The picture itself, in place of `![alt](src)`. The src is resolved by the
+ *  caller (the document's own asset proxy), because this module knows nothing
+ *  about Drive or the local sidecar. */
+class ImageWidget extends WidgetType {
+  constructor(
+    readonly src: string,
+    readonly alt: string,
+  ) {
+    super();
+  }
+  eq(other: ImageWidget) {
+    return other.src === this.src && other.alt === this.alt;
+  }
+  toDOM() {
+    const img = document.createElement("img");
+    img.className = "cm-lp-img";
+    img.src = this.src;
+    img.alt = this.alt;
+    // A broken src must not leave a blank gap with nothing to click: fall back
+    // to the alt text and the path.
+    img.addEventListener("error", () => {
+      img.replaceWith(Object.assign(document.createElement("span"), {
+        className: "cm-lp-img-missing",
+        textContent: `[image not found: ${this.src}]`,
+      }));
+    });
+    return img;
+  }
+  get estimatedHeight() {
+    return 120;
+  }
+}
+
+const imageLine = Decoration.line({ class: "cm-lp-imgline" });
+
+function decorationFor(r: HideRange, resolveSrc: (src: string) => string): Decoration {
+  if (r.show && "bullet" in r.show) return bullet;
+  if (r.show && "image" in r.show) {
+    return Decoration.replace({ widget: new ImageWidget(resolveSrc(r.show.image.src), r.show.image.alt) });
+  }
+  return hidden;
+}
+
+function build(view: EditorView, resolveSrc: (src: string) => string): DecorationSet {
   const state = view.state;
   const ctx: Ctx = {
     read: (a, b) => state.doc.sliceString(a, b),
@@ -172,7 +263,17 @@ function build(view: EditorView): DecorationSet {
     // Whole lines, so a mark starting just above the viewport is still matched.
     const start = state.doc.lineAt(from).from;
     const end = state.doc.lineAt(to).to;
-    for (const r of collect(tree, ctx, start, end)) builder.add(r.from, r.to, hidden);
+    for (const r of collect(tree, ctx, start, end)) {
+      // A line holding nothing but a picture drops the text leading, which would
+      // otherwise leave a line's worth of blank space above and below it.
+      if (r.show && "image" in r.show) {
+        const line = state.doc.lineAt(r.from);
+        if (line.text.trim() === state.doc.sliceString(r.from, r.to).trim()) {
+          builder.add(line.from, line.from, imageLine);
+        }
+      }
+      builder.add(r.from, r.to, decorationFor(r, resolveSrc));
+    }
   }
   return builder.finish();
 }
@@ -184,22 +285,23 @@ function build(view: EditorView): DecorationSet {
  * the hidden text, so arrow keys step over a hidden `##` instead of stalling
  * inside it.
  */
-const livePlugin = ViewPlugin.fromClass(
-  class {
-    decorations: DecorationSet;
-    constructor(view: EditorView) {
-      this.decorations = build(view);
-    }
-    update(u: ViewUpdate) {
-      if (u.docChanged || u.viewportChanged || u.selectionSet) this.decorations = build(u.view);
-    }
-  },
-  {
-    decorations: (v) => v.decorations,
-    provide: (plugin) =>
-      EditorView.atomicRanges.of((view) => view.plugin(plugin)?.decorations ?? Decoration.none),
-  },
-);
+const livePlugin = (resolveSrc: (src: string) => string) =>
+  ViewPlugin.fromClass(
+    class {
+      decorations: DecorationSet;
+      constructor(view: EditorView) {
+        this.decorations = build(view, resolveSrc);
+      }
+      update(u: ViewUpdate) {
+        if (u.docChanged || u.viewportChanged || u.selectionSet) this.decorations = build(u.view, resolveSrc);
+      }
+    },
+    {
+      decorations: (v) => v.decorations,
+      provide: (plugin) =>
+        EditorView.atomicRanges.of((view) => view.plugin(plugin)?.decorations ?? Decoration.none),
+    },
+  );
 
 /**
  * Inline typography, which only live preview turns on: with the `**` hidden,
@@ -217,4 +319,10 @@ const liveHighlight = HighlightStyle.define([
   { tag: tags.url, color: "var(--color-muted)" },
 ]);
 
-export const livePreview = [livePlugin, syntaxHighlighting(liveHighlight)];
+/** The live preview extension. `resolveSrc` turns an image's markdown src into a
+ *  loadable URL (the document's asset proxy); without one, images stay literal
+ *  markup rather than pointing at a path the browser cannot fetch. */
+export const livePreview = (resolveSrc?: (src: string) => string) => [
+  livePlugin(resolveSrc ?? ((s) => s)),
+  syntaxHighlighting(liveHighlight),
+];
