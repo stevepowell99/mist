@@ -48,6 +48,7 @@ function handleImagePaste(
   event: ClipboardEvent,
   view: EditorView,
   onImagePaste: ((file: File) => Promise<string | null>) | undefined,
+  markEdited: () => void,
 ): boolean {
   if (!onImagePaste) return false;
   const items = event.clipboardData?.items;
@@ -63,6 +64,11 @@ function handleImagePaste(
     changes: { from: sel.from, to: sel.to, insert: marker },
     selection: { anchor: sel.from + marker.length },
   });
+  // The dispatches carry no userEvent, so nothing here counts as a user edit and
+  // the save baseline would go on re-baselining: paste an image, and the picture
+  // lands in the folder while the document never saves the line referring to it.
+  // Say so directly instead.
+  markEdited();
 
   void (async () => {
     let replacement = "";
@@ -74,6 +80,7 @@ function handleImagePaste(
     }
     const idx = view.state.doc.toString().indexOf(marker);
     if (idx >= 0) view.dispatch({ changes: { from: idx, to: idx + marker.length, insert: replacement } });
+    markEdited();
   })();
   return true;
 }
@@ -94,6 +101,7 @@ export default function CodeMirrorEditor({
   canEdit = false,
   cleanView = false,
   live = false,
+  resolveSrc,
   activeComment = null,
   bibLibrary = null,
   classList = null,
@@ -115,6 +123,9 @@ export default function CodeMirrorEditor({
   cleanView?: boolean;
   /** Live preview: hide the markdown syntax marks away from the cursor. */
   live?: boolean;
+  /** Turn an image's markdown src into a loadable URL, for live preview's inline
+   *  images. Same resolution the Preview pane uses. */
+  resolveSrc?: (src: string) => string;
   activeComment?: { from: number; to: number } | null;
   bibLibrary?: BibLibrary | null;
   /** Pandoc class names from the deck CSS, for the `.`-class picker. */
@@ -176,6 +187,11 @@ export default function CodeMirrorEditor({
   if (!liveCompRef.current) liveCompRef.current = new Compartment();
   const liveRef = useRef(live);
   liveRef.current = live;
+  // Read at decoration time, so the editor never rebuilds when the asset token
+  // or the file's folder changes.
+  const srcRef = useRef(resolveSrc);
+  srcRef.current = resolveSrc;
+  const liveExt = () => livePreview((s) => srcRef.current?.(s) ?? s);
   const spellcheckExt = (l: string) =>
     EditorView.contentAttributes.of({ spellcheck: "true", autocorrect: "off", autocapitalize: "off", lang: l });
   // The two view-wide classes (clean view's hidden delimiters, live preview's
@@ -260,7 +276,7 @@ export default function CodeMirrorEditor({
         markdown({ base: markdownLanguage }),
         EditorView.lineWrapping,
         langCompRef.current!.of(spellcheckExt(langRef.current)),
-        liveCompRef.current!.of(liveRef.current ? livePreview : []),
+        liveCompRef.current!.of(liveRef.current ? liveExt() : []),
         attrsCompRef.current!.of(editorClasses(cleanRef.current, liveRef.current)),
         autocompletion({
           override: [
@@ -277,7 +293,8 @@ export default function CodeMirrorEditor({
         selectionToolbar(() => canEditRef.current),
         activeCommentField,
         EditorView.domEventHandlers({
-          paste: (event, v) => handleImagePaste(event, v, onImagePasteRef.current),
+          paste: (event, v) =>
+            handleImagePaste(event, v, onImagePasteRef.current, () => onUserEditRef.current?.()),
           // Layout shortcuts: catch the chord here (e.code based) so a focused
           // editor never swallows it, then hand it to the layout.
           keydown: (event) => {
@@ -339,7 +356,7 @@ export default function CodeMirrorEditor({
   useEffect(() => {
     const view = viewRef.current;
     if (!view || !liveCompRef.current) return;
-    view.dispatch({ effects: liveCompRef.current.reconfigure(live ? livePreview : []) });
+    view.dispatch({ effects: liveCompRef.current.reconfigure(live ? liveExt() : []) });
   }, [live]);
 
   // Apply a language change (frontmatter `lang:`) without rebuilding the editor.
