@@ -127,3 +127,12 @@ Four things the plan did not foresee.
 - **`markdownLineStyle` styled a `#` inside a fenced code block as a heading.** Tolerable at one constant size in source view, glaring once live preview gives `.cm-h1` a real size, so that plugin now tracks fences and skips them. The live-preview layer never had the fault, because it reads the tree.
 
 Still out, and now cheap to add if wanted: hiding the frontmatter block, list bullets as real bullets, and images. An image's `![alt](src)` markup is currently coloured like a link, because the markdown parser gives `Link` and `Image` the same highlight tag.
+
+### Obsidian coverage, 18 August 2026
+
+A sweep of Obsidian's own syntax against this layer, prompted by `---` not showing as a rule. Added: a thematic break (`---`, `***`, `___`) drawn as the rule, with the characters back when the cursor is on the line; `==highlight==`, which is Obsidian's and which no parser here knew, so it also went into the shared grammar (`convertHighlights` in `slides-build.ts`) and now renders as `<mark>` in the Preview pane and in a deck; and a task's `- [ ]` / `- [x]` as the one checkbox `marked` already renders in the Preview, the click falling through to the line so the source comes back.
+
+CriticMarkup's own highlight is `{==...==}` and stays literal: the converter skips a `==` touching a brace, and everything inside a CriticMarkup span was already dropped from the hide set.
+
+Deliberately still literal, in both this layer and the Preview pane, so the two agree: LaTeX (`$x$`, `$$x$$`), footnotes (`[^1]` and its definition, which this layer now claims so the parser does not hide the brackets and leave a bare `^1`), `%%comments%%`, `#tags`, block ids (`^abc123`) and definition lists. Each needs a renderer first; adding one to the editor alone would make the editor and the Preview disagree, which is the fault this layer is meant to avoid.
+

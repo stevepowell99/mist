@@ -451,6 +451,37 @@ body {
   color: var(--color-muted);
 }
 
+/* Obsidian's `==highlight==`, the same mark the Preview pane renders. The
+   brand light yellow, softened so ink over it stays readable. */
+.cm-lp-mark {
+  background: color-mix(in srgb, #f7ed73 60%, transparent);
+  border-radius: 2px;
+  padding: 0 0.1em;
+}
+
+/* A task's checkbox, in place of `- [x]`. The click falls through to the line
+   so the source comes back, which is how every other widget here behaves. */
+.cm-lp-task {
+  pointer-events: none;
+  margin-right: 0.3em;
+  vertical-align: -0.08em;
+  accent-color: var(--color-coral);
+}
+
+/* A thematic break: the `---` goes and the (now empty) line draws the rule
+   through its middle, so the break reads as a break rather than a blank line. */
+.cm-lp-rule {
+  position: relative;
+}
+.cm-lp-rule::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  border-top: 1px solid var(--color-border);
+}
+
 /* Clean view: hide delimiters and comment text only */
 
 /* Clean view: hide delimiters and comment text only */

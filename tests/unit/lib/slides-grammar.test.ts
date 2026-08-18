@@ -53,4 +53,11 @@ describe("applyGrammar", () => {
     expect(out).not.toContain("{#id}");
     expect(out).toContain("`{.bar}`");
   });
+  it("renders an Obsidian highlight as a mark, and leaves CriticMarkup alone", () => {
+    expect(applyGrammar("A ==really== good point.")).toContain("<mark>really</mark>");
+    // `{==x==}` is CriticMarkup's own highlight, rendered later by renderCriticHtml.
+    expect(applyGrammar("A {==flagged==} point.")).toContain("{==flagged==}");
+    // Code is masked, so an example of the syntax survives verbatim.
+    expect(applyGrammar("`a == b == c`")).toContain("`a == b == c`");
+  });
 });

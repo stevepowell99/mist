@@ -27,6 +27,48 @@ describe("live preview hide ranges", () => {
     expect(hidden("### Heading ###\n")).toEqual(["### ", " ###"]);
   });
 
+  it("hides a thematic break and marks its line as the rule", () => {
+    const text = "Above.\n\n---\n\nBelow.\n";
+    const ranges = hideRanges(text);
+    // The line entry is empty by definition, so only the marker range hides.
+    expect(ranges.filter((r) => r.to > r.from).map((r) => text.slice(r.from, r.to))).toEqual(["---"]);
+    const rule = ranges.find((r) => r.show && "line" in r.show);
+    expect((rule?.show as { line: string }).line).toBe("cm-lp-rule");
+  });
+
+  it("reveals a thematic break when the cursor is on its line", () => {
+    const text = "Above.\n\n---\n\nBelow.\n";
+    expect(hidden(text, at(text.indexOf("---") + 1))).toEqual([]);
+    // A setext underline is not a break, so it keeps its characters.
+    expect(hidden("Heading\n---\n\nBody.\n")).toEqual([]);
+  });
+
+  it("hides an Obsidian highlight's equals signs and marks the words", () => {
+    const text = "A ==really== good point.\n";
+    const ranges = hideRanges(text);
+    expect(ranges.filter((r) => !r.show).map((r) => text.slice(r.from, r.to))).toEqual(["==", "=="]);
+    const mark = ranges.find((r) => r.show && "mark" in r.show);
+    expect(text.slice(mark!.from, mark!.to)).toBe("really");
+  });
+
+  it("leaves a CriticMarkup highlight's delimiters alone", () => {
+    expect(hidden("A {==flagged==} point.\n")).toEqual([]);
+  });
+
+  it("turns a task's box into a checkbox and keeps its state", () => {
+    const text = "- [ ] open\n- [x] done\n";
+    const tasks = hideRanges(text).filter((r) => r.show && "task" in r.show);
+    expect(tasks.map((r) => text.slice(r.from, r.to))).toEqual(["- [ ]", "- [x]"]);
+    expect(tasks.map((r) => (r.show as { task: boolean }).task)).toEqual([false, true]);
+  });
+
+  it("leaves a plain bullet as a bullet", () => {
+    const text = "- plain\n";
+    const r = hideRanges(text);
+    expect(r.some((x) => x.show && "task" in x.show)).toBe(false);
+    expect(r.some((x) => x.show && "bullet" in x.show)).toBe(true);
+  });
+
   it("hides emphasis, strong, inline code and strikethrough marks", () => {
     const text = "A **bold** and _thin_ and `code` and ~~gone~~ word.\n";
     expect(hidden(text)).toEqual(["**", "**", "_", "_", "`", "`", "~~", "~~"]);

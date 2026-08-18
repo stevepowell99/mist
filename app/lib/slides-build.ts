@@ -342,6 +342,13 @@ export function convertSpans(md: string): string {
   });
 }
 
+/** Obsidian's highlight, `==like this==`, which no markdown parser here knows.
+ *  CriticMarkup's own highlight is `{==...==}` and is rendered later by
+ *  `renderCriticHtml`, so a `==` touching a brace is left alone. */
+export function convertHighlights(md: string): string {
+  return md.replace(/(?<!\{)==(?!\s)([^\n=]+?)(?<!\s)==(?!\})/g, "<mark>$1</mark>");
+}
+
 /** Inside a `::: {.bignums}` block, wrap each list item's first word in
  *  `[word]{.fig}` so the leading figure is enlarged automatically, with no need
  *  to bold it. Runs BEFORE the span/div converters, so the inserted .fig becomes
@@ -395,7 +402,7 @@ export function applyGrammar(
   const masked = maskCode(md);
   let t = convertBignums(masked.text);
   if (opts.wikilinks) t = renderWikiLinks(t);
-  t = convertDivs(convertImages(convertSpans(convertCallouts(convertDashCallouts(t)))));
+  t = convertDivs(convertImages(convertSpans(convertCallouts(convertDashCallouts(convertHighlights(t))))));
   t = convertIcons(t);
   if (opts.afterConvert) t = opts.afterConvert(t);
   return restoreCode(t, masked.tokens);

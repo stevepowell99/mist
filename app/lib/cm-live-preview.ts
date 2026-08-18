@@ -39,13 +39,16 @@ export interface HideRange {
   to: number;
   /** What replaces the range. Nothing by default; a list mark becomes a real
    *  bullet, an image becomes the picture itself, an attribute block is dimmed
-   *  rather than hidden (it is authoring detail, but you need to see it), and a
-   *  line entry styles a whole line (a quote, a callout, a lone picture). */
+   *  rather than hidden (it is authoring detail, but you need to see it), a
+   *  task's `- [x]` becomes a checkbox, and a
+   *  line entry styles a whole line (a quote, a callout, a rule, a lone
+   *  picture). */
   show?:
     | { bullet: true }
     | { image: { src: string; alt: string } }
     | { fade: true }
     | { line: string }
+    | { task: boolean }
     | { mark: string }
     | { text: { value: string; cls: string } };
 }
@@ -141,7 +144,24 @@ function collect(tree: Tree, ctx: Ctx, from: number, to: number): HideRange[] {
           // list keeps its numbers, which carry meaning.
           if (parent.name !== "ListItem" || parent.node.parent?.name !== "BulletList") return;
           if (selTouchesLine(ctx, n.from)) return;
+          // Obsidian's task, `- [ ]` or `- [x]`: the mark and the box together
+          // become the one checkbox `marked` renders in the Preview pane.
+          const task = /^[ \t]\[([ xX])\](?=[ \t]|$)/.exec(ctx.read(n.to, ctx.lineAt(n.from).to));
+          if (task) {
+            add(n.from, n.to + task[0].length, { task: task[1] !== " " });
+            return;
+          }
           add(n.from, n.to, { bullet: true });
+          return;
+        }
+        case "HorizontalRule": {
+          // `---`, `***` or `___` alone on a line becomes the rule it draws.
+          // The markers are hidden and the line carries the rule itself, so an
+          // empty line is never left behind; put the cursor on the line to get
+          // the characters back, as for a heading.
+          if (selTouchesLine(ctx, n.from)) return;
+          add(ctx.lineAt(n.from).from, ctx.lineAt(n.from).from, { line: "cm-lp-rule" });
+          add(n.from, n.to);
           return;
         }
         case "Image": {
@@ -259,6 +279,29 @@ function collect(tree: Tree, ctx: Ctx, from: number, to: number): HideRange[] {
     add(start, shownFrom);
     add(shownFrom, end - 2, { mark: "cm-lp-wikilink" });
     add(end - 2, end); // `]]`
+  }
+
+  // A footnote, `[^1]` and its `[^1]:` definition. Nothing here renders
+  // footnotes (the Preview pane's `marked` has no extension for them), so the
+  // markup stays visible; claiming it stops the parser's link brackets, which
+  // is what `[^1]` looks like to it, from being hidden and leaving a bare `^1`.
+  for (const m of slice.matchAll(/\[\^[^[\]\n]+\]/g)) {
+    const start = from + (m.index ?? 0);
+    if (inCode(start)) continue;
+    claimed.push({ from: start, to: start + m[0].length });
+  }
+
+  // Obsidian's highlight, `==like this==`, which the markdown parser does not
+  // know. CriticMarkup's own highlight is `{==...==}`, and everything inside a
+  // CriticMarkup span is dropped below, so the two never collide.
+  for (const m of slice.matchAll(/(?<!\{)==(?!\s)([^\n=]+?)(?<!\s)==(?!\})/g)) {
+    const start = from + (m.index ?? 0);
+    if (inCode(start)) continue;
+    const end = start + m[0].length;
+    if (selTouchesSpan(ctx, start, end)) continue;
+    add(start, start + 2);
+    add(start + 2, end - 2, { mark: "cm-lp-mark" });
+    add(end - 2, end);
   }
 
   // Citations show as the reference they stand for, the same inline APA the
@@ -404,6 +447,28 @@ class ImageWidget extends WidgetType {
   }
 }
 
+/** A task's checkbox, in place of its `- [x]`. Not interactive: CSS lets the
+ *  click through to the line, which brings the source back, as everywhere else
+ *  in this layer. */
+class TaskWidget extends WidgetType {
+  constructor(readonly done: boolean) {
+    super();
+  }
+  eq(other: TaskWidget) {
+    return other.done === this.done;
+  }
+  toDOM() {
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    box.className = "cm-lp-task";
+    box.checked = this.done;
+    box.tabIndex = -1;
+    return box;
+  }
+}
+const taskOpen = Decoration.replace({ widget: new TaskWidget(false) });
+const taskDone = Decoration.replace({ widget: new TaskWidget(true) });
+
 const imageLine = Decoration.line({ class: "cm-lp-imgline" });
 const faded = Decoration.mark({ class: "cm-lp-attr" });
 /** Line decorations are per class string, and there are a handful of them, so
@@ -451,6 +516,7 @@ function decorationFor(r: HideRange, resolveSrc: (src: string) => string): Decor
   if (r.show && "bullet" in r.show) return bullet;
   if (r.show && "fade" in r.show) return faded;
   if (r.show && "line" in r.show) return lineDeco(r.show.line);
+  if (r.show && "task" in r.show) return r.show.task ? taskDone : taskOpen;
   if (r.show && "mark" in r.show) return markDeco(r.show.mark);
   if (r.show && "text" in r.show) {
     return Decoration.replace({ widget: new TextWidget(r.show.text.value, r.show.text.cls) });
@@ -465,7 +531,7 @@ function decorationFor(r: HideRange, resolveSrc: (src: string) => string): Decor
  *  `##`, but a faded attribute, a styled line or a marked span is ordinary text
  *  to move through. */
 function isHiding(r: HideRange): boolean {
-  return !r.show || "bullet" in r.show || "image" in r.show || "text" in r.show;
+  return !r.show || "bullet" in r.show || "image" in r.show || "text" in r.show || "task" in r.show;
 }
 
 interface Built {
