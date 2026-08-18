@@ -69,6 +69,12 @@ export function generate(manifest) {
   return lines.join("\n");
 }
 
+/** Compare ignoring line endings. A Windows checkout with core.autocrlf on
+ *  holds deck-base.css as CRLF while this generator emits LF, which made both
+ *  the --check run and its test report a stale region on every Windows machine
+ *  while CI (an LF checkout) was green. */
+export const sameText = (a, b) => a.replace(/\r\n/g, "\n") === b.replace(/\r\n/g, "\n");
+
 function regionRe() {
   const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return new RegExp(`${esc(BEGIN)}[\\s\\S]*?${esc(END)}`);
@@ -85,13 +91,15 @@ function main() {
     process.exit(1);
   }
   if (process.argv.includes("--check")) {
-    if (current[0] !== region) {
+    if (!sameText(current[0], region)) {
       console.error("gen-styles: deck-base.css GENERATED region is stale; run `npm run gen:styles`.");
       process.exit(1);
     }
     return;
   }
-  const next = css.replace(re, region);
+  // Write the region in the file's own line endings, or a CRLF checkout ends up
+  // mixed and rewritten on every run.
+  const next = css.replace(re, region.replace(/\n/g, css.includes("\r\n") ? "\r\n" : "\n"));
   if (next !== css) {
     writeFileSync(CSS_PATH, next);
     console.log("gen-styles: rewrote the GENERATED region in deck-base.css.");

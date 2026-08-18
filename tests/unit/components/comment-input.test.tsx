@@ -19,7 +19,7 @@ describe("CommentInput", () => {
       { context: { commentActive: true } },
     );
     expect(getByPlaceholderText("Add a comment...")).toBeTruthy();
-    expect(getByText("Add")).toBeTruthy();
+    expect(getByText("Save")).toBeTruthy();
     expect(getByText("Cancel")).toBeTruthy();
   });
 

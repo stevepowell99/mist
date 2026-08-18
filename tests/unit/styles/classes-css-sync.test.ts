@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { generate, BEGIN, END } from "../../../scripts/gen-styles.mjs";
+import { generate, sameText, BEGIN, END } from "../../../scripts/gen-styles.mjs";
 
 /**
  * classes.json (the machine-readable catalogue that drives the `.` picker and the
@@ -40,6 +40,7 @@ describe("classes.json stays in step with deck-base.css", () => {
     const region = css.slice(css.indexOf(BEGIN), css.indexOf(END) + END.length);
     expect(css).toContain(BEGIN);
     expect(css).toContain(END);
-    expect(region).toBe(generate(JSON.parse(manifestText)));
+    // Line endings are the checkout's business, not the manifest's.
+    expect(sameText(region, generate(JSON.parse(manifestText)))).toBe(true);
   });
 });

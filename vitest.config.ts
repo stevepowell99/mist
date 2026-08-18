@@ -41,6 +41,7 @@ export default defineConfig({
   test: {
     globals: true,
     include: ["tests/**/*.test.ts", "tests/**/*.test.tsx"],
+    setupFiles: ["tests/setup.ts"],
     exclude: ["tests/evals/**"],
     coverage: {
       provider: "v8",

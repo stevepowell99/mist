@@ -21,7 +21,16 @@ describe("theme resolution", () => {
     expect(resolveThemeName("theme: black")).toBe(DEFAULT_THEME);
   });
   it("ships the expected theme set", () => {
-    expect(THEME_NAMES).toEqual(["causal-map", "qualia", "brutalist", "editorial"]);
+    expect(THEME_NAMES).toEqual([
+      "causal-map",
+      "qualia",
+      "brutalist",
+      "editorial",
+      "blackboard",
+      "moonshot",
+      "handwritten",
+      "minimal",
+    ]);
   });
 });
 
