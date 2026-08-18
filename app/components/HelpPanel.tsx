@@ -249,6 +249,11 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
   );
 }
 
+/** The intro flies in on the first few page loads, counted in localStorage, and
+ *  never again; the Help button and Ctrl/Cmd+Alt+/ are how it opens after that. */
+const INTRO_KEY = "mistHelpIntroLoads";
+const INTRO_LOADS = 10;
+
 export default function HelpPanel() {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<"overview" | "shortcuts" | "styling" | "sharing" | "files">("overview");
@@ -273,17 +278,19 @@ export default function HelpPanel() {
     setOpen(false);
   }, [clearIntro]);
 
-  // Auto-intro, gated to once per browser session.
+  // Auto-intro, shown on the first few loads and then not again: long enough to
+  // learn the app is there, short enough to stop nagging someone who works in it.
   useEffect(() => {
     if (typeof window === "undefined") return;
-    let shown = true;
+    let loads = INTRO_LOADS;
     try {
-      shown = sessionStorage.getItem("mistHelpIntroShown") === "1";
-      sessionStorage.setItem("mistHelpIntroShown", "1");
+      loads = Number(localStorage.getItem(INTRO_KEY) ?? 0);
+      if (!Number.isFinite(loads) || loads < 0) loads = 0;
+      localStorage.setItem(INTRO_KEY, String(loads + 1));
     } catch {
-      shown = true; // no storage: skip rather than nag every load
+      loads = INTRO_LOADS; // no storage: skip rather than nag every load
     }
-    if (shown) return;
+    if (loads >= INTRO_LOADS) return;
     setAuto(true);
     setOpen(true);
     introTimers.current = [
