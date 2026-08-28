@@ -37,7 +37,8 @@ import OutlinePanel from "~/components/OutlinePanel";
 import PresenterRail from "~/components/PresenterRail";
 import HelpPanel from "~/components/HelpPanel";
 import LibraryGallery from "~/components/LibraryGallery";
-import GoogleSignIn from "~/components/GoogleSignIn";
+import DocGate from "~/components/DocGate";
+import ShareOnOpen from "~/components/ShareOnOpen";
 import SlidesView, { isSlideDeck } from "~/components/SlidesView";
 import { fillPrintTab } from "~/lib/print-paged.client";
 
@@ -186,32 +187,6 @@ type EditorData = {
   gate: null;
 };
 
-/** Sign-in / no-access screen shown instead of the editor when the viewer is not
- *  authorised for the file. The WebSocket is gated server-side regardless, so
- *  this is the friendly face of that gate. */
-function DocGate({ kind }: { kind: "needsAuth" | "forbidden" }) {
-  return (
-    <div className="flex h-screen flex-col items-center justify-center gap-5 bg-paper p-6 text-center">
-      <Link to="/" className="rounded bg-ink px-3 py-1.5 font-medium text-paper hover:bg-chartreuse hover:text-[#1a1a1a]">
-        {APP_NAME}
-      </Link>
-      {kind === "needsAuth" ? (
-        <>
-          <p className="max-w-sm text-ink">
-            This file is private. Sign in with the Google account it is shared with to open it.
-          </p>
-          <GoogleSignIn onSignedIn={() => window.location.reload()} />
-        </>
-      ) : (
-        <p className="max-w-sm text-ink">
-          You do not have access to this file. Ask the owner to share it with your Google
-          account in Google Drive, then reload.
-        </p>
-      )}
-    </div>
-  );
-}
-
 export default function DocumentPage({ loaderData }: Route.ComponentProps) {
   // Not authorised for this file: show the sign-in / no-access screen, never the
   // editor (and the WebSocket is gated server-side too).
@@ -251,6 +226,7 @@ function DocumentRoot({
       assetToken={assetToken}
     >
       <DocumentLayout id={id} local={local} initialLive={initialLive} />
+      <ShareOnOpen />
     </DocumentProvider>
   );
 }

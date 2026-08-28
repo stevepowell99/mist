@@ -4,6 +4,7 @@ import { getCloudflare } from "~/lib/cloudflare.server";
 import { openDriveRequest } from "~/lib/drive-access.server";
 import { importDriveFileToRoom } from "~/lib/drive-import.server";
 import { isLocalMode, resolveLocalFilePath } from "~/lib/google.server";
+import DocGate from "~/components/DocGate";
 
 /**
  * Direct deep-link to open a markdown file in gmist, from an external tool that
@@ -16,13 +17,23 @@ import { isLocalMode, resolveLocalFilePath } from "~/lib/google.server";
  *    path it cannot read). This is the local counterpart, so TagFox can hand
  *    over any local file, not only one under a Drive mount.
  *
+ * Add `&share=suggest` (or `edit`) to have the room copy its own share link to
+ * the clipboard on arrival, so an external tool gets a link to paste without
+ * holding any gmist credentials of its own. See ShareOnOpen.
+ *
  * Import is the same core as POST /drive/import. Auth is the signed-in browser
  * session (bypassed in local mode), so the launching tool needs no credentials.
+ * A caller who is not signed in, or not shared on the file, gets the same gate
+ * screen /docs/:id shows; this route used to answer a bare JSON 401, which reads
+ * as a broken link to whoever was sent it.
  */
 export async function loader({ request, context }: Route.LoaderArgs) {
   const { env } = getCloudflare(context);
   const gate = await openDriveRequest(request, env);
-  if ("error" in gate) return gate.error;
+  if ("error" in gate) {
+    if (gate.error.status === 401) return { gate: "needsAuth" as const };
+    return gate.error;
+  }
 
   const url = new URL(request.url);
   const localPath = url.searchParams.get("path");
@@ -37,6 +48,17 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   if (!fileId) throw data("missing ?file= (a Drive file id or URL) or ?path= (a local absolute path)", { status: 400 });
 
   const result = await importDriveFileToRoom(env, fileId, gate.access.email);
-  if (!result.ok) throw data(result.error, { status: result.status });
-  return redirect(result.url);
+  if (!result.ok) {
+    if (result.status === 403) return { gate: "forbidden" as const };
+    throw data(result.error, { status: result.status });
+  }
+
+  // The room URL already carries ?k=, so share rides along as a second param.
+  const share = url.searchParams.get("share");
+  return redirect(share === null ? result.url : `${result.url}&share=${encodeURIComponent(share)}`);
+}
+
+export default function OpenPage({ loaderData }: Route.ComponentProps) {
+  const kind = loaderData && "gate" in loaderData ? loaderData.gate : "needsAuth";
+  return <DocGate kind={kind} />;
 }
