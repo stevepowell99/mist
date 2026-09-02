@@ -4,6 +4,7 @@ import { getCloudflare } from "~/lib/cloudflare.server";
 import { getDriveAccessToken, driveFileDetails } from "~/lib/google.server";
 import { openDriveRequest } from "~/lib/drive-access.server";
 import { json } from "~/lib/http.server";
+import { isLocalFileId } from "~/lib/localfs-ids";
 
 /**
  * Details for the open document: richer Drive metadata (modified time, owner,
@@ -22,6 +23,18 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     const id = url.searchParams.get("id");
     const k = url.searchParams.get("k") ?? "";
     if (!id) return json({ error: "missing id" }, 400);
+
+    // A local file has no room and therefore no sync log: there is one copy of
+    // the document, so there is no sequence of adopt/fork/conflict decisions to
+    // record. Its details come straight from the file.
+    if (isLocalFileId(id)) {
+      try {
+        const file = await driveFileDetails(await getDriveAccessToken(env), id);
+        return json({ file, log: [] });
+      } catch {
+        return json({ file: null, log: [] });
+      }
+    }
 
     // Drive meta + the sync log come from the document agent (it holds both).
     const stub = await getAgentByName(env.DocumentAgent, id);

@@ -1,8 +1,9 @@
 import { data, Link } from "react-router";
 import { useRef, useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import type { Route } from "./+types/docs.$id";
-import { getAgentByName } from "agents";
 import { APP_NAME, isValidDocumentId } from "~/shared/constants";
+import { isLocalFileId } from "~/lib/localfs-ids";
+import { resolveDoc } from "~/lib/doc-resolve.server";
 import type { DocRole, DriveMeta } from "~/shared/types";
 import { getCloudflare } from "~/lib/cloudflare.server";
 import { isLocalMode } from "~/lib/google.server";
@@ -17,6 +18,7 @@ import { resolveAssetSrc } from "~/lib/asset-urls";
 import { usePresence } from "~/lib/usePresence";
 import PresenceBar from "~/components/PresenceBar";
 import { useYjsEditor } from "~/lib/useYjsEditor";
+import { useLocalEditor } from "~/lib/useLocalEditor";
 import { DocumentProvider, useDocument } from "~/lib/DocumentContext";
 import CodeMirrorEditor from "~/components/CodeMirrorEditor";
 import Preview from "~/components/Preview";
@@ -62,7 +64,10 @@ export function meta({ data }: Route.MetaArgs) {
 
 export async function loader({ params, request, context }: Route.LoaderArgs) {
   const id = params.id;
-  if (!isValidDocumentId(id)) {
+  // Two id shapes. A room id is eight characters; a local id is the file's own
+  // path, because local mode has no rooms to name.
+  const localFile = isLocalFileId(id);
+  if (!localFile && !isValidDocumentId(id)) {
     throw data(null, { status: 404 });
   }
 
@@ -73,17 +78,7 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
   // same View pill the client will and hydration matches.
   const initialLive = searchParams.get("view") === "live";
   const { env } = getCloudflare(context);
-  const stub = await getAgentByName(env.DocumentAgent, id);
-  const res = await stub.fetch(
-    new Request(`https://do/?k=${encodeURIComponent(docKey ?? "")}`),
-  );
-  const { exists, createdAt, role, suggestKey, drive } = (await res.json()) as {
-    exists: boolean;
-    createdAt: number | null;
-    role: DocRole | null;
-    suggestKey?: string;
-    drive: DriveMeta | null;
-  };
+  const { exists, createdAt, role, suggestKey, drive } = await resolveDoc(env, id, docKey);
 
   if (!exists || !role) {
     throw data(null, { status: 404 });
@@ -93,11 +88,16 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
   // user the file is shared with (Drive sharing is the source of truth). The
   // same check gates the WebSocket in workers/app.ts. The effective role is the
   // more restrictive of the link's role and the user's Drive role.
-  const auth = await authorizeDoc(env as unknown as DriveSessionEnv, request, drive, role);
-  if (auth.status === "badkey") throw data(null, { status: 404 });
-  if (auth.status === "needsAuth") return { id, gate: "needsAuth" as const };
-  if (auth.status === "forbidden") return { id, gate: "forbidden" as const };
-  const effectiveRole = auth.role ?? role;
+  // A local file is the machine user's own and has no sharing to consult, so
+  // there is nobody to authorise. Only a Drive document has an ACL.
+  let effectiveRole = role;
+  if (!localFile) {
+    const auth = await authorizeDoc(env as unknown as DriveSessionEnv, request, drive, role);
+    if (auth.status === "badkey") throw data(null, { status: 404 });
+    if (auth.status === "needsAuth") return { id, gate: "needsAuth" as const };
+    if (auth.status === "forbidden") return { id, gate: "forbidden" as const };
+    effectiveRole = auth.role ?? role;
+  }
 
   // Short-lived token so the sandboxed slides iframe (and document preview) can
   // fetch private-Drive assets without the session cookie.
@@ -199,7 +199,22 @@ export default function DocumentPage({ loaderData }: Route.ComponentProps) {
   return <DocumentRoot key={loaderData.id} {...loaderData} />;
 }
 
-function DocumentRoot({
+/** A local file has no room, so it takes the file-backed session; anything else
+ *  joins its room. Two components rather than a branch inside one, so each calls
+ *  exactly one session hook and neither can swap hooks under React. */
+function DocumentRoot(props: EditorData) {
+  return isLocalFileId(props.id) ? <LocalDocumentRoot {...props} /> : <RoomDocumentRoot {...props} />;
+}
+
+function RoomDocumentRoot(props: EditorData) {
+  return <DocumentShell {...props} yjs={useYjsEditor(props.id, props.docKey)} />;
+}
+
+function LocalDocumentRoot(props: EditorData) {
+  return <DocumentShell {...props} yjs={useLocalEditor(props.id)} />;
+}
+
+function DocumentShell({
   id,
   createdAt,
   role,
@@ -210,9 +225,8 @@ function DocumentRoot({
   initialLive,
   assetToken,
   local,
-}: EditorData) {
-  const yjs = useYjsEditor(id, docKey);
-
+  yjs,
+}: EditorData & { yjs: ReturnType<typeof useYjsEditor> | ReturnType<typeof useLocalEditor> }) {
   return (
     <DocumentProvider
       docId={id}

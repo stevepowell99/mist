@@ -47,6 +47,11 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   }
   if (!fileId) throw data("missing ?file= (a Drive file id or URL) or ?path= (a local absolute path)", { status: 400 });
 
+  // Local mode has no rooms. The id IS the file, so opening it is a redirect
+  // and nothing is created: open the same file twice and you are simply in the
+  // same editor on the same file, the way any other editor behaves.
+  if (isLocalMode(env)) return redirect(`/docs/${encodeURIComponent(fileId)}`);
+
   const result = await importDriveFileToRoom(env, fileId, gate.access.email);
   if (!result.ok) {
     if (result.status === 403) return { gate: "forbidden" as const };

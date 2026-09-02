@@ -1,6 +1,7 @@
 import type { Route } from "./+types/slides.$id";
-import { getAgentByName } from "agents";
 import { isValidDocumentId } from "~/shared/constants";
+import { isLocalFileId } from "~/lib/localfs-ids";
+import { resolveDoc } from "~/lib/doc-resolve.server";
 import { getCloudflare } from "~/lib/cloudflare.server";
 import { getDriveAccessToken, driveRead, driveConfigured } from "~/lib/google.server";
 import { buildSlidesHtml } from "~/lib/slides-build";
@@ -17,7 +18,7 @@ import type { DocRole, DriveMeta } from "~/shared/types";
  */
 export async function loader({ params, request, context }: Route.LoaderArgs) {
   const id = params.id;
-  if (!isValidDocumentId(id)) return new Response("not found", { status: 404 });
+  if (!isValidDocumentId(id) && !isLocalFileId(id)) return new Response("not found", { status: 404 });
 
   const url = new URL(request.url);
   const docKey = url.searchParams.get("k") ?? "";
@@ -27,12 +28,7 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
   const separateFragments = !url.searchParams.has("combine-fragments");
 
   const { env } = getCloudflare(context);
-  const stub = await getAgentByName(env.DocumentAgent, id);
-  const res = await stub.fetch(new Request(`https://do/?k=${encodeURIComponent(docKey)}`));
-  const { role, drive } = (await res.json()) as {
-    role: DocRole | null;
-    drive: DriveMeta | null;
-  };
+  const { role, drive } = await resolveDoc(env, id, docKey);
   if (!role) return new Response("forbidden", { status: 403 });
 
   try {

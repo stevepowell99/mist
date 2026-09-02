@@ -3,6 +3,7 @@ import { useAgent } from "agents/react";
 import * as Y from "yjs";
 import { Awareness } from "y-protocols/awareness";
 import { YjsProvider } from "./yjs-provider";
+import { agentTransport } from "./doc-transport";
 import { useUserIdentity } from "./useUserIdentity";
 import type { DocMode } from "~/shared/types";
 
@@ -143,5 +144,9 @@ export function useYjsEditor(docId: string, docKey: string | null = null) {
     };
   }, [socket]);
 
-  return { doc, awareness, socket, synced, paused, resume, user, setUserName, needsName, dismissNamePrompt, mode, setMode, docState, isOnboarding };
+  // The room's transport. DocumentContext talks to this rather than to the
+  // socket, so the same code drives a local file, which has no socket at all.
+  const transport = useMemo(() => agentTransport(socket), [socket]);
+
+  return { doc, awareness, socket, transport, synced, paused, resume, user, setUserName, needsName, dismissNamePrompt, mode, setMode, docState, isOnboarding };
 }

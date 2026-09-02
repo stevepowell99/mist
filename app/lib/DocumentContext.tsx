@@ -3,6 +3,7 @@ import type { EditorView } from "@codemirror/view";
 import type { CapturedSelection, DocMode, DocRole, DriveMeta } from "~/shared/types";
 import type { MatchedThread } from "~/lib/comment-threads";
 import type { useYjsEditor } from "~/lib/useYjsEditor";
+import type { useLocalEditor } from "~/lib/useLocalEditor";
 import { useTextThreads } from "~/lib/useTextThreads";
 import { commentTextAt } from "~/lib/cm-comments";
 import { serializeThreads, rawFrontmatter } from "~/lib/thread-serialization";
@@ -20,7 +21,7 @@ const DEFAULT_CLASSES = parseCssClasses(DECK_BASE_CSS);
 export interface DocumentContextValue {
   docId: string;
   createdAt: number | null;
-  yjs: ReturnType<typeof useYjsEditor>;
+  yjs: ReturnType<typeof useYjsEditor> | ReturnType<typeof useLocalEditor>;
   /** The CodeMirror view backing the editor (Y.Text core). */
   view: EditorView | null;
   markdown: string;
@@ -170,7 +171,7 @@ export function DocumentProvider({
 }: {
   docId: string;
   createdAt: number | null;
-  yjs: ReturnType<typeof useYjsEditor>;
+  yjs: ReturnType<typeof useYjsEditor> | ReturnType<typeof useLocalEditor>;
   role?: DocRole;
   docKey?: string | null;
   suggestKey?: string | null;
@@ -262,22 +263,15 @@ export function DocumentProvider({
     yjs.setMode(yjs.mode === "edit" ? "suggest" : "edit");
   }, [yjs, role]);
 
-  // Relay the serialized document to the agent for Drive-backed docs. The agent
-  // writes back to Drive on an explicit save (commitNow).
+  // Hand the serialized document to the transport. For a room that relays it to
+  // the agent, which writes it out on an explicit save; for a local file it IS
+  // the save, and only commitNow writes.
   const sendDoc = useCallback(
     (commitNow: boolean) => {
       if (!backed) return;
-      const socket = yjs.socket as unknown as { send?: (data: string) => void } | null;
-      if (!socket?.send) return;
-      try {
-        socket.send(
-          JSON.stringify({ type: "doc", content: serializeThreads(markdown, threads, frontmatter), commitNow }),
-        );
-      } catch {
-        // socket not ready; the next change retries
-      }
+      yjs.transport.send(serializeThreads(markdown, threads, frontmatter), commitNow);
     },
-    [backed, yjs.socket, markdown, threads, frontmatter],
+    [backed, yjs.transport, markdown, threads, frontmatter],
   );
 
   const saveNow = useCallback(() => sendDoc(true), [sendDoc]);
@@ -306,13 +300,8 @@ export function DocumentProvider({
   // Ask the relay to pull the current Drive version in (used to resolve an
   // upstream change when the body also has local edits: Drive wins).
   const reloadFromDrive = useCallback(() => {
-    const socket = yjs.socket as unknown as { send?: (data: string) => void } | null;
-    try {
-      socket?.send?.(JSON.stringify({ type: "pull" }));
-    } catch {
-      // socket not ready; the user can retry
-    }
-  }, [yjs.socket]);
+    yjs.transport.pull();
+  }, [yjs.transport]);
 
   // SAVE / DIRTY STATE MACHINE (Drive-backed docs). The badge is driven by a few
   // interacting flags; the lifecycle is:
@@ -387,12 +376,8 @@ export function DocumentProvider({
 
   // Clear the unsaved state when the agent confirms a commit.
   useEffect(() => {
-    const socket = yjs.socket as unknown as WebSocket | null;
-    if (!socket) return;
-    const onMsg = (e: MessageEvent) => {
-      if (typeof e.data !== "string") return;
-      try {
-        const m = JSON.parse(e.data) as { type?: string; hash?: string; name?: string | null };
+    return yjs.transport.subscribe((m) => {
+      {
         if (m.type === "committed" && typeof m.hash === "string") {
           // A save landed: the agent confirms the hash it wrote. This is what
           // clears the unsaved badge after a real edit; it matches the client's
@@ -422,13 +407,9 @@ export function DocumentProvider({
         } else if (m.type === "upstream-changed") {
           setUpstreamChanged(true);
         }
-      } catch {
-        // not a JSON control message
       }
-    };
-    socket.addEventListener("message", onMsg);
-    return () => socket.removeEventListener("message", onMsg);
-  }, [yjs.socket]);
+    });
+  }, [yjs.transport]);
 
   // Not "unsaved" until this user has edited: a freshly loaded file is in sync, so
   // the badge stays "Synced" through the load settle instead of flashing "Saving".

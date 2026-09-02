@@ -62,6 +62,11 @@ class DocumentAgent extends Agent {
   private awareness: awarenessProtocol.Awareness | null = null;
   // Wall-clock of the last Drive upstream check, to throttle reconnect storms.
   private lastUpstreamCheck = 0;
+  /** The Yjs client ids each WebSocket has announced. Awareness is keyed by the
+   *  Yjs client id, which the browser generates and which has nothing to do with
+   *  the Agents SDK connection id, so a close can only clear the right entries by
+   *  remembering what that connection announced. */
+  private clientsByConnection = new Map<string, Set<number>>();
 
   private ensureInitialised(): { doc: Y.Doc; awareness: awarenessProtocol.Awareness } {
     if (this.doc && this.awareness) {
@@ -70,6 +75,24 @@ class DocumentAgent extends Agent {
 
     this.doc = new Y.Doc();
     this.awareness = new awarenessProtocol.Awareness(this.doc);
+
+    // Note which connection announced which Yjs client id, so onClose can drop
+    // exactly those states. Without it a disconnected editor stays in the
+    // awareness map and every later client is told about a peer that is not
+    // there, complete with its stale cursor and selection.
+    this.awareness.on(
+      "update",
+      (
+        { added, updated }: { added: number[]; updated: number[]; removed: number[] },
+        origin: unknown,
+      ) => {
+        const id = (origin as { id?: unknown } | null)?.id;
+        if (typeof id !== "string") return; // a server-side change, not a client
+        const seen = this.clientsByConnection.get(id) ?? new Set<number>();
+        for (const client of [...added, ...updated]) seen.add(client);
+        this.clientsByConnection.set(id, seen);
+      },
+    );
 
     // Create table if needed
     this.sql`
@@ -299,16 +322,21 @@ class DocumentAgent extends Agent {
     _reason: string,
     _wasClean: boolean,
   ) {
-    if (this.awareness) {
-      // Remove this client's awareness state
-      awarenessProtocol.removeAwarenessStates(
-        this.awareness,
-        // Agents SDK uses string IDs; awareness protocol expects numbers.
-      // The protocol converts via toString() internally, so this is safe.
-      [connection.id as unknown as number],
-        null,
-      );
-    }
+    const clients = this.clientsByConnection.get(connection.id);
+    this.clientsByConnection.delete(connection.id);
+    if (!this.awareness || !clients || clients.size === 0) return;
+
+    // Drop this editor's presence, then tell everyone still here. Removal is
+    // itself an awareness update (the state goes null and the clock advances),
+    // so the remaining clients need to be sent it or they keep drawing a
+    // collaborator who has gone.
+    const gone = [...clients];
+    awarenessProtocol.removeAwarenessStates(this.awareness, gone, null);
+    const update = awarenessProtocol.encodeAwarenessUpdate(this.awareness, gone);
+    const encoder = encoding.createEncoder();
+    encoding.writeVarUint(encoder, MSG_AWARENESS);
+    encoding.writeVarUint8Array(encoder, update);
+    this.broadcastBinary(encoding.toUint8Array(encoder), connection.id);
   }
 
   /**
@@ -611,8 +639,6 @@ class DocumentAgent extends Agent {
       // Create / initialise the document
       const { doc } = this.ensureInitialised();
 
-      // The seed body is read before the exists check, because whether this is a
-      // creation or a re-open of the same file is decided by what it carries.
       const contentType = request.headers.get("Content-Type") || "";
       let body: SeedBody | null = null;
       if (contentType.includes("application/json")) {
@@ -627,24 +653,7 @@ class DocumentAgent extends Agent {
         SELECT value FROM doc_state WHERE key = 'exists'
       `;
       if (existsRows.length > 0) {
-        // Re-opening a file whose room already exists. Hand back the same room's
-        // keys rather than refusing: with a stable room id per file (local mode)
-        // this is the ordinary second open, and the caller has just read the file
-        // and, in Drive mode, passed its ACL. Deliberately NOT re-seeded, because
-        // the room's Y.Text is the live content and the file on disk may be older
-        // than unsaved edits held here; the connect-time upstream check is what
-        // reconciles the two.
-        const storedRaw = this.readStoredText("drive");
-        const stored = storedRaw ? (JSON.parse(storedRaw) as DriveMeta) : null;
-        if (stored && body?.drive && stored.fileId === body.drive.fileId) {
-          const keys = this.ensureKeys();
-          this.logSync("reopen", "same file, joined the existing room");
-          return new Response(
-            JSON.stringify({ ok: true, editKey: keys.editKey, suggestKey: keys.suggestKey, reused: true }),
-            { headers: { "Content-Type": "application/json" } },
-          );
-        }
-        // A different file on the same id: still a collision, still refused.
+        // Creation is one-shot: re-posting an existing id must not leak its keys
         return new Response(JSON.stringify({ ok: false, error: "document already exists" }), {
           status: 409,
           headers: { "Content-Type": "application/json" },

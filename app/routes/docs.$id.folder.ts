@@ -1,6 +1,7 @@
 import type { Route } from "./+types/docs.$id.folder";
-import { getAgentByName } from "agents";
 import { isValidDocumentId } from "~/shared/constants";
+import { isLocalFileId } from "~/lib/localfs-ids";
+import { resolveDoc } from "~/lib/doc-resolve.server";
 import { getCloudflare } from "~/lib/cloudflare.server";
 import { DriveBackend } from "~/lib/backend.server";
 import { driveAccess, driveUnauthenticated } from "~/lib/drive-access.server";
@@ -15,7 +16,7 @@ import type { DocRole, DriveMeta } from "~/shared/types";
  */
 export async function loader({ params, request, context }: Route.LoaderArgs) {
   const id = params.id;
-  if (!isValidDocumentId(id)) {
+  if (!isValidDocumentId(id) && !isLocalFileId(id)) {
     return Response.json({ error: "not found" }, { status: 404 });
   }
 
@@ -24,12 +25,7 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
   const ref = url.searchParams.get("ref");
 
   const { env } = getCloudflare(context);
-  const stub = await getAgentByName(env.DocumentAgent, id);
-  const res = await stub.fetch(new Request(`https://do/?k=${encodeURIComponent(docKey)}`));
-  const { role, drive } = (await res.json()) as {
-    role: DocRole | null;
-    drive: DriveMeta | null;
-  };
+  const { role, drive } = await resolveDoc(env, id, docKey);
 
   if (!role) {
     return Response.json({ error: "forbidden" }, { status: 403 });

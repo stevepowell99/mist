@@ -1,18 +1,16 @@
 import { getAgentByName } from "agents";
-import { documentIdForFile, generateDocumentId } from "~/shared/constants";
+import { generateDocumentId } from "~/shared/constants";
 import { deserializeThreads, serializeThreads } from "~/lib/thread-serialization";
 import { DriveBackend } from "~/lib/backend.server";
-import { getDriveAccessToken, driveGetMeta, isLocalMode, parseDriveFileId } from "~/lib/google.server";
+import { getDriveAccessToken, driveGetMeta, parseDriveFileId } from "~/lib/google.server";
 import type { DriveMeta } from "~/shared/types";
 import { stripMistBanner } from "~/shared/mist-banner";
 import { fileAccessRole } from "~/lib/drive-access.server";
 
 /**
- * Open a Google Drive markdown file into a gmist room, seeded from the file's
- * current content and bound to it for write-back. In local mode the room id is
- * derived from the file id, so re-opening a file joins the room it already has
- * rather than forking a second copy; the agent then returns that room's keys
- * and skips re-seeding, because its CRDT is the live content. Shared by the POST /drive/import
+ * Open a Google Drive markdown file into a new gmist room, seeded from the
+ * file's current content and bound to it for write-back. Drive only: a local
+ * file has no room, and /open redirects straight to it. Shared by the POST /drive/import
  * route (the in-app quick-open / sidebar) and the GET /open route (a direct
  * deep-link from an external tool, e.g. TagFox). The caller does the session gate
  * (openDriveRequest) and passes the signed-in user's email; the file's own Drive
@@ -51,12 +49,7 @@ export async function importDriveFileToRoom(
     return { ok: false, error: err instanceof Error ? err.message : "Drive read failed", status: 502 };
   }
 
-  // One room per file in local mode. The file id there is the path itself, so a
-  // stable room id costs nothing and removes the whole duplicate-room hazard:
-  // two opens of one file used to mint two rooms, each holding its own copy of
-  // the content and its own baseline, both saving back to the same path. Drive
-  // keeps random ids, so a room stays unguessable for a file whose id is known.
-  const id = isLocalMode(env) ? documentIdForFile(fileId) : generateDocumentId();
+  const id = generateDocumentId();
   const stub = await getAgentByName(env.DocumentAgent, id);
   const { body, threads, frontmatter } = deserializeThreads(content);
   const res = await stub.fetch(
