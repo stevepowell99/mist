@@ -92,17 +92,11 @@ export class DriveBackend implements DocBackend {
     expectedVersion: string | null,
     _message: string,
   ): Promise<{ version: string | null }> {
-    const token = await this.token();
-    // Conditional guard: if the file moved underneath us, reject so the caller
-    // re-reads and reconciles rather than clobbering (the relay forks the other
-    // version to a sibling, see DocumentAgent.checkUpstream).
-    if (expectedVersion) {
-      const current = await driveGetMeta(token, this.meta.fileId);
-      if (current.version && current.version !== expectedVersion) {
-        throw new Error("file changed upstream; reload and retry");
-      }
-    }
-    return driveWrite(token, this.meta.fileId, text);
+    // The conditional guard lives in the storage layer now, so the local backend
+    // can check and write in one step instead of leaving a window between them.
+    // A mismatch throws "changed upstream" and the caller reconciles (the relay
+    // forks the other version to a sibling, see DocumentAgent.checkUpstream).
+    return driveWrite(await this.token(), this.meta.fileId, text, expectedVersion);
   }
 
   /** Write `text` to a sibling `<base> (<tag> <stamp>).<ext>` in the same folder,

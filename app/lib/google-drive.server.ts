@@ -135,12 +135,24 @@ export async function driveRead(token: string, fileId: string): Promise<{ text: 
   return { text: await res.text(), version: meta.version };
 }
 
-/** Overwrite a file's content, returning the new version token. */
+/** Overwrite a file's content, returning the new version token. `expectedVersion`
+ *  is the headRevisionId the caller last saw: a mismatch means the file moved
+ *  under us, so refuse and let the caller reconcile. Drive has no conditional
+ *  PATCH, so this is a read-then-write and a small race remains; the caller's
+ *  churn recovery is what absorbs it. The local backend does the same check
+ *  atomically. */
 export async function driveWrite(
   token: string,
   fileId: string,
   content: string,
+  expectedVersion?: string | null,
 ): Promise<{ version: string | null }> {
+  if (expectedVersion) {
+    const current = await driveGetMeta(token, fileId);
+    if (current.version && current.version !== expectedVersion) {
+      throw new Error("file changed upstream; reload and retry");
+    }
+  }
   const res = await fetch(
     `${UPLOAD}/files/${fileId}?uploadType=media&fields=headRevisionId&${COMMON}`,
     {

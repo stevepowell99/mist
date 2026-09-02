@@ -10,6 +10,32 @@ export function isValidDocumentId(id: string): boolean {
 const ID_CHARS = "abcdefghijklmnopqrstuvwxyz0123456789";
 const ID_LENGTH = 8;
 
+/**
+ * The room id for a storage file, derived from the file id so the same file
+ * always resolves to the same room. Opening a file twice then joins the one
+ * room instead of forking a second copy of the content, with its own baseline
+ * and its own save loop, that writes back over the first. Used in local mode,
+ * where the file id is itself the file's path and a room is never handed to
+ * anyone else; Drive rooms keep random ids, so a room id stays unguessable for
+ * a file whose id a stranger may know.
+ *
+ * FNV-1a over the file id, rendered in the same alphabet as a random id so it
+ * satisfies isValidDocumentId and is indistinguishable in a URL.
+ */
+export function documentIdForFile(fileId: string): string {
+  let h = 0xcbf29ce484222325n;
+  for (let i = 0; i < fileId.length; i++) {
+    h ^= BigInt(fileId.charCodeAt(i));
+    h = (h * 0x100000001b3n) & 0xffffffffffffffffn;
+  }
+  let id = "";
+  for (let i = 0; i < ID_LENGTH; i++) {
+    id = ID_CHARS[Number(h % 36n)] + id;
+    h /= 36n;
+  }
+  return id;
+}
+
 export function generateDocumentId(): string {
   let id = "";
   for (let i = 0; i < ID_LENGTH; i++) {

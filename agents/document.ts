@@ -47,6 +47,16 @@ function generateSecretKey(): string {
   return key;
 }
 
+/** The JSON a create/open POST carries: the file's content and metadata. */
+interface SeedBody {
+  content?: string;
+  threads?: unknown[];
+  onboarding?: boolean;
+  drive?: DriveMeta;
+  frontmatter?: string;
+  driveVersion?: string | null;
+}
+
 class DocumentAgent extends Agent {
   private doc: Y.Doc | null = null;
   private awareness: awarenessProtocol.Awareness | null = null;
@@ -601,11 +611,40 @@ class DocumentAgent extends Agent {
       // Create / initialise the document
       const { doc } = this.ensureInitialised();
 
-      // Creation is one-shot: re-posting an existing id must not leak its keys
+      // The seed body is read before the exists check, because whether this is a
+      // creation or a re-open of the same file is decided by what it carries.
+      const contentType = request.headers.get("Content-Type") || "";
+      let body: SeedBody | null = null;
+      if (contentType.includes("application/json")) {
+        try {
+          body = (await request.json()) as SeedBody;
+        } catch {
+          body = null; // malformed JSON: the document is still created, empty
+        }
+      }
+
       const existsRows = this.sql<{ value: ArrayBuffer }>`
         SELECT value FROM doc_state WHERE key = 'exists'
       `;
       if (existsRows.length > 0) {
+        // Re-opening a file whose room already exists. Hand back the same room's
+        // keys rather than refusing: with a stable room id per file (local mode)
+        // this is the ordinary second open, and the caller has just read the file
+        // and, in Drive mode, passed its ACL. Deliberately NOT re-seeded, because
+        // the room's Y.Text is the live content and the file on disk may be older
+        // than unsaved edits held here; the connect-time upstream check is what
+        // reconciles the two.
+        const storedRaw = this.readStoredText("drive");
+        const stored = storedRaw ? (JSON.parse(storedRaw) as DriveMeta) : null;
+        if (stored && body?.drive && stored.fileId === body.drive.fileId) {
+          const keys = this.ensureKeys();
+          this.logSync("reopen", "same file, joined the existing room");
+          return new Response(
+            JSON.stringify({ ok: true, editKey: keys.editKey, suggestKey: keys.suggestKey, reused: true }),
+            { headers: { "Content-Type": "application/json" } },
+          );
+        }
+        // A different file on the same id: still a collision, still refused.
         return new Response(JSON.stringify({ ok: false, error: "document already exists" }), {
           status: 409,
           headers: { "Content-Type": "application/json" },
@@ -635,10 +674,8 @@ class DocumentAgent extends Agent {
       `;
 
       // If the request has a JSON body with content, populate the Yjs doc
-      const contentType = request.headers.get("Content-Type") || "";
-      if (contentType.includes("application/json")) {
+      if (body) {
         try {
-          const body = await request.json() as { content?: string; threads?: unknown[]; onboarding?: boolean; drive?: DriveMeta; frontmatter?: string; driveVersion?: string | null };
           if (body.drive) {
             const d = body.drive;
             this.sql`

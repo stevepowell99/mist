@@ -144,8 +144,9 @@ export async function driveWrite(
   token: string,
   fileId: string,
   content: string,
+  expectedVersion?: string | null,
 ): Promise<{ version: string | null }> {
-  return call<{ version: string | null }>(token, "/write" + q({ path: pathOf(fileId) }), {
+  return call<{ version: string | null }>(token, "/write" + q({ path: pathOf(fileId), expected: expectedVersion ?? undefined }), {
     method: "POST",
     headers: { "Content-Type": "text/markdown; charset=utf-8" },
     body: content,

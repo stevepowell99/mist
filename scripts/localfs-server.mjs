@@ -187,6 +187,25 @@ const handlers = {
   "POST /write": async (params, req) => {
     const abs = absOf(params.get("path"));
     const buf = await readBody(req);
+    // Conditional write. `expected` is the version the caller last saw, and the
+    // check happens HERE, next to the write, because this process is the only
+    // one that touches the disk. Doing it in the worker meant a stat, a network
+    // hop and then a write, with a window in between in which the file could
+    // change; a stale room could win that race and its own older copy of the
+    // file would land with nothing said. A caller with no baseline (a new file,
+    // a deliberate overwrite) simply omits it.
+    const expected = params.get("expected");
+    if (expected) {
+      let current = null;
+      try {
+        current = hashOf(await fs.readFile(abs));
+      } catch {
+        current = null; // gone since the caller read it; treat as unchanged
+      }
+      if (current !== null && current !== expected) {
+        throw new HttpError(409, "file changed upstream; reload and retry");
+      }
+    }
     await fs.mkdir(path.dirname(abs), { recursive: true });
     await fs.writeFile(abs, buf);
     console.log(`localfs: wrote ${abs} (${buf.length} bytes)`);

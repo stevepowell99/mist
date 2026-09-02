@@ -92,8 +92,13 @@ export async function driveRead(token: string, fileId: string): Promise<{ text: 
   return { text: text.replace(/\r\n?/g, "\n"), version };
 }
 
-export function driveWrite(token: string, fileId: string, content: string): Promise<{ version: string | null }> {
-  return impl(token).driveWrite(token, fileId, content);
+export function driveWrite(
+  token: string,
+  fileId: string,
+  content: string,
+  expectedVersion?: string | null,
+): Promise<{ version: string | null }> {
+  return impl(token).driveWrite(token, fileId, content, expectedVersion);
 }
 
 export function driveListFolder(token: string, folderId: string): Promise<DriveEntry[]> {
