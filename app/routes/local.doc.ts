@@ -1,7 +1,7 @@
 import type { Route } from "./+types/local.doc";
 import { getCloudflare } from "~/lib/cloudflare.server";
 import { openDriveRequest } from "~/lib/drive-access.server";
-import { driveRead, driveWrite, getDriveAccessToken, isLocalMode } from "~/lib/google.server";
+import { driveGetMeta, driveRead, driveWrite, getDriveAccessToken, isLocalMode } from "~/lib/google.server";
 import { isLocalFileId } from "~/lib/localfs-ids";
 import { json } from "~/lib/http.server";
 
@@ -28,8 +28,22 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 
   const id = target(request);
   if (!id) return json({ error: "not a local file id" }, 400);
+  const token = await getDriveAccessToken(env);
+
+  // `stat=1` asks only whether the file has changed, which is what the editor
+  // polls a few times a minute to notice an outside edit. Cheap enough to poll:
+  // the sidecar is on loopback and the answer is one content hash.
+  if (new URL(request.url).searchParams.has("stat")) {
+    try {
+      const meta = await driveGetMeta(token, id);
+      return json({ version: meta.version ?? null });
+    } catch {
+      return json({ version: null });
+    }
+  }
+
   try {
-    const { text, version } = await driveRead(await getDriveAccessToken(env), id);
+    const { text, version } = await driveRead(token, id);
     return json({ text, version });
   } catch (err) {
     return json({ error: err instanceof Error ? err.message : "read failed" }, 404);

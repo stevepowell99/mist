@@ -7,6 +7,9 @@ import { quickHash } from "~/shared/hash";
 import type { DocControl, DocTransport } from "./doc-transport";
 import type { DocMode } from "~/shared/types";
 
+/** How often to ask whether the file has changed underneath the editor. */
+const WATCH_MS = 2000;
+
 /**
  * A document that is just a file.
  *
@@ -42,6 +45,13 @@ export function useLocalEditor(fileId: string) {
    *  while another is in flight replaces it rather than queueing behind it. */
   const chainRef = useRef<Promise<void>>(Promise.resolve());
   const pendingRef = useRef<string | null>(null);
+  /** The editor body as it stood at the last load or save. Anything else in the
+   *  Y.Text means the user has typed since, which decides whether an outside
+   *  change can be taken silently or has to be offered. */
+  const cleanBodyRef = useRef<string | null>(null);
+  /** The outside version we have already told the user about, so a change they
+   *  have chosen not to take is announced once rather than on every poll. */
+  const warnedRef = useRef<string | null>(null);
   const emit = useCallback((m: DocControl) => {
     for (const fn of listeners.current) fn(m);
   }, []);
@@ -78,11 +88,32 @@ export function useLocalEditor(fileId: string) {
       const seeded = serializeThreads(body, [], frontmatter).replace(/\r\n?/g, "\n");
       const ytext = doc.getText("body");
       doc.transact(() => {
-        if (replace) ytext.delete(0, ytext.length);
-        if (ytext.length === 0) ytext.insert(0, seeded);
+        if (replace) {
+          // Rewrite only the span that actually differs. Deleting the whole body
+          // and reinserting it would work, but it throws the cursor to the top and
+          // drops the scroll position on every outside edit, however small.
+          const current = ytext.toString();
+          if (current !== seeded) {
+            let head = 0;
+            const max = Math.min(current.length, seeded.length);
+            while (head < max && current[head] === seeded[head]) head++;
+            let tail = 0;
+            while (
+              tail < max - head &&
+              current[current.length - 1 - tail] === seeded[seeded.length - 1 - tail]
+            ) {
+              tail++;
+            }
+            ytext.delete(head, current.length - head - tail);
+            ytext.insert(head, seeded.slice(head, seeded.length - tail));
+          }
+        } else if (ytext.length === 0) {
+          ytext.insert(0, seeded);
+        }
         const map = doc.getMap<string>("threads");
         for (const thread of threads) map.set(thread.id, JSON.stringify(thread));
       });
+      cleanBodyRef.current = ytext.toString();
       return true;
     },
     [doc, fileId],
@@ -120,6 +151,7 @@ export function useLocalEditor(fileId: string) {
         if (!res.ok) return; // transient; the next edit retries
         const { version } = (await res.json()) as { version: string | null };
         versionRef.current = version;
+        cleanBodyRef.current = doc.getText("body").toString();
         emit({ type: "committed", hash: quickHash(content) });
       } catch {
         // the sidecar is unreachable; the next edit retries
@@ -144,7 +176,64 @@ export function useLocalEditor(fileId: string) {
         return () => listeners.current.delete(listener);
       },
     };
-  }, [fileId, emit, load]);
+  }, [doc, fileId, emit, load]);
+
+  /**
+   * Notice the file changing underneath us, the way a desktop editor does.
+   *
+   * An agent, a git checkout, Drive for Desktop or another editor writes the
+   * file; a poll of its content hash spots the new version within a couple of
+   * seconds. With nothing typed here since the last load or save, the change is
+   * taken silently and the editor updates in place. With local edits
+   * outstanding it is not taken: the upstream-changed banner offers it, so the
+   * choice stays the user's.
+   *
+   * Polling rather than a file watcher and a socket, deliberately. The sidecar
+   * is on loopback and the answer is one content hash, so the cost is nil, and
+   * it adds no server-side state to a mode whose whole point is having none.
+   */
+  useEffect(() => {
+    if (!synced) return;
+    let stopped = false;
+
+    const check = async () => {
+      if (stopped || document.hidden) return;
+      try {
+        const res = await fetch(`/local/doc?stat=1&id=${encodeURIComponent(fileId)}`);
+        if (!res.ok) return;
+        const { version } = (await res.json()) as { version: string | null };
+        if (stopped || !version || version === versionRef.current) return;
+
+        const dirty =
+          cleanBodyRef.current !== null && doc.getText("body").toString() !== cleanBodyRef.current;
+        if (dirty) {
+          if (warnedRef.current !== version) {
+            warnedRef.current = version;
+            emit({ type: "upstream-changed" });
+          }
+          return;
+        }
+        if (await load(true)) emit({ type: "reloaded" });
+      } catch {
+        // the sidecar is briefly unreachable; the next tick tries again
+      }
+    };
+
+    const timer = setInterval(check, WATCH_MS);
+    // Returning to the tab is when an outside change is most likely to be
+    // waiting, so look then rather than waiting out the interval.
+    const onVisible = () => {
+      if (!document.hidden) void check();
+    };
+    window.addEventListener("focus", onVisible);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      stopped = true;
+      clearInterval(timer);
+      window.removeEventListener("focus", onVisible);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [synced, fileId, doc, load, emit]);
 
   return {
     doc,
