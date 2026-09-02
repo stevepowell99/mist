@@ -146,6 +146,7 @@ export async function driveWrite(
   fileId: string,
   content: string,
   expectedVersion?: string | null,
+  _client?: string | null,
 ): Promise<{ version: string | null }> {
   if (expectedVersion) {
     const current = await driveGetMeta(token, fileId);

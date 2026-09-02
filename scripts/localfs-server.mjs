@@ -27,9 +27,33 @@
  */
 import { createHash, timingSafeEqual } from "node:crypto";
 import fs from "node:fs/promises";
+import fsSync from "node:fs";
 import http from "node:http";
 import path from "node:path";
 import { readDevVars } from "./dev-vars.mjs";
+
+/**
+ * A durable record of every write, and every refusal, to a local file.
+ *
+ * This process is the only thing that touches the disk, so it is the only place
+ * that knows what was actually there when a write arrived. Without that record
+ * an overwrite can only be reconstructed afterwards from commit sizes and
+ * guesswork, which on 2 September 2026 produced two confident and wrong
+ * attributions in a row. stdout is not enough: it goes to whichever terminal
+ * started the server and is lost on the next restart.
+ *
+ * One JSON object per line, appended, never rotated by us: the file is small
+ * (a line per save) and losing history is the whole thing it exists to prevent.
+ */
+const LOG_PATH = path.join(process.cwd(), "logs", "localfs-writes.log");
+function record(entry) {
+  try {
+    fsSync.mkdirSync(path.dirname(LOG_PATH), { recursive: true });
+    fsSync.appendFileSync(LOG_PATH, JSON.stringify({ at: new Date().toISOString(), ...entry }) + "\n");
+  } catch {
+    // logging must never be the reason a save fails
+  }
+}
 
 const vars = { ...readDevVars(), ...process.env };
 const TOKEN = vars.LOCAL_FS_TOKEN;
@@ -195,21 +219,28 @@ const handlers = {
     // file would land with nothing said. A caller with no baseline (a new file,
     // a deliberate overwrite) simply omits it.
     const expected = params.get("expected");
-    if (expected) {
-      let current = null;
-      try {
-        current = hashOf(await fs.readFile(abs));
-      } catch {
-        current = null; // gone since the caller read it; treat as unchanged
-      }
-      if (current !== null && current !== expected) {
-        throw new HttpError(409, "file changed upstream; reload and retry");
-      }
+    const client = req.headers["x-gmist-client"] || null;
+    let current = null;
+    let existing = null;
+    try {
+      existing = await fs.readFile(abs);
+      current = hashOf(existing);
+    } catch {
+      current = null; // no file yet, or gone since the caller read it
+    }
+    if (expected && current !== null && current !== expected) {
+      record({ op: "refused", path: abs, bytes: buf.length, was: existing.length, expected, onDisk: current, client });
+      throw new HttpError(409, "file changed upstream; reload and retry");
     }
     await fs.mkdir(path.dirname(abs), { recursive: true });
     await fs.writeFile(abs, buf);
-    console.log(`localfs: wrote ${abs} (${buf.length} bytes)`);
-    return { version: hashOf(buf) };
+    const version = hashOf(buf);
+    // `was` next to `bytes` is the pair worth having: a save that shrinks a file
+    // by twenty thousand characters is the shape of a stale buffer landing, and
+    // it is invisible in a byte count on its own.
+    record({ op: "wrote", path: abs, bytes: buf.length, was: existing ? existing.length : 0, expected: expected ?? null, onDisk: current, version, client });
+    console.log(`localfs: wrote ${abs} (${buf.length} bytes, was ${existing ? existing.length : 0})`);
+    return { version };
   },
 
   "GET /list": async (params) => ({ entries: await listDir(absOf(params.get("path"))) }),

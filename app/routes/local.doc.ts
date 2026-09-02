@@ -63,8 +63,14 @@ export async function action({ request, context }: Route.ActionArgs) {
   // which only a deliberate overwrite should ever ask for.
   const expected = new URL(request.url).searchParams.get("expected");
   const content = await request.text();
+  // The browser's own identity, which only this layer can see: the sidecar is
+  // reached by the worker, not by the page.
+  const client = [request.headers.get("user-agent"), request.headers.get("referer")]
+    .filter(Boolean)
+    .join(" | ")
+    .slice(0, 300);
   try {
-    const { version } = await driveWrite(await getDriveAccessToken(env), id, content, expected);
+    const { version } = await driveWrite(await getDriveAccessToken(env), id, content, expected, client);
     return json({ version });
   } catch (err) {
     const message = err instanceof Error ? err.message : "write failed";

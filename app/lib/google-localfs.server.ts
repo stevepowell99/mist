@@ -145,10 +145,16 @@ export async function driveWrite(
   fileId: string,
   content: string,
   expectedVersion?: string | null,
+  client?: string | null,
 ): Promise<{ version: string | null }> {
   return call<{ version: string | null }>(token, "/write" + q({ path: pathOf(fileId), expected: expectedVersion ?? undefined }), {
     method: "POST",
-    headers: { "Content-Type": "text/markdown; charset=utf-8" },
+    headers: {
+      "Content-Type": "text/markdown; charset=utf-8",
+      // Who asked for this write. The sidecar records it, so an overwrite names
+      // its own source instead of being reconstructed from commit sizes later.
+      ...(client ? { "X-Gmist-Client": client } : {}),
+    },
     body: content,
   });
 }

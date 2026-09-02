@@ -29,3 +29,4 @@ public/vendor/
 # gmist headless client session cookie (a credential)
 scripts/.gmist-session
 _tmp/
+logs/

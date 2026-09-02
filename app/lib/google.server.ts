@@ -97,8 +97,9 @@ export function driveWrite(
   fileId: string,
   content: string,
   expectedVersion?: string | null,
+  client?: string | null,
 ): Promise<{ version: string | null }> {
-  return impl(token).driveWrite(token, fileId, content, expectedVersion);
+  return impl(token).driveWrite(token, fileId, content, expectedVersion, client);
 }
 
 export function driveListFolder(token: string, folderId: string): Promise<DriveEntry[]> {
