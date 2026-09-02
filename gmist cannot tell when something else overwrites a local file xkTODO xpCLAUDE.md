@@ -70,11 +70,27 @@ The same session had committed `principles.md` at 06:01, committed again at 06:0
 wrote `rubicon/docs/rubicon-conversation-summary.md` at 06:35:11. `.git/index` was
 refreshed at 06:36:31.
 
-**Line endings separate the two writers.** gmist cannot produce CRLF: the Y.Text body
-is normalised with `text.replace(/\r\n?/g, "\n")` in `replaceBodyFromText`
+**Line endings separate the writers, but only for the 06:55:41 one.** gmist cannot
+produce CRLF: the Y.Text body is normalised in `replaceBodyFromText`
 (`agents/document.ts`), and every `pendingMd` and `lastCommitMd` measured in the four
-databases carries zero CR bytes. The writes at 06:36:26 and 06:55:41 are CRLF. So they
-did not come from gmist.
+databases carries zero CR bytes. The 06:55:41 write is CRLF, so it did not come from
+gmist.
+
+**The 06:36:26 write was LF, not CRLF, which corrects the table below.** Room
+`df22f088` opened twelve seconds after it, at 06:36:38, and recorded
+`driveVersion = e8071be3b7aac524`. That token is the sidecar's hash of the raw bytes it
+read, and hashing the committed blob the same way gives `e8071be3b7aac524` for the LF
+form and `f901c9aed423cdfd` for the CRLF form. So the disk held LF bytes at 06:36:38.
+`core.autocrlf` is `true` in that repository, so a git checkout there writes CRLF, which
+rules git out for the 06:36:26 write and for the earlier revert.
+
+**No agent session made either of those two writes.** Every transcript under
+`~/.claude/projects` was searched for tool calls between 06:29 and 06:37. Three were
+found, all in the concurrent `causal-map-extension` session, and all three read-only: an
+`ls -l` at 06:36:30, a `git diff` at 06:36:38 and a `find` at 06:36:54. That session's
+last write to the file before the loss was at 06:00:59. So the inference that it
+performed the revert does not hold, and the writer of the first two reverts is still
+unidentified.
 
 ## The evidence
 
@@ -111,7 +127,7 @@ Timeline, with what was measured and what was reported:
 | 06:08:44 to 06:30:14 | 32 saves, all successful, last one 18,452 bytes to disk | yes |
 | 06:30:14 to 06:34:38 | file reverted to the exact committed content, LF | yes, by the read at 06:34:38 |
 | 06:34:38, 06:36:38, 06:39:19 | three more rooms open, each reading 12,684 LF | yes |
-| 06:36:26 | file written again, CRLF | reported only |
+| 06:36:26 | file written again, LF (corrected above) | yes, by the read at 06:36:38 |
 | 06:36:31 | `.git/index` refreshed | yes |
 | 06:43:39 | recovered copy put back, 18,452 bytes | yes |
 | 06:55:36 | `_tmp/principles-new.md` staged, 12,723 bytes CRLF | yes |
@@ -140,11 +156,12 @@ document that no longer resembles what is on disk and will keep reporting Saved.
 That is what happened here twice over. The first three overwrites went unremarked
 because nothing was watching, and the fourth destroyed a recovery.
 
-The fix is a conditional write for local files: pass `expected` through `driveWrite`,
-have the sidecar compare it against the file's current hash before writing, and refuse
-with the same "changed upstream" message the Drive path uses, so the existing conflict
-machinery fires. That turns this class of loss into a visible error. It is worth having
-whatever else changes.
+**Fixed in `a0d2bc1`.** `driveWrite` now takes the baseline, and the sidecar compares it
+against the file's current hash in the same step as the write, refusing with a 409 and
+the same "changed upstream" message the Drive path uses, so the existing conflict
+machinery fires. The check sits beside the write rather than in the worker, so there is
+no window between the two for a stale writer to win. Verified against a running sidecar:
+a write carrying a stale baseline is refused and the file is left untouched.
 
 Worth settling alongside it:
 
@@ -173,12 +190,18 @@ this was not the cause of the loss. But had anybody typed in one of them it woul
 saved 12,684 characters over the top with no complaint, and the conditional write above
 is what would refuse it.
 
-Fixing it needs a `fileId -> documentId` index, which does not exist, so it is not a
-one-line change. Things to settle: whether a long-closed room is revived without
-asking, what the second opener sees (joining the live room is the collaborative answer
-and is a change in behaviour), and whether a room holding unsaved `pendingMd` may ever
-be garbage collected. Tracked separately in
-`xkTODO make open reuse the room per Drive file id.md`.
+**Fixed for local mode in `a0d2bc1`, and it needed no index.** A local file's id is its
+own path, so the room id is derived from it and the same file always resolves to the
+same room. The agent answers a repeat open of the same file with that room's existing
+keys instead of a 409, and does not re-seed it, because the room's Y.Text is the live
+content and may hold edits the file does not. Three consecutive opens of one file now
+return one room and one key. The second opener therefore joins the live room, which is
+the behaviour change flagged here and the right one for a single-user local session.
+
+Drive mode still mints a room per open, deliberately: a room id there would otherwise be
+derivable from a Drive file id that people outside the room may know. That half is
+tracked in `xkTODO make open reuse the room per Drive file id.md`, along with what to do
+about reviving a long-closed room and collecting one that holds unsaved `pendingMd`.
 
 ## Recovery recipe
 
