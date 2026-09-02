@@ -156,7 +156,8 @@ document that no longer resembles what is on disk and will keep reporting Saved.
 That is what happened here twice over. The first three overwrites went unremarked
 because nothing was watching, and the fourth destroyed a recovery.
 
-**Fixed in `a0d2bc1`.** `driveWrite` now takes the baseline, and the sidecar compares it
+**Fixed in `a0d2bc1`, and it is now the whole of local mode's conflict handling
+(`ba4354c`).** `driveWrite` takes the baseline, and the sidecar compares it
 against the file's current hash in the same step as the write, refusing with a 409 and
 the same "changed upstream" message the Drive path uses, so the existing conflict
 machinery fires. The check sits beside the write rather than in the worker, so there is
@@ -190,18 +191,15 @@ this was not the cause of the loss. But had anybody typed in one of them it woul
 saved 12,684 characters over the top with no complaint, and the conditional write above
 is what would refuse it.
 
-**Fixed for local mode in `a0d2bc1`, and it needed no index.** A local file's id is its
-own path, so the room id is derived from it and the same file always resolves to the
-same room. The agent answers a repeat open of the same file with that room's existing
-keys instead of a 409, and does not re-seed it, because the room's Y.Text is the live
-content and may hold edits the file does not. Three consecutive opens of one file now
-return one room and one key. The second opener therefore joins the live room, which is
-the behaviour change flagged here and the right one for a single-user local session.
+**Gone for local mode in `ba4354c`.** Not fixed, removed: local mode no longer has
+rooms at all. A local document is the file plus a buffer in the browser tab, so there is
+nothing to mint on an open and no second copy to disagree with the first. `/open?path=`
+redirects to the file and creates nothing.
 
-Drive mode still mints a room per open, deliberately: a room id there would otherwise be
-derivable from a Drive file id that people outside the room may know. That half is
-tracked in `xkTODO make open reuse the room per Drive file id.md`, along with what to do
-about reviving a long-closed room and collecting one that holds unsaved `pendingMd`.
+Drive mode still mints a room per open, and there it is the right shape, because several
+people really do edit one document. Tracked in
+`xkTODO make open reuse the room per Drive file id.md`, along with what to do about
+reviving a long-closed room and collecting one that holds unsaved `pendingMd`.
 
 ## Recovery recipe
 
@@ -268,3 +266,23 @@ the file changing underneath the room within four minutes.
 Do not edit a file in gmist local mode while an agent or another tool is working in the
 same folder. gmist will report the save as done and will not notice the file being
 replaced under it.
+
+
+## Closed, 2 September 2026
+
+Both problems are gone, by removing the thing that caused them rather than by guarding
+it. `ba4354c` takes the room out of local mode: no Durable Object, no WebSocket, no
+awareness, no adopt/fork/re-anchor, and no second copy of the content that could be
+written back later. What remains is an ordinary editor's contract, which is what Steve
+asked for three times before it was heard: read the file, edit a buffer, write it back,
+refuse the write if the file moved.
+
+Verified against a running sidecar: a file opens and edits save; a file changed on disk
+behind the editor refuses the next write, shows Conflict, and the external content
+survives.
+
+**The writer of the two reverts on 2 September is still unidentified**, and that is
+worth remembering rather than assuming the rebuild covered it. It could not have been
+either problem above, since the three rooms never saved. What the rebuild guarantees is
+that a local write now carries a baseline, so the same loss would be refused and
+reported rather than landing silently.
