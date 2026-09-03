@@ -5,10 +5,13 @@ import { useUserIdentity } from "./useUserIdentity";
 import { deserializeThreads, serializeThreads } from "./thread-serialization";
 import { quickHash } from "~/shared/hash";
 import type { DocControl, DocTransport } from "./doc-transport";
+import { shouldOfferRatherThanTake } from "./outside-change";
 import type { DocMode } from "~/shared/types";
 
 /** How often to ask whether the file has changed underneath the editor. */
 const WATCH_MS = 2000;
+
+
 
 /**
  * A document that is just a file.
@@ -52,6 +55,10 @@ export function useLocalEditor(fileId: string) {
   /** The outside version we have already told the user about, so a change they
    *  have chosen not to take is announced once rather than on every poll. */
   const warnedRef = useRef<string | null>(null);
+  /** Every version of this file we have loaded or written. An outside change
+   *  that lands on one of these is a revert to a state we have already been in,
+   *  not somebody's new work, so it is never taken silently. */
+  const seenRef = useRef(new Set<string>());
   const emit = useCallback((m: DocControl) => {
     for (const fn of listeners.current) fn(m);
   }, []);
@@ -81,6 +88,7 @@ export function useLocalEditor(fileId: string) {
       if (!res.ok) return false;
       const { text, version } = (await res.json()) as { text: string; version: string | null };
       versionRef.current = version;
+      if (version) seenRef.current.add(version);
 
       const { body, threads, frontmatter } = deserializeThreads(text);
       // LF only. CodeMirror drops \r, so CRLF in the Y.Text desyncs every editor
@@ -151,6 +159,7 @@ export function useLocalEditor(fileId: string) {
         if (!res.ok) return; // transient; the next edit retries
         const { version } = (await res.json()) as { version: string | null };
         versionRef.current = version;
+        if (version) seenRef.current.add(version);
         cleanBodyRef.current = doc.getText("body").toString();
         emit({ type: "committed", hash: quickHash(content) });
       } catch {
@@ -204,9 +213,23 @@ export function useLocalEditor(fileId: string) {
         const { version } = (await res.json()) as { version: string | null };
         if (stopped || !version || version === versionRef.current) return;
 
-        const dirty =
-          cleanBodyRef.current !== null && doc.getText("body").toString() !== cleanBodyRef.current;
-        if (dirty) {
+        const current = doc.getText("body").toString();
+        const dirty = cleanBodyRef.current !== null && current !== cleanBodyRef.current;
+
+        const reverted = seenRef.current.has(version);
+        // The incoming length decides whether text has gone, so it has to be
+        // read before the change can be taken. Skipped when the answer is
+        // already settled, to keep the ordinary poll to one small request.
+        let incomingLength: number | null = null;
+        if (!dirty && !reverted) {
+          const peek = await fetch(`/local/doc?id=${encodeURIComponent(fileId)}`);
+          if (peek.ok) {
+            const { text } = (await peek.json()) as { text: string };
+            incomingLength = text.length;
+          }
+        }
+
+        if (shouldOfferRatherThanTake({ dirty, reverted, currentLength: current.length, incomingLength })) {
           if (warnedRef.current !== version) {
             warnedRef.current = version;
             emit({ type: "upstream-changed" });

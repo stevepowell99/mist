@@ -2,7 +2,7 @@ import { data, Link } from "react-router";
 import { useRef, useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import type { Route } from "./+types/docs.$id";
 import { APP_NAME, isValidDocumentId } from "~/shared/constants";
-import { isLocalFileId } from "~/lib/localfs-ids";
+import { idToPath, isLocalFileId } from "~/lib/localfs-ids";
 import { resolveDoc } from "~/lib/doc-resolve.server";
 import type { DocRole, DriveMeta } from "~/shared/types";
 import { getCloudflare } from "~/lib/cloudflare.server";
@@ -488,7 +488,21 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
   // The parent folder's name for the navbar breadcrumb. The folder id is on the
   // DriveMeta; its name is the last entry of the folder trail, which the search
   // endpoint already returns, so no new route or schema field is needed.
+  //
+  // For a local file the immediate parent is not enough. Two files can be called
+  // the same thing in folders called the same thing, and one of them can be a
+  // build artefact: `rubicon/docs/principles.md` and
+  // `rubicon-function/app/rubicon/docs/principles.md` both showed as
+  // "docs / principles", which is how forty minutes of editing went into a
+  // directory a deploy script rebuilds from scratch. So show enough of the path
+  // to tell them apart.
   const [folderName, setFolderName] = useState<string | null>(null);
+  const localFolder = useMemo(() => {
+    const path = drive?.fileId ? idToPath(drive.fileId) : null;
+    if (!path) return null;
+    const parts = path.split("\\").join("/").split("/").filter(Boolean);
+    return parts.slice(Math.max(0, parts.length - 4), parts.length - 1).join("/");
+  }, [drive?.fileId]);
   useEffect(() => {
     const fid = drive?.folderId;
     if (!fid) {
@@ -1034,15 +1048,15 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
           </span>
           {/* Parent folder, paler and clickable: opens the Drive sidebar (which
               starts at this folder). Hidden on the narrowest screens for room. */}
-          {folderName && (
+          {(localFolder ?? folderName) && (
             <span className="hidden min-w-0 shrink items-center gap-2 sm:flex">
               <button
                 type="button"
                 onClick={() => window.dispatchEvent(new CustomEvent("mist-toggle-folder"))}
-                title={`Open folder: ${folderName}`}
+                title={`Open folder: ${localFolder ?? folderName}`}
                 className="max-w-[12rem] cursor-pointer truncate text-muted opacity-70 hover:underline hover:opacity-100"
               >
-                {folderName}
+                {localFolder ?? folderName}
               </button>
               <span className="text-muted opacity-50">/</span>
             </span>
