@@ -5,6 +5,8 @@ description: Review or edit a live gmist document as a participant. Use when Ste
 
 # gmist-review
 
+**House style.** Prose this skill writes for a human reader is a deliverable. Apply the Writing Rules in `C:\Users\Zoom\.claude\CLAUDE.md` before saving or sending. Those rules do nothing unless the prompt asks for them (measured 5 September 2026), which makes this line the switch. Detail in memory `reference_testing_hub_rules`.
+
 Read and contribute to a live gmist document as a real session peer, via
 `scripts/gmist-bot.mjs` (the canonical client; do not reimplement its protocol).
 Steve gives a doc URL; you fetch the body, decide on changes, and post them as
