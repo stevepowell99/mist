@@ -57,6 +57,19 @@ export async function resolveLocalFilePath(
   return resolveLocalPath(await getDriveAccessToken(env), absPath);
 }
 
+/** Git, for a local file. Local mode only, like resolveLocalFilePath above: a
+ *  Drive document has no working tree to commit to. Kept out of StorageOps for
+ *  that reason, rather than stubbed on the Drive side. */
+export async function localGitInfo(env: DriveEnv, fileId: string) {
+  if (!isLocalMode(env)) return { repo: false, dirty: false, branch: null };
+  return localfs.gitInfo(await getDriveAccessToken(env), fileId);
+}
+
+export async function localGitCommit(env: DriveEnv, fileId: string, message?: string) {
+  if (!isLocalMode(env)) throw new Error("localGitCommit is local-mode only");
+  return localfs.gitCommit(await getDriveAccessToken(env), fileId, message);
+}
+
 /** The operations both implementations provide; assigning localfs here is the
  *  compile-time guard that the two surfaces stay in step. */
 type StorageOps = Pick<

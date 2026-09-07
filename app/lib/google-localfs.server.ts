@@ -320,3 +320,25 @@ export async function driveFilesUnderFolders(
 export async function driveListPermissions(_token: string, _fileId: string): Promise<DriveGrant[]> {
   return [{ type: "anyone", role: "writer" }];
 }
+
+/** Whether a local file is in a git work tree, and whether it has uncommitted
+ *  changes. Local mode only: Drive has no equivalent and needs none. */
+export async function gitInfo(
+  token: string,
+  fileId: string,
+): Promise<{ repo: boolean; dirty: boolean; branch: string | null }> {
+  return call(token, "/git-info" + q({ path: pathOf(fileId) }));
+}
+
+/** Commit this one file. See the sidecar for why it is only ever this path. */
+export async function gitCommit(
+  token: string,
+  fileId: string,
+  message?: string,
+): Promise<{ committed: boolean; hash?: string; message?: string; reason?: string }> {
+  return call(token, "/git-commit" + q({ path: pathOf(fileId) }), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message: message ?? "" }),
+  });
+}

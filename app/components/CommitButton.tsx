@@ -1,0 +1,101 @@
+import { useCallback, useEffect, useState } from "react";
+import { useDocument } from "~/lib/DocumentContext";
+import { isLocalFileId } from "~/lib/localfs-ids";
+
+type GitInfo = { repo: boolean; dirty: boolean; branch: string | null };
+
+/**
+ * Commit the file you are editing, without leaving the editor.
+ *
+ * Uncommitted work in a repo an agent is using is the fragile thing: `git
+ * checkout --` discards it, a session rewind overwrites it, a whole-file write
+ * from an old copy replaces it. A commit is out of reach of all three, so the
+ * cheapest protection is to make committing a click rather than a trip to a
+ * terminal.
+ *
+ * Local files only. A Drive document has no working tree, and the button hides
+ * itself for a file that is not in a repo.
+ */
+export default function CommitButton() {
+  const { drive, unsaved, saveNow } = useDocument();
+  const fileId = drive?.fileId;
+  const local = !!fileId && isLocalFileId(fileId);
+
+  const [info, setInfo] = useState<GitInfo>({ repo: false, dirty: false, branch: null });
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    if (!local || !fileId) return;
+    try {
+      const res = await fetch(`/local/git?id=${encodeURIComponent(fileId)}`);
+      if (res.ok) setInfo((await res.json()) as GitInfo);
+    } catch {
+      // the sidecar is briefly unreachable; the next poll tries again
+    }
+  }, [local, fileId]);
+
+  // Follow the file's git state rather than asking once: an agent committing or
+  // reverting it underneath changes whether there is anything here to commit.
+  useEffect(() => {
+    if (!local) return;
+    void refresh();
+    const timer = setInterval(refresh, 5000);
+    return () => clearInterval(timer);
+  }, [local, refresh]);
+
+  const commit = useCallback(async () => {
+    if (!fileId || busy) return;
+    setBusy(true);
+    setNote(null);
+    try {
+      // Save first, so the commit is of what is on the screen rather than of
+      // whatever the last autosave happened to catch.
+      if (unsaved) {
+        saveNow();
+        await new Promise((r) => setTimeout(r, 400));
+      }
+      const res = await fetch(`/local/git?id=${encodeURIComponent(fileId)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const body = (await res.json()) as { committed?: boolean; hash?: string; reason?: string; error?: string };
+      setNote(body.error ?? (body.committed ? `Committed ${body.hash}` : body.reason ?? "Nothing to commit"));
+      void refresh();
+    } catch {
+      setNote("Could not reach git");
+    } finally {
+      setBusy(false);
+      setTimeout(() => setNote(null), 4000);
+    }
+  }, [fileId, busy, unsaved, saveNow, refresh]);
+
+  if (!local || !info.repo) return null;
+
+  return (
+    <button
+      type="button"
+      onClick={commit}
+      disabled={busy || (!info.dirty && !unsaved)}
+      title={
+        note ??
+        (info.dirty || unsaved
+          ? `Commit this file to ${info.branch ?? "the current branch"}. Only this file: anything else staged in the repo is left alone.`
+          : "Nothing to commit; this file matches the last commit.")
+      }
+      className={`flex h-full items-center gap-2 px-3 text-sm uppercase tracking-wider transition-colors ${
+        info.dirty || unsaved
+          ? "cursor-pointer text-muted hover:bg-border hover:text-ink"
+          : "cursor-default text-muted opacity-40"
+      }`}
+    >
+      <span
+        className={`inline-block h-2 w-2 shrink-0 rounded-full ${
+          info.dirty || unsaved ? "bg-amber-500" : "bg-border"
+        }`}
+      />
+      {note ?? (busy ? "Committing…" : "Commit")}
+    </button>
+  );
+}

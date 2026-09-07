@@ -25,6 +25,7 @@ import Preview from "~/components/Preview";
 import ConnectionStatus from "~/components/ConnectionStatus";
 import UserName from "~/components/UserName";
 import SaveStatus from "~/components/SaveStatus";
+import CommitButton from "~/components/CommitButton";
 import ShareButton from "~/components/ShareButton";
 import CleanViewToggle from "~/components/CleanViewToggle";
 import SuggestionList from "~/components/SuggestionList";
@@ -1142,6 +1143,7 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
           </div>
           <div className="flex shrink-0 items-stretch border-l border-border">
             <SaveStatus />
+            <CommitButton />
           </div>
           <div className="shrink-0 border-l border-border">
             <ShareButton />

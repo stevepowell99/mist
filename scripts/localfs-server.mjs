@@ -30,7 +30,32 @@ import fs from "node:fs/promises";
 import fsSync from "node:fs";
 import http from "node:http";
 import path from "node:path";
+import { execFile } from "node:child_process";
 import { readDevVars } from "./dev-vars.mjs";
+
+/**
+ * Commit one file, from the editor, on demand.
+ *
+ * A commit is the only thing that survives every way work gets destroyed here:
+ * an agent running `git checkout -- <file>` to tidy a working tree it assumes is
+ * its own debris, a session rewind restoring a stale checkpoint, a whole-file
+ * write from a copy read hours ago. None of them can touch an object already in
+ * git. Snapshots make a loss recoverable; this makes it not a loss.
+ *
+ * Only ever the one path, never `git add -A`: the repo may have another agent's
+ * work staged in it, and sweeping that into Steve's documentation commit would
+ * be its own small disaster. `git commit -- <path>` commits that path alone and
+ * leaves the index untouched.
+ *
+ * execFile with an argument array, never a shell: the path comes in over HTTP.
+ */
+function git(args, cwd) {
+  return new Promise((resolve) => {
+    execFile("git", args, { cwd, windowsHide: true, timeout: 20000 }, (err, stdout, stderr) => {
+      resolve({ ok: !err, out: (stdout || "").trim(), err: (stderr || "").trim() });
+    });
+  });
+}
 
 /**
  * A durable record of every write, and every refusal, to a local file.
@@ -318,6 +343,50 @@ const handlers = {
     record({ op: "wrote", path: abs, bytes: buf.length, was: existing ? existing.length : 0, expected: expected ?? null, onDisk: current, version, client });
     console.log(`localfs: wrote ${abs} (${buf.length} bytes, was ${existing ? existing.length : 0})`);
     return { version };
+  },
+
+  // Whether this file sits in a git work tree, and whether it differs from what
+  // is committed. The editor asks so it can offer a commit only where one means
+  // something, and say whether there is anything to commit.
+  "GET /git-info": async (params) => {
+    const abs = absOf(params.get("path"));
+    const cwd = path.dirname(abs);
+    const inside = await git(["rev-parse", "--is-inside-work-tree"], cwd);
+    if (!inside.ok || inside.out !== "true") return { repo: false, dirty: false, branch: null };
+    const [status, branch] = await Promise.all([
+      git(["status", "--porcelain", "--", abs], cwd),
+      git(["rev-parse", "--abbrev-ref", "HEAD"], cwd),
+    ]);
+    return { repo: true, dirty: status.ok && status.out !== "", branch: branch.ok ? branch.out : null };
+  },
+
+  "POST /git-commit": async (params, req) => {
+    const abs = absOf(params.get("path"));
+    const cwd = path.dirname(abs);
+    const inside = await git(["rev-parse", "--is-inside-work-tree"], cwd);
+    if (!inside.ok || inside.out !== "true") throw new HttpError(400, "not inside a git work tree");
+
+    const body = (await readBody(req)).toString("utf8");
+    let message = "";
+    try {
+      message = String(JSON.parse(body || "{}").message || "");
+    } catch {
+      message = "";
+    }
+    message = message.trim() || `docs: edit ${path.basename(abs)} in gmist`;
+
+    const status = await git(["status", "--porcelain", "--", abs], cwd);
+    if (status.ok && status.out === "") return { committed: false, reason: "nothing to commit" };
+
+    const done = await git(["commit", "-m", message, "--", abs], cwd);
+    if (!done.ok) {
+      record({ op: "commit-failed", path: abs, bytes: 0, was: 0, expected: null, onDisk: null, client: done.err.slice(0, 200) });
+      throw new HttpError(500, done.err || done.out || "commit failed");
+    }
+    const hash = await git(["rev-parse", "--short", "HEAD"], cwd);
+    record({ op: "committed", path: abs, bytes: 0, was: 0, expected: null, onDisk: hash.out, client: message.slice(0, 200) });
+    console.log(`localfs: committed ${abs} as ${hash.out}`);
+    return { committed: true, hash: hash.out, message };
   },
 
   "GET /list": async (params) => ({ entries: await listDir(absOf(params.get("path"))) }),
