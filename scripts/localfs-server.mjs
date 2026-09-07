@@ -45,11 +45,81 @@ import { readDevVars } from "./dev-vars.mjs";
  * One JSON object per line, appended, never rotated by us: the file is small
  * (a line per save) and losing history is the whole thing it exists to prevent.
  */
+
+/**
+ * Keep every version of a file gmist has open, whoever writes it.
+ *
+ * The write log says who wrote and what changed, which is diagnosis. This is the
+ * repair: an agent, a script or a stray tool overwrites the file and the version
+ * before it is already on disk, named and timestamped, so getting the work back
+ * is a copy rather than an investigation. Three times in a week Steve lost
+ * editing to a write nothing could be pinned on afterwards; twice the content
+ * was simply gone.
+ *
+ * Every file served through here is polled, so a change made by something that
+ * never touches this process is caught too. That is the whole point: the writes
+ * worth surviving are the ones we do not make.
+ */
+const SNAP_DIR = path.join(process.cwd(), "logs", "snapshots");
+const SNAP_KEEP = 50;
+const SNAP_POLL_MS = 2000;
+const SNAP_MAX_BYTES = 4 * 1024 * 1024;
+/** Served path -> the hash of the last version snapshotted for it. */
+const watched = new Map();
+
+function snapDirFor(abs) {
+  // One folder per file, named so two files called the same thing stay apart.
+  const safe = abs.replace(/[^A-Za-z0-9._-]+/g, "_").replace(/^_+/, "").slice(-120);
+  return path.join(SNAP_DIR, safe);
+}
+
+function snapshot(abs, buf) {
+  if (!buf || buf.length === 0 || buf.length > SNAP_MAX_BYTES) return;
+  const version = hashOf(buf);
+  if (watched.get(abs) === version) return;
+  watched.set(abs, version);
+  try {
+    const dir = snapDirFor(abs);
+    fsSync.mkdirSync(dir, { recursive: true });
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    fsSync.writeFileSync(path.join(dir, `${stamp}__${version}${path.extname(abs)}`), buf);
+    const kept = fsSync.readdirSync(dir).sort();
+    for (const old of kept.slice(0, Math.max(0, kept.length - SNAP_KEEP))) {
+      try { fsSync.unlinkSync(path.join(dir, old)); } catch { /* already gone */ }
+    }
+  } catch {
+    // snapshotting must never be the reason a read or a save fails
+  }
+}
+
+// Catch a change made by anything else. A file is polled from the moment gmist
+// first reads it and until this process ends, which is what makes an outside
+// clobber recoverable rather than merely detectable.
+setInterval(() => {
+  for (const abs of [...watched.keys()]) {
+    fsSync.readFile(abs, (err, buf) => {
+      if (!err) snapshot(abs, buf);
+    });
+  }
+}, SNAP_POLL_MS).unref();
+
 const LOG_PATH = path.join(process.cwd(), "logs", "localfs-writes.log");
+/** Local time with its offset. The first version of this log wrote UTC, which
+ *  then had to be compared against file times in local time; reading the two an
+ *  hour apart is the same mistake that made the first incident note wrong. */
+function localStamp() {
+  const d = new Date();
+  const off = -d.getTimezoneOffset();
+  const sign = off >= 0 ? "+" : "-";
+  const pad = (n) => String(Math.floor(Math.abs(n))).padStart(2, "0");
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 23) +
+    sign + pad(off / 60) + ":" + pad(off % 60);
+}
+
 function record(entry) {
   try {
     fsSync.mkdirSync(path.dirname(LOG_PATH), { recursive: true });
-    fsSync.appendFileSync(LOG_PATH, JSON.stringify({ at: new Date().toISOString(), ...entry }) + "\n");
+    fsSync.appendFileSync(LOG_PATH, JSON.stringify({ at: localStamp(), ...entry }) + "\n");
   } catch {
     // logging must never be the reason a save fails
   }
@@ -195,6 +265,8 @@ const handlers = {
     const buf = await fs.readFile(abs).catch(() => {
       throw new HttpError(404, `file not found: ${abs}`);
     });
+    // First sight of this file: keep this version, and start watching it.
+    snapshot(abs, buf);
     return { text: buf.toString("utf8"), version: hashOf(buf) };
   },
 
@@ -232,8 +304,13 @@ const handlers = {
       record({ op: "refused", path: abs, bytes: buf.length, was: existing.length, expected, onDisk: current, client });
       throw new HttpError(409, "file changed upstream; reload and retry");
     }
+    // Keep what we are about to replace, then what we wrote. The first covers a
+    // change somebody else made between our polls; the second is the version most
+    // worth having back, since it is the one the editor believed was saved.
+    if (existing) snapshot(abs, existing);
     await fs.mkdir(path.dirname(abs), { recursive: true });
     await fs.writeFile(abs, buf);
+    snapshot(abs, buf);
     const version = hashOf(buf);
     // `was` next to `bytes` is the pair worth having: a save that shrinks a file
     // by twenty thousand characters is the shape of a stale buffer landing, and
