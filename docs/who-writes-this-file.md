@@ -1,66 +1,54 @@
-# Finding out what overwrote a file
+# What happened to this file
 
-Between 2 and 7 September 2026 the same document was reverted five times by
-something nobody could name. Three layers of logging were built in response, and
-each recorded the effect precisely while naming nobody. This page records what
-each layer answers, so the next investigation starts where the last one stopped
-rather than repeating it.
+Between 2 and 7 September 2026 the same document was reverted five times. This
+page says where to look, so the next investigation starts where the last one
+stopped.
 
-## What is already recorded
+## The two things that are recorded
 
-- **`logs/localfs-writes.log`** — every write and every refusal gmist makes, with
-  the bytes written, the bytes that were there before, the version expected and
-  the version actually on disk, and the browser that asked. A change with no
-  matching line here was not gmist. That is a negative, and a strong one.
-- **`logs/snapshots/<file>/`** — every version of every file gmist has open,
-  kept fifty deep, whoever wrote it. This is what makes a loss recoverable, and
-  it dates the change to under a second.
-- **`logs/forensics/<file>-<time>.json`** — written whenever the file changes and
-  gmist did not do it. It holds the running processes over the previous fifteen
-  seconds, sampled every second, with the ones that appeared inside that window
-  listed separately. A `git.exe` or a shell that ran briefly around the moment
-  the file moved is named there.
+- **`logs/file-history.log`** — one line per observed change to any file gmist
+  has open, whoever made it. A gmist write records the bytes written, the bytes
+  that were there before, the version it expected, the version actually on disk,
+  and the browser that asked. A change gmist did not make is recorded as
+  `changed-by-something-else`, with the hashes either side. Local time with an
+  offset throughout: never compare it against a log in UTC.
+- **`logs/snapshots/<file>/`** — every version of every file gmist has open, kept
+  fifty deep, named by time and content hash. This is what makes a loss a copy
+  rather than an investigation, and it has recovered work three times.
 
-All three use local time with an offset. Do not mix clocks: reading a UTC log
-against local file times is what made the first incident note wrong.
+Together they answer what changed, when, and whether gmist did it. They do not
+answer which process did it.
 
-## The certain answer, which needs one elevation
+## Naming the process
 
-The forensic dump names processes that were running. Windows can name the process
-that actually performed the write, through object-access auditing. It needs an
-administrator once; on this machine that means the `steve` account rather than
-`Zoom`.
+Two attempts failed and are worth not repeating. Sampling running processes
+around the change catches only a writer that started moments before, and the one
+writer ever positively identified had been alive for hours. Windows object-access
+auditing was switched on and produced no events.
 
-In an elevated PowerShell:
+What did work was reading the session transcripts. Session `e8f8dbe9` was writing
+`rubicon/docs/principles.md` through `python - <<'PY'` heredocs at 22:20:03,
+22:20:43, 22:21:07 and 22:21:20, matching the recorded changes to the second.
 
-```powershell
-# 1. Turn on auditing for file writes.
-auditpol /set /subcategory:"File System" /success:enable
+That is the mechanism to look for first: **an agent editing a file through Bash
+rather than through the Edit tool**. The harness checks whether a file has moved
+since it was read, but only for its own Read/Write pair. A heredoc, `cat >`, or
+`sed -i` bypasses that check completely and rewrites the whole file from whatever
+the session holds in memory.
 
-# 2. Audit writes to the one file, by everyone.
-$f = "C:\dev\causal-map-extension\rubicon\docs\principles.md"
-$acl = Get-Acl $f -Audit
-$rule = New-Object System.Security.AccessControl.FileSystemAuditRule(
-  "Everyone", "Write,Delete,ChangePermissions", "Success")
-$acl.AddAuditRule($rule)
-Set-Acl -Path $f -AclObject $acl
-```
+Grep the transcripts under `~/.claude/projects` for the filename, over a window
+either side of the change, and look for `Bash` rather than `Edit`. Do not filter
+by "did an agent write it" using the Write and Edit tools alone; that search
+returns nothing and reads as an exoneration.
 
-Then every write appears in the Security log as event 4663, carrying the process
-name and id:
-
-```powershell
-Get-WinEvent -FilterHashtable @{LogName="Security"; Id=4663} -MaxEvents 40 |
-  Where-Object { $_.Message -match "principles" } |
-  Select-Object TimeCreated, @{n="Process";e={($_.Message -split "Process Name:\s+")[1] -split "`n" | Select-Object -First 1}}
-```
-
-Turn it off afterwards with `auditpol /set /subcategory:"File System" /success:disable`,
-since success auditing on a busy volume fills the Security log quickly.
+**The other losses on 2 and 3 September remain unattributed.** One confirmed
+writer does not explain them, and Steve reports that some happened while he was
+editing and no agent was running. Do not present the heredoc mechanism as the
+established cause of all of them.
 
 ## What actually protects the work
 
-None of the above prevents anything. A commit does: nothing that has destroyed
-work here, a `git checkout --`, a session rewind, or a whole-file write from a
-stale copy, can reach an object already in git. gmist has a Commit button for
-exactly this reason, and it is worth more than all three logs together.
+A commit. Nothing that has destroyed work here, a `git checkout --`, a session
+rewind, or a whole-file write from a stale copy, can reach an object already in
+git. gmist has a Commit button for exactly that, and it is worth more than
+everything above.

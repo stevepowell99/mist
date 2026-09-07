@@ -58,7 +58,15 @@ function git(args, cwd) {
 }
 
 /**
- * A durable record of every write, and every refusal, to a local file.
+ * One record of everything that happens to a file gmist has open.
+ *
+ * There were three stores by the end of 7 September 2026: a log of gmist's own
+ * writes, a tree of snapshots, and a dump of running processes. Answering "what
+ * happened to this file" meant correlating them by hand, in two different
+ * timezones, and the process dump never named anything because it was built to
+ * catch a short-lived writer when the writer was a session that had been alive
+ * for hours. So: one log, one shape, every observed change, and each line names
+ * the snapshot holding the content it produced.
  *
  * This process is the only thing that touches the disk, so it is the only place
  * that knows what was actually there when a write arrived. Without that record
@@ -102,74 +110,6 @@ function git(args, cwd) {
  * process for every write, and which needs one elevation to switch on; see
  * docs/who-writes-this-file.md.
  */
-const FORENSIC_DIR = path.join(process.cwd(), "logs", "forensics");
-
-/**
- * Who wrote the file.
- *
- * Three layers of logging recorded the effect precisely and named nobody: the
- * write log says gmist did not do it, the snapshots say exactly what changed and
- * when, and neither says which process. So when a file changes underneath us,
- * this asks Windows which processes have started in the last minute. Something
- * that ran for half a second and moved the file is then on the record, with its
- * start time, instead of being reconstructed afterwards from commit sizes.
- *
- * Get-Process rather than tasklist or Get-CimInstance: both of those go through
- * WMI, which on this machine answers "Call cancelled" under load, and an empty
- * window is worse than no window because it reads as an answer. Command lines do
- * need WMI, so they are attempted separately and their absence is not a failure.
- *
- * The certain answer is Windows object-access auditing, which records the writing
- * process for every write and needs one elevation; see docs/who-writes-this-file.md.
- */
-function forensicDump(abs, was, now) {
-  try {
-    fsSync.mkdirSync(FORENSIC_DIR, { recursive: true });
-    const stamp = localStamp().replace(/[:.+]/g, "-");
-    const out = path.join(FORENSIC_DIR, `${path.basename(abs)}-${stamp}.json`);
-    const dump = { file: abs, was, now, at: localStamp(), recentlyStarted: [], commandLines: [] };
-    fsSync.writeFileSync(out, JSON.stringify(dump, null, 2));
-    console.log(`localfs: outside change to ${abs}; see logs/forensics`);
-
-    const save = () => fsSync.writeFileSync(out, JSON.stringify(dump, null, 2));
-
-    execFile(
-      "powershell",
-      ["-NoProfile", "-Command",
-       "Get-Process | Where-Object { $_.StartTime -gt (Get-Date).AddSeconds(-60) } | " +
-       "Select-Object Id,ProcessName,@{n='StartTime';e={$_.StartTime.ToString('o')}} | ConvertTo-Json -Compress"],
-      { windowsHide: true, timeout: 15000, maxBuffer: 8 * 1024 * 1024 },
-      (err, stdout) => {
-        if (err) return;
-        try {
-          const v = JSON.parse(stdout || "[]");
-          dump.recentlyStarted = Array.isArray(v) ? v : [v];
-          save();
-        } catch { /* leave the field empty rather than guess */ }
-      },
-    );
-
-    execFile(
-      "powershell",
-      ["-NoProfile", "-Command",
-       "Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | " +
-       "Where-Object { $_.Name -match 'git|node|claude|python|pwsh|powershell|cmd|bash' } | " +
-       "Select-Object ProcessId,Name,CommandLine | ConvertTo-Json -Compress -Depth 3"],
-      { windowsHide: true, timeout: 20000, maxBuffer: 16 * 1024 * 1024 },
-      (err, stdout) => {
-        if (err) return;
-        try {
-          const v = JSON.parse(stdout || "[]");
-          dump.commandLines = Array.isArray(v) ? v : [v];
-          save();
-        } catch { /* WMI is unwell; the start times still stand */ }
-      },
-    );
-  } catch {
-    // forensics must never be the reason anything else fails
-  }
-}
-
 const SNAP_DIR = path.join(process.cwd(), "logs", "snapshots");
 const SNAP_KEEP = 50;
 const SNAP_POLL_MS = 700;
@@ -186,7 +126,7 @@ function snapDirFor(abs) {
 function snapshot(abs, buf) {
   if (!buf || buf.length === 0 || buf.length > SNAP_MAX_BYTES) return;
   const version = hashOf(buf);
-  if (watched.get(abs) === version) return;
+  if (watched.get(abs) === version) return version;
   watched.set(abs, version);
   try {
     const dir = snapDirFor(abs);
@@ -211,13 +151,17 @@ setInterval(() => {
     fsSync.readFile(abs, (err, buf) => {
       if (err) return;
       const now = hashOf(buf);
-      if (now !== before) forensicDump(abs, before, now);
+      if (now !== before && before !== undefined) {
+        // Nobody claimed this one: gmist's own writes are logged as they happen,
+        // so a change seen only by the poll came from something else.
+        record({ op: "changed-by-something-else", path: abs, bytes: buf.length, was: null, expected: before, onDisk: now, client: null });
+      }
       snapshot(abs, buf);
     });
   }
 }, SNAP_POLL_MS).unref();
 
-const LOG_PATH = path.join(process.cwd(), "logs", "localfs-writes.log");
+const LOG_PATH = path.join(process.cwd(), "logs", "file-history.log");
 /** Local time with its offset. The first version of this log wrote UTC, which
  *  then had to be compared against file times in local time; reading the two an
  *  hour apart is the same mistake that made the first incident note wrong. */
