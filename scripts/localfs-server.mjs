@@ -378,6 +378,16 @@ const handlers = {
     const status = await git(["status", "--porcelain", "--", abs], cwd);
     if (status.ok && status.out === "") return { committed: false, reason: "nothing to commit" };
 
+    // A file git has never seen has to be added before it can be named in a
+    // commit: `git commit -- <path>` matches tracked paths only, and answers an
+    // untracked one with "did not match any file(s) known to git". Adding this
+    // one path is still not `git add -A`, so anything else staged in the repo is
+    // left exactly as it was.
+    if (status.ok && status.out.startsWith("??")) {
+      const added = await git(["add", "--", abs], cwd);
+      if (!added.ok) throw new HttpError(500, added.err || "could not add the file");
+    }
+
     const done = await git(["commit", "-m", message, "--", abs], cwd);
     if (!done.ok) {
       record({ op: "commit-failed", path: abs, bytes: 0, was: 0, expected: null, onDisk: null, client: done.err.slice(0, 200) });
