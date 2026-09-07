@@ -85,9 +85,94 @@ function git(args, cwd) {
  * never touches this process is caught too. That is the whole point: the writes
  * worth surviving are the ones we do not make.
  */
+/**
+ * Who wrote the file.
+ *
+ * Three layers of logging so far have recorded the effect precisely and named
+ * nobody: the write log says gmist did not do it, the snapshots say exactly what
+ * changed and when, and neither says which process. So this samples the running
+ * processes continuously and keeps the last fifteen seconds, and when a file
+ * changes underneath us it writes out that window. A `git.exe` or a shell that
+ * lived for half a second before the file moved is then on the record, named,
+ * with its command line, instead of being reconstructed afterwards from commit
+ * sizes.
+ *
+ * `tasklist` rather than anything cleverer because it needs no privilege. The
+ * certain answer is Windows object-access auditing, which records the writing
+ * process for every write, and which needs one elevation to switch on; see
+ * docs/who-writes-this-file.md.
+ */
+const FORENSIC_DIR = path.join(process.cwd(), "logs", "forensics");
+
+/**
+ * Who wrote the file.
+ *
+ * Three layers of logging recorded the effect precisely and named nobody: the
+ * write log says gmist did not do it, the snapshots say exactly what changed and
+ * when, and neither says which process. So when a file changes underneath us,
+ * this asks Windows which processes have started in the last minute. Something
+ * that ran for half a second and moved the file is then on the record, with its
+ * start time, instead of being reconstructed afterwards from commit sizes.
+ *
+ * Get-Process rather than tasklist or Get-CimInstance: both of those go through
+ * WMI, which on this machine answers "Call cancelled" under load, and an empty
+ * window is worse than no window because it reads as an answer. Command lines do
+ * need WMI, so they are attempted separately and their absence is not a failure.
+ *
+ * The certain answer is Windows object-access auditing, which records the writing
+ * process for every write and needs one elevation; see docs/who-writes-this-file.md.
+ */
+function forensicDump(abs, was, now) {
+  try {
+    fsSync.mkdirSync(FORENSIC_DIR, { recursive: true });
+    const stamp = localStamp().replace(/[:.+]/g, "-");
+    const out = path.join(FORENSIC_DIR, `${path.basename(abs)}-${stamp}.json`);
+    const dump = { file: abs, was, now, at: localStamp(), recentlyStarted: [], commandLines: [] };
+    fsSync.writeFileSync(out, JSON.stringify(dump, null, 2));
+    console.log(`localfs: outside change to ${abs}; see logs/forensics`);
+
+    const save = () => fsSync.writeFileSync(out, JSON.stringify(dump, null, 2));
+
+    execFile(
+      "powershell",
+      ["-NoProfile", "-Command",
+       "Get-Process | Where-Object { $_.StartTime -gt (Get-Date).AddSeconds(-60) } | " +
+       "Select-Object Id,ProcessName,@{n='StartTime';e={$_.StartTime.ToString('o')}} | ConvertTo-Json -Compress"],
+      { windowsHide: true, timeout: 15000, maxBuffer: 8 * 1024 * 1024 },
+      (err, stdout) => {
+        if (err) return;
+        try {
+          const v = JSON.parse(stdout || "[]");
+          dump.recentlyStarted = Array.isArray(v) ? v : [v];
+          save();
+        } catch { /* leave the field empty rather than guess */ }
+      },
+    );
+
+    execFile(
+      "powershell",
+      ["-NoProfile", "-Command",
+       "Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | " +
+       "Where-Object { $_.Name -match 'git|node|claude|python|pwsh|powershell|cmd|bash' } | " +
+       "Select-Object ProcessId,Name,CommandLine | ConvertTo-Json -Compress -Depth 3"],
+      { windowsHide: true, timeout: 20000, maxBuffer: 16 * 1024 * 1024 },
+      (err, stdout) => {
+        if (err) return;
+        try {
+          const v = JSON.parse(stdout || "[]");
+          dump.commandLines = Array.isArray(v) ? v : [v];
+          save();
+        } catch { /* WMI is unwell; the start times still stand */ }
+      },
+    );
+  } catch {
+    // forensics must never be the reason anything else fails
+  }
+}
+
 const SNAP_DIR = path.join(process.cwd(), "logs", "snapshots");
 const SNAP_KEEP = 50;
-const SNAP_POLL_MS = 2000;
+const SNAP_POLL_MS = 700;
 const SNAP_MAX_BYTES = 4 * 1024 * 1024;
 /** Served path -> the hash of the last version snapshotted for it. */
 const watched = new Map();
@@ -106,7 +191,7 @@ function snapshot(abs, buf) {
   try {
     const dir = snapDirFor(abs);
     fsSync.mkdirSync(dir, { recursive: true });
-    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const stamp = localStamp().replace(/[:.+]/g, "-");
     fsSync.writeFileSync(path.join(dir, `${stamp}__${version}${path.extname(abs)}`), buf);
     const kept = fsSync.readdirSync(dir).sort();
     for (const old of kept.slice(0, Math.max(0, kept.length - SNAP_KEEP))) {
@@ -122,8 +207,12 @@ function snapshot(abs, buf) {
 // clobber recoverable rather than merely detectable.
 setInterval(() => {
   for (const abs of [...watched.keys()]) {
+    const before = watched.get(abs);
     fsSync.readFile(abs, (err, buf) => {
-      if (!err) snapshot(abs, buf);
+      if (err) return;
+      const now = hashOf(buf);
+      if (now !== before) forensicDump(abs, before, now);
+      snapshot(abs, buf);
     });
   }
 }, SNAP_POLL_MS).unref();
