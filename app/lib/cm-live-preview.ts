@@ -17,6 +17,7 @@ import { runMermaid } from "./mermaid";
 import { criticSpans } from "./critic";
 import { CALLOUT_ALIAS } from "./slides-build";
 import { citationSpans, type BibLibrary } from "./citations";
+import { revealPos } from "./cm-reveal";
 
 /**
  * Live preview (the fourth View): the markdown syntax marks recede while you
@@ -658,7 +659,7 @@ class BlockWidget extends WidgetType {
     // source in the same update.
     wrap.addEventListener("mousedown", (e) => {
       e.preventDefault();
-      view.dispatch({ selection: { anchor: this.from }, scrollIntoView: true });
+      revealPos(view, this.from);
       view.focus();
     });
     return wrap;

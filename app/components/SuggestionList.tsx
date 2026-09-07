@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
+import { revealPos } from "~/lib/cm-reveal";
 import { useDocument } from "~/lib/DocumentContext";
 import { listSuggestions, resolveAtCursor, resolveAll, type SuggestionItem } from "~/lib/cm-suggestion-actions";
 
@@ -44,7 +45,7 @@ export default function SuggestionList() {
       // The list has shifted up by one, so the same index IS the next edit.
       const remaining = listSuggestions(view.state.doc.toString());
       const next = remaining[Math.min(index, remaining.length - 1)];
-      if (next) view.dispatch({ selection: { anchor: next.from }, scrollIntoView: true });
+      if (next) revealPos(view, next.from);
       view.focus();
     },
     [view, threads, resolveThread],
@@ -71,7 +72,7 @@ export default function SuggestionList() {
   const jump = useCallback(
     (item: SuggestionItem) => {
       if (!view) return;
-      view.dispatch({ selection: { anchor: item.from }, scrollIntoView: true });
+      revealPos(view, item.from);
       view.focus();
     },
     [view],

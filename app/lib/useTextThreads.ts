@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { revealPos } from "~/lib/cm-reveal";
 import type { EditorView } from "@codemirror/view";
 import type { Doc as YDoc } from "yjs";
 import type { ThreadData, ThreadReply, UserInfo } from "~/shared/types";
@@ -204,7 +205,7 @@ export function useTextThreads({
     (thread: MatchedThread) => {
       setActiveThreadId(thread.id);
       if (view && thread.position !== undefined) {
-        view.dispatch({ selection: { anchor: thread.position }, scrollIntoView: true });
+        revealPos(view, thread.position);
         view.focus();
       }
     },
