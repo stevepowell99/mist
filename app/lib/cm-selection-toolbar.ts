@@ -133,6 +133,11 @@ function buildToolbar(view: EditorView, canEdit: boolean): { dom: HTMLElement } 
     format("B", "Bold (Ctrl/Cmd+B)", "**", "**", "font-weight:700");
     format("I", "Italic (Ctrl/Cmd+I)", "*", "*", "font-style:italic");
     format("Code", "Inline code", "`", "`");
+    // Obsidian's highlight. Not CriticMarkup's `{==...==}`, which marks a span
+    // for a comment; this is ordinary emphasis and stays in the document. Both
+    // the editor and the preview already understood it, so only the way to
+    // write one was missing.
+    format("Mark", "Highlight (Obsidian's ==like this==)", "==", "==", "background:color-mix(in srgb, #f7ed73 60%, transparent)");
     add("Link", "Wrap as a link, then type the address", () => {
       const { from, to } = view.state.selection.main;
       const text = view.state.sliceDoc(from, to);
