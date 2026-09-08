@@ -1,10 +1,10 @@
+import { lazy, Suspense, useEffect, useState } from "react";
 import { data } from "react-router";
 import type { Route } from "./+types/edit.$id";
 import { getCloudflare } from "~/lib/cloudflare.server";
 import { openDriveRequest } from "~/lib/drive-access.server";
 import { driveGetMeta, getDriveAccessToken, isLocalMode } from "~/lib/google.server";
 import { isLocalFileId } from "~/lib/localfs-ids";
-import PlainEditor from "~/components/PlainEditor";
 
 /**
  * The plain local editor: a file, and a buffer that is a view of it.
@@ -14,7 +14,14 @@ import PlainEditor from "~/components/PlainEditor";
  * Drive room, and every one of them assumes the document lives in the app with
  * the file as somewhere to push it. This one assumes the opposite, and the two
  * assumptions cannot share a component. See plans/local-editor.md.
+ *
+ * The editor is loaded on the client only. Its chain reaches CodeMirror, mermaid
+ * and DOMPurify, none of which survive in a Worker with no DOM: importing it at
+ * module scope crashed the route with workerd's opaque "internal error;
+ * reference = ..." and took the page down entirely.
  */
+const PlainEditor = lazy(() => import("~/components/PlainEditor"));
+
 export function meta({ data: d }: Route.MetaArgs) {
   const name = d && "name" in d ? d.name : "gmist";
   return [{ title: name }];
@@ -39,11 +46,30 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
 }
 
 export default function EditPage({ loaderData }: Route.ComponentProps) {
+  const [onClient, setOnClient] = useState(false);
+  useEffect(() => setOnClient(true), []); // eslint-disable-line react-hooks/set-state-in-effect
+
+  if (!onClient) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-paper text-sm uppercase tracking-wider text-muted">
+        opening {loaderData.name}
+      </div>
+    );
+  }
+
   return (
-    <PlainEditor
-      fileId={loaderData.id}
-      name={loaderData.name}
-      folderId={loaderData.folderId ?? undefined}
-    />
+    <Suspense
+      fallback={
+        <div className="flex h-screen items-center justify-center bg-paper text-sm uppercase tracking-wider text-muted">
+          opening {loaderData.name}
+        </div>
+      }
+    >
+      <PlainEditor
+        fileId={loaderData.id}
+        name={loaderData.name}
+        folderId={loaderData.folderId ?? undefined}
+      />
+    </Suspense>
   );
 }
