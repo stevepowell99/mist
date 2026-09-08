@@ -35,6 +35,24 @@ import type { DriveMeta } from "~/shared/types";
 const SAVE_AFTER_MS = 1000;
 const POLL_MS = 700;
 
+/**
+ * The live layer: the decorations that hide the marks, and the class that
+ * typesets what is left.
+ *
+ * Both, always, together. The decorations alone hide the syntax and change
+ * nothing else, which reads as plain source and is what the first attempt
+ * shipped. The typography lives in `.live-preview` in app.css, and per the
+ * repo's own invariant a view-wide class has to ride in `editorAttributes`,
+ * never on the DOM node, because CodeMirror rewrites that attribute whenever it
+ * takes focus.
+ */
+function liveLayer(getBib: () => BibLibrary | null) {
+  return [
+    livePreview({ resolveSrc: (src) => resolveAssetSrc(src, null, ""), getBib }),
+    EditorView.editorAttributes.of({ class: "live-preview" }),
+  ];
+}
+
 type Status = "loading" | "clean" | "dirty" | "saving" | "conflict" | "error";
 
 type View = "live" | "editor" | "split" | "preview";
@@ -113,10 +131,7 @@ export default function PlainEditor({
 
   useEffect(() => {
     view.current?.dispatch({
-      effects: liveOn.current.reconfigure(layout === "live" ? livePreview({
-        resolveSrc: (src) => resolveAssetSrc(src, null, ""),
-        getBib: () => bibRef.current,
-      }) : []),
+      effects: liveOn.current.reconfigure(layout === "live" ? liveLayer(() => bibRef.current) : []),
     });
   }, [layout]);
 
@@ -258,12 +273,7 @@ export default function PlainEditor({
             editable.current.of(EditorView.editable.of(true)),
             // The document typeset where you type it. Marks stay in the text and
             // are hidden by decorations, so nothing about the file changes.
-            liveOn.current.of(
-              livePreview({
-                resolveSrc: (src) => resolveAssetSrc(src, null, ""),
-                getBib: () => bibRef.current,
-              }),
-            ),
+            liveOn.current.of(liveLayer(() => bibRef.current)),
             keymap.of([
               {
                 key: "Mod-s",
