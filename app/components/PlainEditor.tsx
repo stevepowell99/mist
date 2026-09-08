@@ -17,6 +17,8 @@ import { classSource } from "~/lib/cm-classes";
 import { parseCssClasses } from "~/lib/cm-classes";
 import DECK_BASE_CSS from "~/styles/deck-base.css?raw";
 import { suggestMode } from "~/lib/cm-suggest";
+import { selectionToolbar } from "~/lib/cm-selection-toolbar";
+import { insertCommentChange } from "~/lib/cm-comments";
 import { wrapOnSelection } from "~/lib/cm-shortcuts";
 import PlainReview from "~/components/PlainReview";
 import { markdownLineStyle } from "~/lib/cm-markdown-style";
@@ -84,6 +86,7 @@ type View = "live" | "editor" | "split" | "preview";
  */
 const VIEW_KEY = "gmist.plain.view";
 const REVIEW_KEY = "gmist.plain.review";
+const MODE_KEY = "gmist.plain.mode";
 
 /** The class names the deck stylesheet defines, for the `.`-picker. */
 const CSS_CLASSES = parseCssClasses(DECK_BASE_CSS);
@@ -196,6 +199,28 @@ export default function PlainEditor({
     modeRef.current = mode;
   }, [mode]);
 
+  /**
+   * The toolbar's Comment button, and Ctrl/Cmd+Alt+M.
+   *
+   * A comment is `{>>note<<}` written into the document, wrapping the selection
+   * in `{==…==}` when there is one, so the note is anchored by the words it is
+   * about rather than by an offset that the next edit invalidates.
+   */
+  useEffect(() => {
+    const onComment = () => {
+      const v = view.current;
+      if (!v || conflicted.current) return;
+      const note = window.prompt("Comment");
+      if (!note) return;
+      const { from, to } = v.state.selection.main;
+      const { changes, cursor } = insertCommentChange(v.state.doc.toString(), from, to, note);
+      v.dispatch({ changes, selection: { anchor: cursor }, userEvent: "input.comment" });
+      v.focus();
+    };
+    window.addEventListener("mist-comment", onComment);
+    return () => window.removeEventListener("mist-comment", onComment);
+  }, []);
+
   // Restore the remembered view and panel once, on the client. The server has
   // no localStorage, so this is a deliberate post-mount correction rather than
   // state that could have been initialised.
@@ -204,6 +229,7 @@ export default function PlainEditor({
     setLayout(remembered(VIEW_KEY, ["live", "editor", "split", "preview"] as const, "live"));
     setOutlineOpen(remembered(OUTLINE_KEY, ["yes", "no"] as const, "no") === "yes");
     setReviewOpen(remembered(REVIEW_KEY, ["yes", "no"] as const, "no") === "yes");
+    setMode(remembered(MODE_KEY, ["edit", "suggest"] as const, "edit"));
   }, []);
 
   useEffect(() => {
@@ -380,7 +406,18 @@ export default function PlainEditor({
             wrapKeymap,
             wrapOnSelection,
             suggestMode(() => modeRef.current),
+            // The floating bar on a selection: Comment, and the three tracked
+            // changes. All four write CriticMarkup into the text, so none of
+            // them needs anything stored anywhere.
+            selectionToolbar(() => !conflicted.current),
             keymap.of([
+              {
+                key: "Mod-Alt-m",
+                run: () => {
+                  window.dispatchEvent(new CustomEvent("mist-comment"));
+                  return true;
+                },
+              },
               {
                 key: "Mod-s",
                 run: () => {
@@ -524,7 +561,10 @@ export default function PlainEditor({
             <button
               key={m}
               type="button"
-              onClick={() => setMode(m)}
+              onClick={() => {
+                remember(MODE_KEY, m);
+                setMode(m);
+              }}
               title={
                 m === "suggest"
                   ? "Your edits become tracked changes in the text itself"
