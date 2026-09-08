@@ -25,7 +25,7 @@ import { markdownLineStyle } from "~/lib/cm-markdown-style";
 import PlainPreview from "~/components/PlainPreview";
 import OutlinePanel from "~/components/OutlinePanel";
 import { livePreview } from "~/lib/cm-live-preview";
-import { resolveAssetSrc } from "~/lib/asset-urls";
+import { resolveAssetSrc, type AssetCtx } from "~/lib/asset-urls";
 import { parseBib, type BibLibrary } from "~/lib/citations";
 import { extractBibPaths } from "~/lib/slides-build";
 import { rawFrontmatter } from "~/lib/thread-serialization";
@@ -62,10 +62,16 @@ const POLL_MS = 700;
  * repo's own invariant a view-wide class has to ride in `editorAttributes`,
  * never on the DOM node, because CodeMirror rewrites that attribute whenever it
  * takes focus.
+ *
+ * `resolveSrc` must not throw. A decoration plugin that throws is dropped by
+ * CodeMirror without a word, and dropping this one brings back every `#` and
+ * `**` in the document at once. It was passed a null context here, which threw
+ * on any relative image path and left absolute ones working, so the whole live
+ * layer collapsed on some documents and not others.
  */
-function liveLayer(getBib: () => BibLibrary | null) {
+function liveLayer(resolveSrc: (src: string) => string, getBib: () => BibLibrary | null) {
   return [
-    livePreview({ resolveSrc: (src) => resolveAssetSrc(src, null, ""), getBib }),
+    livePreview({ resolveSrc, getBib }),
     // Both classes, because they do different halves of the job: live-preview
     // sets the typography, clean-view hides the delimiters. Only the first is
     // what shipped, which gave headings at heading size with their hashes still
@@ -140,6 +146,10 @@ export default function PlainEditor({
   // you want when writing. The three-pane arrangement earns its keep for a deck,
   // where the slide and its source are different things.
   const [layout, setLayout] = useState<View>("live");
+  /** The same value, readable at the moment the editor is built. The editor is
+   *  created after a fetch, so the remembered view has long since been restored
+   *  by then, but the creation effect cannot see the state it landed in. */
+  const layoutRef = useRef<View>("live");
   const [outlineOpen, setOutlineOpen] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
   /** Suggesting turns every edit into CriticMarkup instead of applying it. It is
@@ -159,6 +169,23 @@ export default function PlainEditor({
   const bibRef = useRef<BibLibrary | null>(null);
   /** Live typesetting, on or off, without rebuilding the editor. */
   const liveOn = useRef(new Compartment());
+
+  /**
+   * An image's src, as a URL the browser can fetch.
+   *
+   * Read through a ref at decoration time, the way the Drive editor does, so a
+   * change of folder does not rebuild the editor. It is the same context the
+   * preview beside it uses, so the two agree on every image.
+   */
+  const assetCtx = useRef<AssetCtx>({ drive: null, origin: "", driveToken: "" });
+  useEffect(() => {
+    assetCtx.current = {
+      drive: folderId ? ({ fileId, name, folderId } as DriveMeta) : null,
+      origin: typeof window === "undefined" ? "" : window.location.origin,
+      driveToken: "",
+    };
+  }, [fileId, name, folderId]);
+  const resolveSrc = useCallback((src: string) => resolveAssetSrc(src, assetCtx.current), []);
 
   // Citations. The document names its library in `bibliography:`; the route
   // resolves it, including an absolute or ~ path, which is the only way to reach
@@ -279,18 +306,23 @@ export default function PlainEditor({
   // no localStorage, so this is a deliberate post-mount correction rather than
   // state that could have been initialised.
   useEffect(() => {
+    const view = remembered(VIEW_KEY, ["live", "editor", "split", "preview"] as const, "live");
+    layoutRef.current = view;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- the server has no localStorage, so it rendered the default; this is a correction after mount, not state that could have been initialised.
-    setLayout(remembered(VIEW_KEY, ["live", "editor", "split", "preview"] as const, "live"));
+    setLayout(view);
     setOutlineOpen(remembered(OUTLINE_KEY, ["yes", "no"] as const, "no") === "yes");
     setReviewOpen(remembered(REVIEW_KEY, ["yes", "no"] as const, "no") === "yes");
     setMode(remembered(MODE_KEY, ["edit", "suggest"] as const, "edit"));
   }, []);
 
   useEffect(() => {
+    layoutRef.current = layout;
     view.current?.dispatch({
-      effects: liveOn.current.reconfigure(layout === "live" ? liveLayer(() => bibRef.current) : []),
+      effects: liveOn.current.reconfigure(
+        layout === "live" ? liveLayer(resolveSrc, () => bibRef.current) : [],
+      ),
     });
-  }, [layout]);
+  }, [layout, resolveSrc]);
 
   const docUrl = useCallback(
     (extra = "") => `/local/doc?id=${encodeURIComponent(fileId)}${extra}`,
@@ -436,8 +468,13 @@ export default function PlainEditor({
             }),
             editable.current.of(EditorView.editable.of(true)),
             // The document typeset where you type it. Marks stay in the text and
-            // are hidden by decorations, so nothing about the file changes.
-            liveOn.current.of(liveLayer(() => bibRef.current)),
+            // are hidden by decorations, so nothing about the file changes. It
+            // is only on for the Live view: built unconditionally, a remembered
+            // Editor view opened typeset anyway, because the effect that turns
+            // it off had already run and found no editor to reconfigure.
+            liveOn.current.of(
+              layoutRef.current === "live" ? liveLayer(resolveSrc, () => bibRef.current) : [],
+            ),
             // The editing behaviour the other editor has, minus the parts that
             // belong to comments and suggest mode: those are phase 3 and need
             // storage decisions this editor has deliberately not made.
@@ -565,7 +602,7 @@ export default function PlainEditor({
       view.current?.destroy();
       view.current = null;
     };
-  }, [docUrl, adopt]);
+  }, [docUrl, adopt, resolveSrc]);
 
   /** Take the version on disk, keeping a copy of this buffer first. */
   const takeDisk = useCallback(async () => {
