@@ -70,6 +70,33 @@ type Status = "loading" | "clean" | "dirty" | "saving" | "conflict" | "error";
 
 type View = "live" | "editor" | "split" | "preview";
 
+/**
+ * The view and the contents panel are how this person likes to work, not
+ * anything about the document, so they are remembered per browser rather than
+ * written into the file. Reading happens after mount: the server renders the
+ * default, and a value read during render would not match it.
+ */
+const VIEW_KEY = "gmist.plain.view";
+const OUTLINE_KEY = "gmist.plain.outline";
+
+function remembered<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
+  try {
+    const v = window.localStorage.getItem(key);
+    return v && (allowed as readonly string[]).includes(v) ? (v as T) : fallback;
+  } catch {
+    // a private window, or storage refused: the default is fine
+    return fallback;
+  }
+}
+
+function remember(key: string, value: string) {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // nothing here is worth failing an edit for
+  }
+}
+
 export default function PlainEditor({
   fileId,
   name,
@@ -141,6 +168,15 @@ export default function PlainEditor({
   useEffect(() => {
     bibRef.current = bibLib;
   }, [bibLib]);
+
+  // Restore the remembered view and panel once, on the client. The server has
+  // no localStorage, so this is a deliberate post-mount correction rather than
+  // state that could have been initialised.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => {
+    setLayout(remembered(VIEW_KEY, ["live", "editor", "split", "preview"] as const, "live"));
+    setOutlineOpen(remembered(OUTLINE_KEY, ["yes", "no"] as const, "no") === "yes");
+  }, []);
 
   useEffect(() => {
     view.current?.dispatch({
@@ -456,7 +492,10 @@ export default function PlainEditor({
             <button
               key={v}
               type="button"
-              onClick={() => setLayout(v)}
+              onClick={() => {
+                remember(VIEW_KEY, v);
+                setLayout(v);
+              }}
               className={`cursor-pointer px-2 py-1 text-xs uppercase tracking-wider ${
                 layout === v ? "bg-border text-ink" : "text-muted hover:text-ink"
               }`}

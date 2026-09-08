@@ -50,7 +50,10 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   // Local mode has no rooms. The id IS the file, so opening it is a redirect
   // and nothing is created: open the same file twice and you are simply in the
   // same editor on the same file, the way any other editor behaves.
-  if (isLocalMode(env)) return redirect(`/docs/${encodeURIComponent(fileId)}`);
+  // The plain editor, not the room-backed one: a local file has one editor and
+  // one buffer, and /docs carries the machinery for a shared Drive document.
+  // TagFox reaches gmist through here, so this is what "Open in gmist" means.
+  if (isLocalMode(env)) return redirect(`/edit/${encodeURIComponent(fileId)}`);
 
   const result = await importDriveFileToRoom(env, fileId, gate.access.email);
   if (!result.ok) {
