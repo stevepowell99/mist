@@ -211,33 +211,44 @@ export default function PlainEditor({
    * One window per file.
    *
    * Two windows are two buffers, and the second to save wins whatever the first
-   * was doing. The conditional write refuses the stale one for a while, but once
-   * the loser's poll adopts the newer version its baseline is current again and
-   * its own older text goes over the top. That is not theoretical: it happened
-   * on 8 September 2026 at 13:12, two saves refused in the same second carrying
-   * different byte counts, and the revert landed eight minutes later.
+   * was doing. The conditional write cannot prevent it: it refuses the stale
+   * save, but once that window's poll adopts the newer version its baseline is
+   * current again and its older text follows with nothing left to refuse. That
+   * is what happened on 8 September 2026 at 13:12.
    *
-   * A Web Lock is the right instrument. The browser holds it while the tab
-   * lives, releases it if the tab dies, and tells a second tab immediately
-   * rather than making it wait. The lock is per file, so it holds however the
-   * second window was opened.
+   * The lock is requested normally rather than with `ifAvailable`, so it QUEUES.
+   * Asking whether it is free and answering immediately looked simpler and was
+   * wrong twice over: React mounts an effect, tears it down and mounts it again,
+   * so the second request raced this tab's own release and declared the file
+   * open elsewhere when nothing was; and a genuine second window, once told,
+   * stayed told even after the first was closed. Queuing fixes both. The notice
+   * appears only if the wait is real, and clears by itself the moment the lock
+   * arrives.
    */
   useEffect(() => {
     if (typeof navigator === "undefined" || !navigator.locks) return;
     let release = () => {};
     let cancelled = false;
-    void navigator.locks.request(`gmist-file:${fileId}`, { ifAvailable: true }, (held) =>
+    // Long enough to outlast a remount, short enough to feel immediate.
+    const slow = setTimeout(() => {
+      if (!cancelled) setAlreadyOpen(true);
+    }, 400);
+
+    void navigator.locks.request(`gmist-file:${fileId}`, () =>
       new Promise<void>((resolve) => {
-        if (!held || cancelled) {
-          if (!held && !cancelled) setAlreadyOpen(true);
+        clearTimeout(slow);
+        if (cancelled) {
           resolve();
           return;
         }
+        setAlreadyOpen(false);
         release = resolve; // held until this tab lets go
       }),
     );
+
     return () => {
       cancelled = true;
+      clearTimeout(slow);
       release();
     };
   }, [fileId]);
@@ -677,14 +688,15 @@ export default function PlainEditor({
           <p className="max-w-md text-sm text-muted">
             This file is open in another tab or window, possibly a minimised one. Two windows on
             one file are two separate copies, and whichever saves last wins, so this one will not
-            read or write it. Close the other window, then reload this page.
+            read or write it. Close the other window and this page will open by itself. Chrome's
+            tab search, Ctrl+Shift+A, finds a tab you cannot see.
           </p>
           <button
             type="button"
             onClick={() => window.location.reload()}
             className="cursor-pointer rounded border border-border px-3 py-1.5 text-sm uppercase tracking-wider text-ink hover:bg-border"
           >
-            Reload
+            Reload anyway
           </button>
         </div>
       )}
