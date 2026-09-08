@@ -6,6 +6,8 @@ export default [
   route("open", "routes/open.tsx"),
   route("go", "routes/go.tsx"),
   route("local/doc", "routes/local.doc.ts"),
+  route("local/recovery", "routes/local.recovery.ts"),
+  route("edit/:id", "routes/edit.$id.tsx"),
   route("local/git", "routes/local.git.ts"),
   route("docs/:id", "routes/docs.$id.tsx"),
   route("docs/:id/folder", "routes/docs.$id.folder.ts"),
