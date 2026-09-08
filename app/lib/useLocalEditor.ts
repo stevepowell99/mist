@@ -84,7 +84,7 @@ export function useLocalEditor(fileId: string) {
    *  out, threads in the Yjs map, body as text. */
   const load = useCallback(
     async (replace: boolean) => {
-      const res = await fetch(`/local/doc?id=${encodeURIComponent(fileId)}`);
+      const res = await fetch(`/local/doc?id=${encodeURIComponent(fileId)}`, { cache: "no-store" });
       if (!res.ok) return false;
       const { text, version } = (await res.json()) as { text: string; version: string | null };
       versionRef.current = version;
@@ -208,7 +208,7 @@ export function useLocalEditor(fileId: string) {
     const check = async () => {
       if (stopped || document.hidden) return;
       try {
-        const res = await fetch(`/local/doc?stat=1&id=${encodeURIComponent(fileId)}`);
+        const res = await fetch(`/local/doc?stat=1&id=${encodeURIComponent(fileId)}`, { cache: "no-store" });
         if (!res.ok) return;
         const { version } = (await res.json()) as { version: string | null };
         if (stopped || !version || version === versionRef.current) return;
@@ -222,7 +222,7 @@ export function useLocalEditor(fileId: string) {
         // already settled, to keep the ordinary poll to one small request.
         let incomingLength: number | null = null;
         if (!dirty && !reverted) {
-          const peek = await fetch(`/local/doc?id=${encodeURIComponent(fileId)}`);
+          const peek = await fetch(`/local/doc?id=${encodeURIComponent(fileId)}`, { cache: "no-store" });
           if (peek.ok) {
             const { text } = (await peek.json()) as { text: string };
             incomingLength = text.length;

@@ -146,6 +146,44 @@ const SNAP_MAX_BYTES = 4 * 1024 * 1024;
 /** Served path -> the hash of the last version snapshotted for it. */
 const watched = new Map();
 
+/**
+ * The watch list survives a restart.
+ *
+ * It used to live only in memory, so every restart of the dev server emptied it
+ * and the log went silent until something happened to reopen the file. That is
+ * exactly when a restart is most likely, since a restart usually means gmist was
+ * just changed, and it left the one record that could say who wrote a file blind
+ * at the moment it was most needed. Steve lost an attribution to it on
+ * 8 September 2026.
+ */
+const WATCH_LIST = path.join(process.cwd(), "logs", "watched.json");
+
+function rememberWatched() {
+  try {
+    fsSync.mkdirSync(path.dirname(WATCH_LIST), { recursive: true });
+    fsSync.writeFileSync(WATCH_LIST, JSON.stringify([...watched.keys()], null, 2));
+  } catch {
+    // the watch list is a convenience; never fail a read or a write for it
+  }
+}
+
+function restoreWatched() {
+  try {
+    for (const abs of JSON.parse(fsSync.readFileSync(WATCH_LIST, "utf8"))) {
+      try {
+        // Seed with the file's current hash, so coming back does not report the
+        // whole file as an outside change.
+        watched.set(abs, hashOf(fsSync.readFileSync(abs)));
+      } catch {
+        // gone or renamed since; drop it from the list on the next write
+      }
+    }
+    console.log(`localfs: watching ${watched.size} file(s) from the last run`);
+  } catch {
+    // no list yet, which is the normal first run
+  }
+}
+
 function snapDirFor(abs) {
   // One folder per file, named so two files called the same thing stay apart.
   const safe = abs.replace(/[^A-Za-z0-9._-]+/g, "_").replace(/^_+/, "").slice(-120);
@@ -156,7 +194,9 @@ function snapshot(abs, buf) {
   if (!buf || buf.length === 0 || buf.length > SNAP_MAX_BYTES) return;
   const version = hashOf(buf);
   if (watched.get(abs) === version) return version;
+  const isNew = !watched.has(abs);
   watched.set(abs, version);
+  if (isNew) rememberWatched();
   try {
     const dir = snapDirFor(abs);
     fsSync.mkdirSync(dir, { recursive: true });
@@ -549,6 +589,8 @@ const server = http.createServer(async (req, res) => {
     res.end(JSON.stringify({ error: err.message || "internal error" }));
   }
 });
+
+restoreWatched();
 
 server.listen(PORT, "127.0.0.1", () => {
   console.log(`localfs: serving this machine's files on http://127.0.0.1:${PORT} (loopback, token required)`);
