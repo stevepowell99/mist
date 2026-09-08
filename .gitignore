@@ -30,3 +30,4 @@ public/vendor/
 scripts/.gmist-session
 _tmp/
 logs/
+coverage/
