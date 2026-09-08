@@ -4,6 +4,15 @@ import { EditorView, keymap, highlightActiveLine, drawSelection, lineNumbers } f
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
+import { bracketMatching, codeFolding, foldGutter, foldKeymap } from "@codemirror/language";
+import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } from "@codemirror/autocomplete";
+import { mistFolds } from "~/lib/cm-folding";
+import { wrapKeymap } from "~/lib/cm-shortcuts";
+import { criticMarkup } from "~/lib/cm-criticmarkup";
+import { fencedDivStyle } from "~/lib/cm-fenced-divs";
+import { citationSource } from "~/lib/cm-citations";
+import { slashSource } from "~/lib/cm-slash";
+import { iconSource } from "~/lib/cm-icons";
 import { markdownLineStyle } from "~/lib/cm-markdown-style";
 import PlainPreview from "~/components/PlainPreview";
 import OutlinePanel from "~/components/OutlinePanel";
@@ -274,6 +283,21 @@ export default function PlainEditor({
             // The document typeset where you type it. Marks stay in the text and
             // are hidden by decorations, so nothing about the file changes.
             liveOn.current.of(liveLayer(() => bibRef.current)),
+            // The editing behaviour the other editor has, minus the parts that
+            // belong to comments and suggest mode: those are phase 3 and need
+            // storage decisions this editor has deliberately not made.
+            bracketMatching(),
+            closeBrackets(),
+            codeFolding(),
+            foldGutter(),
+            mistFolds,
+            criticMarkup,
+            fencedDivStyle,
+            autocompletion({
+              override: [slashSource(), citationSource(() => bibRef.current), iconSource()],
+              icons: false,
+            }),
+            wrapKeymap,
             keymap.of([
               {
                 key: "Mod-s",
@@ -282,6 +306,9 @@ export default function PlainEditor({
                   return true;
                 },
               },
+              ...closeBracketsKeymap,
+              ...completionKeymap,
+              ...foldKeymap,
               ...defaultKeymap,
               ...historyKeymap,
               ...searchKeymap,
