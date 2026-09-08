@@ -583,16 +583,33 @@ function build(view: EditorView, resolveSrc: (src: string) => string, bib: BibLi
  * over the visible range per cursor move. `atomicRanges` keeps the caret out of
  * the hidden text, so arrow keys step over a hidden `##` instead of stalling
  * inside it.
+ *
+ * It rebuilds on a new syntax tree as well, and that one is not optional. The
+ * markdown parser does not parse the document when the state is made: it parses
+ * the first 3,000 characters and hands the rest to a background worker, which
+ * catches up over idle callbacks and announces each chunk as a transaction that
+ * changes neither the document nor the selection nor the viewport. Rebuilding
+ * only on those three therefore froze the decorations at whatever the tree
+ * covered at mount, so on any real document the marks were hidden down to about
+ * the first screen and every `##` and `**` below it stayed visible until a
+ * keystroke or a click happened to trigger a rebuild. A large adopted change
+ * does the same thing mid-session, which is why it looked intermittent.
  */
 const livePlugin = (resolveSrc: (src: string) => string, getBib: () => BibLibrary | null) =>
   ViewPlugin.fromClass(
     class {
       built: Built;
+      tree: Tree;
       constructor(view: EditorView) {
         this.built = build(view, resolveSrc, getBib());
+        this.tree = syntaxTree(view.state);
       }
       update(u: ViewUpdate) {
-        if (u.docChanged || u.viewportChanged || u.selectionSet) this.built = build(u.view, resolveSrc, getBib());
+        const tree = syntaxTree(u.state);
+        if (u.docChanged || u.viewportChanged || u.selectionSet || tree !== this.tree) {
+          this.built = build(u.view, resolveSrc, getBib());
+          this.tree = tree;
+        }
       }
     },
     {
@@ -708,7 +725,16 @@ const MERMAID_START =
 const blockField = StateField.define<DecorationSet>({
   create: (state) => buildBlocks(state),
   update(value, tr) {
-    if (!tr.docChanged && tr.selection === undefined) return value;
+    // The tree comparison is what catches the background parse finishing; see
+    // the note on livePlugin. Without it a table or a diagram below the first
+    // few thousand characters never became one.
+    if (
+      !tr.docChanged &&
+      tr.selection === undefined &&
+      syntaxTree(tr.startState) === syntaxTree(tr.state)
+    ) {
+      return value;
+    }
     return buildBlocks(tr.state);
   },
   provide: (f) => EditorView.decorations.from(f),
