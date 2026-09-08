@@ -101,15 +101,23 @@ export function serializeThreads(
     return entry;
   });
 
-  const fm: Record<string, unknown> = { ...existing };
+  // Keep the author's own frontmatter as the text they wrote, and splice the
+  // `mist:` block in beside it. Parsing the whole block and re-emitting it, which
+  // is what this did, reformatted every key on every save: quotes changed, lists
+  // were re-indented, key order moved. On a file an agent is also editing that
+  // reads as the whole header being rewritten every few seconds, and the agent
+  // then "restores" it over the human's work. Obsidian never touched a line it
+  // was not asked to touch, which is why this worked for years before gmist.
   const existingMist =
-    fm.mist && typeof fm.mist === "object"
-      ? (fm.mist as Record<string, unknown>)
+    existing.mist && typeof existing.mist === "object"
+      ? { ...(existing.mist as Record<string, unknown>) }
       : {};
-  fm.mist = { ...existingMist, threads: serialized };
-
-  const yamlStr = stringify(fm, { lineWidth: 0 });
-  return `---\n${yamlStr}---\n\n${body}`;
+  delete existingMist.threads;
+  const mistYaml = stringify({ mist: { ...existingMist, threads: serialized } }, { lineWidth: 0 });
+  const kept = stripMistKey(raw);
+  const nl = String.fromCharCode(10);
+  const keptText = kept.trim() ? (kept.endsWith(nl) ? kept : kept + nl) : "";
+  return "---" + nl + keptText + mistYaml + "---" + nl + nl + body;
 }
 
 export function deserializeThreads(markdown: string): {
