@@ -366,14 +366,30 @@ const handlers = {
     // change somebody else made between our polls; the second is the version most
     // worth having back, since it is the one the editor believed was saved.
     if (existing) snapshot(abs, existing);
+    // Write back in the line endings the file already had.
+    //
+    // The editor's Y.Text is LF-only, and has to be: CodeMirror discards a
+    // carriage return, so a CRLF document desyncs every position after a line
+    // break. That is a requirement of the editor, not of the file, and gmist was
+    // the disk. In a repo with core.autocrlf=true every other writer produces
+    // CRLF, so each gmist save flipped several hundred line endings and every
+    // agent save flipped them back. To anything running `git diff` that reads as
+    // the whole file being rewritten, which is exactly what the agents reported
+    // and then "repaired" by restoring their own copies, which flipped the
+    // endings again. Steve hand-edited alongside agents for a year without this;
+    // Obsidian and VS Code keep a file's existing endings, and so must we.
+    let toWrite = buf;
+    if (existing && existing.includes(13) && !buf.includes(13)) {
+      toWrite = Buffer.from(buf.toString("utf8").split("\n").join("\r\n"), "utf8");
+    }
     await fs.mkdir(path.dirname(abs), { recursive: true });
-    await fs.writeFile(abs, buf);
-    snapshot(abs, buf);
-    const version = hashOf(buf);
+    await fs.writeFile(abs, toWrite);
+    snapshot(abs, toWrite);
+    const version = hashOf(toWrite);
     // `was` next to `bytes` is the pair worth having: a save that shrinks a file
     // by twenty thousand characters is the shape of a stale buffer landing, and
     // it is invisible in a byte count on its own.
-    record({ op: "wrote", path: abs, bytes: buf.length, was: existing ? existing.length : 0, expected: expected ?? null, onDisk: current, version, client });
+    record({ op: "wrote", path: abs, bytes: toWrite.length, was: existing ? existing.length : 0, expected: expected ?? null, onDisk: current, version, client });
     console.log(`localfs: wrote ${abs} (${buf.length} bytes, was ${existing ? existing.length : 0})`);
     return { version };
   },
