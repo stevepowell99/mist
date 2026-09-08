@@ -133,20 +133,20 @@ export interface DocumentContextValue {
 /**
  * How long the typing has to stop before a live save flushes.
  *
- * Twelve seconds, not two and a half. Steve edits these files while agents edit
+ * Twenty seconds, not two and a half. Steve edits these files while agents edit
  * them too, and a save every two and a half seconds means the file is being
  * rewritten almost continuously: any read an agent takes is stale within a
  * breath, and any write it makes lands in the middle of somebody's sentence.
  * Obsidian and VS Code write when asked, which is why editing alongside agents
  * worked for years and then stopped.
  *
- * Twelve is a pause rather than a gap between keystrokes: long enough that a
+ * Twenty is a pause rather than a gap between keystrokes: long enough that a
  * working session produces a handful of writes rather than hundreds, short
  * enough that stepping away from the keyboard saves. Leaving the window, and
  * closing the tab, still flush immediately, so nothing waits on the timer to be
  * safe.
  */
-const AUTOSAVE_DEBOUNCE_MS = 12000;
+const AUTOSAVE_DEBOUNCE_MS = 20000;
 
 /**
  * A genuine save-conflict (Drive's body diverged from our last save) pauses
