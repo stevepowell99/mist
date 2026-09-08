@@ -58,7 +58,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
         // climbs the document's own ancestors, so a bib in another tree (Steve's
         // Zotero library under My Drive, against a document in C:\dev) can never
         // be found by walking, and every citation renders as "n.d.".
-        const abs = isLocalMode(env) && /^[A-Za-z]:[\\/]/.test(p);
+        const abs = isLocalMode(env) && (/^[A-Za-z]:[\\/]/.test(p) || p.startsWith("~/"));
         const id = abs ? pathToId(p.split("/").join("\\")) : await driveResolvePath(token, folder, p);
         if (id) bibIds.push(id);
       } catch {

@@ -29,6 +29,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import fs from "node:fs/promises";
 import fsSync from "node:fs";
 import http from "node:http";
+import os from "node:os";
 import path from "node:path";
 import { execFile } from "node:child_process";
 import { readDevVars } from "./dev-vars.mjs";
@@ -249,6 +250,13 @@ function tokenOk(given) {
 function absOf(p) {
   if (!p) throw new HttpError(400, "missing path");
   if (p.includes("\0")) throw new HttpError(400, "bad path");
+  // `~` is expanded here because this process owns path arithmetic and is the
+  // only thing that knows whose machine it is. It lets a document name a shared
+  // resource, a Zotero library sitting above all the repos, in a way that reads
+  // the same on Steve's machine and on Gabriele's.
+  if (p === "~" || p.startsWith("~/") || p.startsWith("~\\")) {
+    p = path.join(os.homedir(), p.slice(1));
+  }
   const abs = path.resolve(p);
   if (!path.isAbsolute(abs)) throw new HttpError(400, "path must be absolute");
   return abs;
