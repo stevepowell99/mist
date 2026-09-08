@@ -6,6 +6,9 @@ import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
 import { markdownLineStyle } from "~/lib/cm-markdown-style";
 import PlainPreview from "~/components/PlainPreview";
+import OutlinePanel from "~/components/OutlinePanel";
+import { livePreview } from "~/lib/cm-live-preview";
+import { resolveAssetSrc } from "~/lib/asset-urls";
 import { parseBib, type BibLibrary } from "~/lib/citations";
 import { extractBibPaths } from "~/lib/slides-build";
 import { rawFrontmatter } from "~/lib/thread-serialization";
@@ -34,7 +37,7 @@ const POLL_MS = 700;
 
 type Status = "loading" | "clean" | "dirty" | "saving" | "conflict" | "error";
 
-type View = "editor" | "split" | "preview";
+type View = "live" | "editor" | "split" | "preview";
 
 export default function PlainEditor({
   fileId,
@@ -58,12 +61,21 @@ export default function PlainEditor({
   /** Holds the editable flag, so a conflict can freeze the buffer in place. */
   const editable = useRef(new Compartment());
   const [note, setNote] = useState<string | null>(null);
-  const [layout, setLayout] = useState<View>("editor");
+  // Live is the default for prose: the document typeset in place, which is what
+  // you want when writing. The three-pane arrangement earns its keep for a deck,
+  // where the slide and its source are different things.
+  const [layout, setLayout] = useState<View>("live");
+  const [outlineOpen, setOutlineOpen] = useState(false);
+  /** So the outline can move the cursor and the live layer can be reconfigured. */
+  const [editorView, setEditorView] = useState<EditorView | null>(null);
   /** The document text, mirrored into React so the preview can render it. The
    *  editor remains the owner; this is a copy for display, never a second
    *  source of truth. */
   const [text, setText] = useState("");
   const [bibLib, setBibLib] = useState<BibLibrary | null>(null);
+  const bibRef = useRef<BibLibrary | null>(null);
+  /** Live typesetting, on or off, without rebuilding the editor. */
+  const liveOn = useRef(new Compartment());
 
   // Citations. The document names its library in `bibliography:`; the route
   // resolves it, including an absolute or ~ path, which is the only way to reach
@@ -92,6 +104,21 @@ export default function PlainEditor({
       stopped = true;
     };
   }, [folderId, bibPaths]);
+
+  // The live layer reads the library through a ref, so a new one does not rebuild
+  // the editor; keeping it current is an effect rather than a render-time write.
+  useEffect(() => {
+    bibRef.current = bibLib;
+  }, [bibLib]);
+
+  useEffect(() => {
+    view.current?.dispatch({
+      effects: liveOn.current.reconfigure(layout === "live" ? livePreview({
+        resolveSrc: (src) => resolveAssetSrc(src, null, ""),
+        getBib: () => bibRef.current,
+      }) : []),
+    });
+  }, [layout]);
 
   const docUrl = useCallback(
     (extra = "") => `/local/doc?id=${encodeURIComponent(fileId)}${extra}`,
@@ -229,6 +256,14 @@ export default function PlainEditor({
             markdownLineStyle,
             EditorView.lineWrapping,
             editable.current.of(EditorView.editable.of(true)),
+            // The document typeset where you type it. Marks stay in the text and
+            // are hidden by decorations, so nothing about the file changes.
+            liveOn.current.of(
+              livePreview({
+                resolveSrc: (src) => resolveAssetSrc(src, null, ""),
+                getBib: () => bibRef.current,
+              }),
+            ),
             keymap.of([
               {
                 key: "Mod-s",
@@ -255,6 +290,7 @@ export default function PlainEditor({
           ],
         });
         view.current = new EditorView({ state, parent: host.current });
+        setEditorView(view.current);
         setText(first.text);
         setStatus("clean");
       } catch {
@@ -364,8 +400,18 @@ export default function PlainEditor({
           </button>
         )}
         {note && <span className="truncate text-xs text-muted">{note}</span>}
-        <span className="ml-auto flex items-center overflow-hidden rounded border border-border">
-          {(["editor", "split", "preview"] as View[]).map((v) => (
+        <button
+          type="button"
+          onClick={() => setOutlineOpen((o) => !o)}
+          title="Contents"
+          className={`ml-auto cursor-pointer rounded px-2 py-1 text-xs uppercase tracking-wider ${
+            outlineOpen ? "bg-border text-ink" : "text-muted hover:text-ink"
+          }`}
+        >
+          Contents
+        </button>
+        <span className="flex items-center overflow-hidden rounded border border-border">
+          {(["live", "editor", "split", "preview"] as View[]).map((v) => (
             <button
               key={v}
               type="button"
@@ -380,6 +426,17 @@ export default function PlainEditor({
         </span>
       </header>
       <div className="flex min-h-0 flex-1">
+        {outlineOpen && (
+          <div className="min-h-0 w-64 shrink-0 overflow-auto border-r border-border">
+            <OutlinePanel
+              view={editorView}
+              text={text}
+              deck={false}
+              canEdit={status !== "conflict"}
+              onClose={() => setOutlineOpen(false)}
+            />
+          </div>
+        )}
         <div
           ref={host}
           className={`min-h-0 overflow-auto ${

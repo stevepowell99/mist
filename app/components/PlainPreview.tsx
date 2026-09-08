@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { renderDocumentHtml } from "~/lib/render-document";
 import { runMermaid } from "~/lib/mermaid";
 import { POS_ANCHOR_CSS } from "~/lib/source-anchors";
@@ -25,17 +25,26 @@ export default function PlainPreview({
 }) {
   const container = useRef<HTMLDivElement>(null);
 
+  // DOMPurify needs a DOM, and the Cloudflare Worker has none, so the render only
+  // runs after hydration. Without this gate the route 500s on the server with
+  // "sanitize is not a function", which reaches the user as a page that will not
+  // open at all.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []); // eslint-disable-line react-hooks/set-state-in-effect
+
   const themeStyle = useMemo(() => themeCss(rawFrontmatter(markdown)), [markdown]);
 
   const html = useMemo(
     () =>
-      renderDocumentHtml(markdown, {
+      !mounted
+        ? ""
+        : renderDocumentHtml(markdown, {
         drive,
         origin: typeof window !== "undefined" ? window.location.origin : "",
         driveToken: "",
         bibLib,
-      }),
-    [markdown, drive, bibLib],
+          }),
+    [mounted, markdown, drive, bibLib],
   );
 
   useEffect(() => {
