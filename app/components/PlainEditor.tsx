@@ -440,10 +440,16 @@ export default function PlainEditor({
         <div
           ref={host}
           className={`min-h-0 overflow-auto ${
-            layout === "preview" ? "hidden" : layout === "split" ? "w-1/2 border-r border-border" : "flex-1"
+            layout === "preview"
+              ? "hidden"
+              : layout === "split"
+                ? "w-1/2 border-r border-border"
+                : "flex-1"
           }`}
         />
-        {layout !== "editor" && (
+        {/* Live is the editor alone, typeset in place. Only split and preview put a
+            second pane beside it. */}
+        {(layout === "split" || layout === "preview") && (
           <div className={layout === "split" ? "min-h-0 w-1/2" : "min-h-0 flex-1"}>
             <PlainPreview
               markdown={text}
