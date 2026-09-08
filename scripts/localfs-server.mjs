@@ -110,6 +110,34 @@ function git(args, cwd) {
  * process for every write, and which needs one elevation to switch on; see
  * docs/who-writes-this-file.md.
  */
+
+/**
+ * Which line endings a file should be written with.
+ *
+ * Preserving whatever the file already has covers every case but one: a file
+ * gmist has already flattened to LF has no carriage returns left to preserve, so
+ * it would stay flat for ever and keep diffing against the whole file. For a
+ * tracked file in a repo with core.autocrlf=true, git's own answer is CRLF, so
+ * ask git rather than the bytes. Decided once per file and cached, because it
+ * costs two subprocesses and an autosave runs every few seconds.
+ */
+const eolFor = new Map();
+
+async function decideEol(abs, existing) {
+  if (eolFor.has(abs)) return eolFor.get(abs);
+  let eol = existing && existing.includes(13) ? "crlf" : "lf";
+  if (eol === "lf") {
+    const cwd = path.dirname(abs);
+    const autocrlf = await git(["config", "core.autocrlf"], cwd);
+    if (autocrlf.ok && autocrlf.out === "true") {
+      const tracked = await git(["ls-files", "--error-unmatch", "--", abs], cwd);
+      if (tracked.ok) eol = "crlf";
+    }
+  }
+  eolFor.set(abs, eol);
+  return eol;
+}
+
 const SNAP_DIR = path.join(process.cwd(), "logs", "snapshots");
 const SNAP_KEEP = 50;
 const SNAP_POLL_MS = 700;
@@ -379,7 +407,7 @@ const handlers = {
     // endings again. Steve hand-edited alongside agents for a year without this;
     // Obsidian and VS Code keep a file's existing endings, and so must we.
     let toWrite = buf;
-    if (existing && existing.includes(13) && !buf.includes(13)) {
+    if ((await decideEol(abs, existing)) === "crlf" && !buf.includes(13)) {
       toWrite = Buffer.from(buf.toString("utf8").split("\n").join("\r\n"), "utf8");
     }
     await fs.mkdir(path.dirname(abs), { recursive: true });
