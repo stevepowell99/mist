@@ -127,8 +127,12 @@ export default function PlainEditor({
   const clean = useRef<string>("");
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [status, setStatus] = useState<Status>("loading");
+  /** Another tab or window already has this file open. */
+  const [alreadyOpen, setAlreadyOpen] = useState(false);
   /** Read by the save timer and the poll, which must not re-subscribe on it. */
   const conflicted = useRef(false);
+  /** Read by the save path, which must not re-subscribe when it changes. */
+  const lockedOut = useRef(false);
   /** Holds the editable flag, so a conflict can freeze the buffer in place. */
   const editable = useRef(new Compartment());
   const [note, setNote] = useState<string | null>(null);
@@ -196,8 +200,47 @@ export default function PlainEditor({
   }, [bibLib]);
 
   useEffect(() => {
+    lockedOut.current = alreadyOpen;
+  }, [alreadyOpen]);
+
+  useEffect(() => {
     modeRef.current = mode;
   }, [mode]);
+
+  /**
+   * One window per file.
+   *
+   * Two windows are two buffers, and the second to save wins whatever the first
+   * was doing. The conditional write refuses the stale one for a while, but once
+   * the loser's poll adopts the newer version its baseline is current again and
+   * its own older text goes over the top. That is not theoretical: it happened
+   * on 8 September 2026 at 13:12, two saves refused in the same second carrying
+   * different byte counts, and the revert landed eight minutes later.
+   *
+   * A Web Lock is the right instrument. The browser holds it while the tab
+   * lives, releases it if the tab dies, and tells a second tab immediately
+   * rather than making it wait. The lock is per file, so it holds however the
+   * second window was opened.
+   */
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !navigator.locks) return;
+    let release = () => {};
+    let cancelled = false;
+    void navigator.locks.request(`gmist-file:${fileId}`, { ifAvailable: true }, (held) =>
+      new Promise<void>((resolve) => {
+        if (!held || cancelled) {
+          if (!held && !cancelled) setAlreadyOpen(true);
+          resolve();
+          return;
+        }
+        release = resolve; // held until this tab lets go
+      }),
+    );
+    return () => {
+      cancelled = true;
+      release();
+    };
+  }, [fileId]);
 
   /**
    * The toolbar's Comment button, and Ctrl/Cmd+Alt+M.
@@ -282,7 +325,7 @@ export default function PlainEditor({
 
   const save = useCallback(async () => {
     const v = view.current;
-    if (!v || conflicted.current) return;
+    if (!v || conflicted.current || lockedOut.current) return;
     const text = v.state.doc.toString();
     if (text === clean.current) return;
     setStatus("saving");
@@ -485,7 +528,7 @@ export default function PlainEditor({
     // fetch started at that moment does not.
     const flush = () => {
       const v = view.current;
-      if (!v || conflicted.current) return;
+      if (!v || conflicted.current || lockedOut.current) return;
       const text = v.state.doc.toString();
       if (text === clean.current) return;
       const expected = version.current ? `&expected=${encodeURIComponent(version.current)}` : "";
@@ -626,7 +669,26 @@ export default function PlainEditor({
           ))}
         </span>
       </header>
-      <div className="flex min-h-0 flex-1">
+      {alreadyOpen && (
+        <div className="flex flex-1 flex-col items-center justify-center gap-4 px-8 text-center">
+          <span className="text-sm uppercase tracking-wider text-amber-600">
+            Already open in another window
+          </span>
+          <p className="max-w-md text-sm text-muted">
+            This file is open in another tab or window, possibly a minimised one. Two windows on
+            one file are two separate copies, and whichever saves last wins, so this one will not
+            read or write it. Close the other window, then reload this page.
+          </p>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="cursor-pointer rounded border border-border px-3 py-1.5 text-sm uppercase tracking-wider text-ink hover:bg-border"
+          >
+            Reload
+          </button>
+        </div>
+      )}
+      <div className={`flex min-h-0 flex-1 ${alreadyOpen ? "hidden" : ""}`}>
         {outlineOpen && (
           <div className="min-h-0 w-64 shrink-0 overflow-auto border-r border-border">
             <OutlinePanel
