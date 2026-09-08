@@ -811,3 +811,24 @@ body {
     color: #000;
   }
 }
+
+/* The upstream-changed prompt.
+ *
+ * It appears when the file has been rewritten by something else while you were
+ * typing, and it is the moment that decides whether an afternoon survives: take
+ * the new version, or keep yours and lose theirs. A quiet amber pill in a busy
+ * navbar was missed for a whole day of edit-loss, so it flashes. Fast enough to
+ * catch the eye at the edge of vision, and it never stops, because the choice
+ * does not go away on its own. */
+@keyframes upstream-flash {
+  0%, 100% { background-color: rgb(245 158 11 / 0.18); color: rgb(180 83 9); }
+  50%      { background-color: rgb(245 158 11 / 0.95); color: rgb(255 255 255); }
+}
+
+.upstream-flash {
+  animation: upstream-flash 1s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .upstream-flash { animation: upstream-flash 2.5s ease-in-out infinite; }
+}

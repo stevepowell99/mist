@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { isLocalFileId } from "~/lib/localfs-ids";
 import { useDocument } from "~/lib/DocumentContext";
 
 /**
@@ -13,7 +14,11 @@ import { useDocument } from "~/lib/DocumentContext";
  * before closing with unsaved edits.
  */
 export default function SaveStatus() {
-  const { backed, unsaved, conflict, upstreamChanged, reloadFromDrive, saveNow, forkedNotice, clearForkedNotice } = useDocument();
+  const { backed, unsaved, conflict, upstreamChanged, reloadFromDrive, saveNow, forkedNotice, clearForkedNotice, drive } = useDocument();
+  // A local file has not "changed in Drive", and saying so sent Steve looking
+  // in the wrong place more than once.
+  const local = !!drive?.fileId && isLocalFileId(drive.fileId);
+  const where = local ? "on disk" : "in Drive";
 
   useEffect(() => {
     if (!unsaved && !conflict) return;
@@ -55,11 +60,11 @@ export default function SaveStatus() {
     return (
       <button
         onClick={reloadFromDrive}
-        className="flex h-full cursor-pointer items-center gap-2 bg-amber-500/15 px-3 text-sm uppercase tracking-wider text-amber-600 hover:bg-amber-500/25"
-        title="This file changed in Drive (edited elsewhere). Click to load the Drive version. If you have unsaved edits here, they are saved alongside as a recovery copy first, so nothing is lost."
+        className="upstream-flash flex h-full cursor-pointer items-center gap-2 px-3 text-sm font-semibold uppercase tracking-wider"
+        title={`This file changed ${where} while you were editing. Click to load that version. Any unsaved edits here are saved alongside as a recovery copy first, so nothing is lost.`}
       >
-        <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-amber-500" />
-        Load Drive version
+        <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-current" />
+        {local ? "File changed on disk — load it" : "Load Drive version"}
       </button>
     );
   }
