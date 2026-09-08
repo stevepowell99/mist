@@ -13,6 +13,12 @@ import { fencedDivStyle } from "~/lib/cm-fenced-divs";
 import { citationSource } from "~/lib/cm-citations";
 import { slashSource } from "~/lib/cm-slash";
 import { iconSource } from "~/lib/cm-icons";
+import { classSource } from "~/lib/cm-classes";
+import { parseCssClasses } from "~/lib/cm-classes";
+import DECK_BASE_CSS from "~/styles/deck-base.css?raw";
+import { suggestMode } from "~/lib/cm-suggest";
+import { wrapOnSelection } from "~/lib/cm-shortcuts";
+import PlainReview from "~/components/PlainReview";
 import { markdownLineStyle } from "~/lib/cm-markdown-style";
 import PlainPreview from "~/components/PlainPreview";
 import OutlinePanel from "~/components/OutlinePanel";
@@ -77,6 +83,10 @@ type View = "live" | "editor" | "split" | "preview";
  * default, and a value read during render would not match it.
  */
 const VIEW_KEY = "gmist.plain.view";
+const REVIEW_KEY = "gmist.plain.review";
+
+/** The class names the deck stylesheet defines, for the `.`-picker. */
+const CSS_CLASSES = parseCssClasses(DECK_BASE_CSS);
 const OUTLINE_KEY = "gmist.plain.outline";
 
 function remembered<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
@@ -124,6 +134,11 @@ export default function PlainEditor({
   // where the slide and its source are different things.
   const [layout, setLayout] = useState<View>("live");
   const [outlineOpen, setOutlineOpen] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  /** Suggesting turns every edit into CriticMarkup instead of applying it. It is
+   *  a mode of typing, not of storage: the marks are characters in the file. */
+  const [mode, setMode] = useState<"edit" | "suggest">("edit");
+  const modeRef = useRef<"edit" | "suggest">("edit");
   /** So the outline can move the cursor and the live layer can be reconfigured. */
   const [editorView, setEditorView] = useState<EditorView | null>(null);
   /** The document text, mirrored into React so the preview can render it. The
@@ -131,6 +146,9 @@ export default function PlainEditor({
    *  source of truth. */
   const [text, setText] = useState("");
   const [bibLib, setBibLib] = useState<BibLibrary | null>(null);
+  /** Spellcheck language, from a `lang:` in the frontmatter. British by default,
+   *  which is the house style. */
+  const langRef = useRef("en-GB");
   const bibRef = useRef<BibLibrary | null>(null);
   /** Live typesetting, on or off, without rebuilding the editor. */
   const liveOn = useRef(new Compartment());
@@ -139,6 +157,11 @@ export default function PlainEditor({
   // resolves it, including an absolute or ~ path, which is the only way to reach
   // a library that is not an ancestor of the file.
   const frontmatter = useMemo(() => rawFrontmatter(text), [text]);
+  useEffect(() => {
+    const m = /^\s*lang(?:uage)?:\s*(.+)$/m.exec(frontmatter);
+    langRef.current = m ? m[1].trim().replace(/^["']|["']$/g, "") : "en-GB";
+  }, [frontmatter]);
+
   const bibPaths = useMemo(() => extractBibPaths(frontmatter).join("|"), [frontmatter]);
   useEffect(() => {
     let stopped = false;
@@ -169,13 +192,18 @@ export default function PlainEditor({
     bibRef.current = bibLib;
   }, [bibLib]);
 
+  useEffect(() => {
+    modeRef.current = mode;
+  }, [mode]);
+
   // Restore the remembered view and panel once, on the client. The server has
   // no localStorage, so this is a deliberate post-mount correction rather than
   // state that could have been initialised.
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- the server has no localStorage, so it rendered the default; this is a correction after mount, not state that could have been initialised.
     setLayout(remembered(VIEW_KEY, ["live", "editor", "split", "preview"] as const, "live"));
     setOutlineOpen(remembered(OUTLINE_KEY, ["yes", "no"] as const, "no") === "yes");
+    setReviewOpen(remembered(REVIEW_KEY, ["yes", "no"] as const, "no") === "yes");
   }, []);
 
   useEffect(() => {
@@ -319,6 +347,13 @@ export default function PlainEditor({
             markdown({ base: markdownLanguage, codeLanguages: [] }),
             markdownLineStyle,
             EditorView.lineWrapping,
+            // Browser spellcheck, in the document's own language if it names one.
+            EditorView.contentAttributes.of({
+              spellcheck: "true",
+              autocorrect: "off",
+              autocapitalize: "off",
+              lang: langRef.current,
+            }),
             editable.current.of(EditorView.editable.of(true)),
             // The document typeset where you type it. Marks stay in the text and
             // are hidden by decorations, so nothing about the file changes.
@@ -334,10 +369,17 @@ export default function PlainEditor({
             criticMarkup,
             fencedDivStyle,
             autocompletion({
-              override: [slashSource(), citationSource(() => bibRef.current), iconSource()],
+              override: [
+                slashSource(),
+                citationSource(() => bibRef.current),
+                classSource(() => CSS_CLASSES),
+                iconSource(),
+              ],
               icons: false,
             }),
             wrapKeymap,
+            wrapOnSelection,
+            suggestMode(() => modeRef.current),
             keymap.of([
               {
                 key: "Mod-s",
@@ -477,9 +519,48 @@ export default function PlainEditor({
           </button>
         )}
         {note && <span className="truncate text-xs text-muted">{note}</span>}
+        <span className="ml-auto flex items-center overflow-hidden rounded border border-border">
+          {(["edit", "suggest"] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => setMode(m)}
+              title={
+                m === "suggest"
+                  ? "Your edits become tracked changes in the text itself"
+                  : "Your edits are applied"
+              }
+              className={`cursor-pointer px-2 py-1 text-xs uppercase tracking-wider ${
+                mode === m ? "bg-border text-ink" : "text-muted hover:text-ink"
+              }`}
+            >
+              {m === "edit" ? "Editing" : "Suggesting"}
+            </button>
+          ))}
+        </span>
         <button
           type="button"
-          onClick={() => setOutlineOpen((o) => !o)}
+          onClick={() =>
+            setReviewOpen((o) => {
+              remember(REVIEW_KEY, o ? "no" : "yes");
+              return !o;
+            })
+          }
+          title="Suggested edits and comments"
+          className={`cursor-pointer rounded px-2 py-1 text-xs uppercase tracking-wider ${
+            reviewOpen ? "bg-border text-ink" : "text-muted hover:text-ink"
+          }`}
+        >
+          Review
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            setOutlineOpen((o) => {
+              remember(OUTLINE_KEY, o ? "no" : "yes");
+              return !o;
+            })
+          }
           title="Contents"
           className={`ml-auto cursor-pointer rounded px-2 py-1 text-xs uppercase tracking-wider ${
             outlineOpen ? "bg-border text-ink" : "text-muted hover:text-ink"
@@ -536,6 +617,11 @@ export default function PlainEditor({
               drive={folderId ? ({ fileId, name, folderId } as DriveMeta) : null}
               bibLib={bibLib}
             />
+          </div>
+        )}
+        {reviewOpen && (
+          <div className="min-h-0 w-72 shrink-0">
+            <PlainReview view={editorView} text={text} onClose={() => setReviewOpen(false)} />
           </div>
         )}
       </div>
