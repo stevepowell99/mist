@@ -19,29 +19,6 @@ stopped.
 Together they answer what changed, when, and whether gmist did it. They do not
 answer which process did it.
 
-## Naming the process
-
-Two attempts failed and are worth not repeating. Sampling running processes
-around the change catches only a writer that started moments before, and the one
-writer ever positively identified had been alive for hours. Windows object-access
-auditing was switched on and produced no events.
-
-What did work was reading the session transcripts. Session `e8f8dbe9` was writing
-`rubicon/docs/principles.md` through `python - <<'PY'` heredocs at 22:20:03,
-22:20:43, 22:21:07 and 22:21:20, matching the recorded changes to the second.
-
-That is one mechanism, but it is no longer the one to look for first: **an agent
-editing a file through Bash rather than through the Edit tool**. The harness
-checks whether a file has moved
-since it was read, but only for its own Read/Write pair. A heredoc, `cat >`, or
-`sed -i` bypasses that check completely and rewrites the whole file from whatever
-the session holds in memory.
-
-Grep the transcripts under `~/.claude/projects` for the filename, over a window
-either side of the change, and look for `Bash` rather than `Edit`. Do not filter
-by "did an agent write it" using the Write and Edit tools alone; that search
-returns nothing and reads as an exoneration.
-
 ## Look here first: what has the file open
 
 An open editor window is a writer, and it costs one command to check where the
@@ -72,6 +49,29 @@ switched TO did it. gmist was blamed for three days on that correlation.
 happened while he was editing and no agent was running, which the editor mechanism
 would explain, but nobody has gone back to check. Do not present any one mechanism
 as the established cause of all of them.
+
+## Naming the process
+
+Two attempts failed and are worth not repeating. Sampling running processes
+around the change catches only a writer that started moments before, and the one
+writer ever positively identified had been alive for hours. Windows object-access
+auditing was switched on and produced no events.
+
+What did work was reading the session transcripts. Session `e8f8dbe9` was writing
+`rubicon/docs/principles.md` through `python - <<'PY'` heredocs at 22:20:03,
+22:20:43, 22:21:07 and 22:21:20, matching the recorded changes to the second.
+
+That is one mechanism, but it is no longer the one to look for first: **an agent
+editing a file through Bash rather than through the Edit tool**. The harness
+checks whether a file has moved
+since it was read, but only for its own Read/Write pair. A heredoc, `cat >`, or
+`sed -i` bypasses that check completely and rewrites the whole file from whatever
+the session holds in memory.
+
+Grep the transcripts under `~/.claude/projects` for the filename, over a window
+either side of the change, and look for `Bash` rather than `Edit`. Do not filter
+by "did an agent write it" using the Write and Edit tools alone; that search
+returns nothing and reads as an exoneration.
 
 ## What actually protects the work
 
