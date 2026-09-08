@@ -8,6 +8,8 @@ import {
   driveResolvePath,
 } from "~/lib/google.server";
 import { openDriveRequest } from "~/lib/drive-access.server";
+import { isLocalMode } from "~/lib/google.server";
+import { pathToId } from "~/lib/localfs-ids";
 
 const isBib = (n: string) => /\.bib$/i.test(n);
 
@@ -51,7 +53,13 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 
     for (const p of explicit) {
       try {
-        const id = await driveResolvePath(token, folder, p);
+        // An absolute local path is allowed, and is the only thing that works
+        // for a repo whose library lives outside it. The folder walk below only
+        // climbs the document's own ancestors, so a bib in another tree (Steve's
+        // Zotero library under My Drive, against a document in C:\dev) can never
+        // be found by walking, and every citation renders as "n.d.".
+        const abs = isLocalMode(env) && /^[A-Za-z]:[\\/]/.test(p);
+        const id = abs ? pathToId(p.split("/").join("\\")) : await driveResolvePath(token, folder, p);
         if (id) bibIds.push(id);
       } catch {
         // a bad bibliography path just falls through to the folder walk
