@@ -54,9 +54,30 @@ export default function PlainReview({
     });
   };
 
-  /** A comment is dealt with by deleting it: there is no resolved flag to set. */
+  /**
+   * A comment is dealt with by deleting it: there is no resolved flag to set.
+   *
+   * The highlight goes with it. A comment on a selection is written as
+   * `{==the words==}{>>the note<<}`, so removing only the note leaves the words
+   * wrapped in markup that now marks nothing, which then shows as a stray
+   * highlight nobody can explain. Unwrap it: keep the words, drop the braces.
+   */
   const drop = (from: number, to: number) => {
-    view?.dispatch({ changes: { from, to, insert: "" }, userEvent: "input.reject" });
+    const v = view;
+    if (!v) return;
+    const doc = v.state.doc.toString();
+    const spans = criticSpans(doc);
+    const i = spans.findIndex((s) => s.from === from && s.to === to);
+    const before = i > 0 ? spans[i - 1] : undefined;
+    const abuts =
+      before?.type === "highlight" && doc.slice(before.to, from).trim() === "";
+    const changes = abuts
+      ? [
+          { from: before.from, to: before.contentFrom, insert: "" },
+          { from: before.contentTo, to, insert: "" },
+        ]
+      : [{ from, to, insert: "" }];
+    v.dispatch({ changes, userEvent: "input.reject" });
   };
 
   const nothing = edits.length === 0 && comments.length === 0;

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { revealPosAtTop } from "~/lib/cm-reveal";
 import type { EditorView } from "@codemirror/view";
 import { extractOutlineFromText, moveSection, sectionEnd, toggleHiddenText, type OutlineItem } from "~/lib/outline";
 import { slideIndexForOffset } from "~/lib/slide-cursor";
@@ -60,7 +61,7 @@ export default function OutlinePanel({
   const jump = useCallback(
     (pos: number) => {
       if (!view) return;
-      view.dispatch({ selection: { anchor: pos }, scrollIntoView: true });
+      revealPosAtTop(view, pos);
       view.focus();
     },
     [view],

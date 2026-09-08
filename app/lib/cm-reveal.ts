@@ -22,3 +22,20 @@ export function revealPos(view: EditorView, pos: number): void {
     effects: EditorView.scrollIntoView(pos, { y: "start", yMargin }),
   });
 }
+
+/**
+ * Scroll `pos` to the top of the view, with just enough room above it to read
+ * as a top rather than as a clipped edge.
+ *
+ * This is the right landing for a heading picked from the contents: the section
+ * you asked for should start at the top with its body below it, not sit at the
+ * bottom of the screen with the previous section above it, which is what
+ * CodeMirror's own minimum-distance scrolling gives you when the target is
+ * below the fold.
+ */
+export function revealPosAtTop(view: EditorView, pos: number): void {
+  view.dispatch({
+    selection: { anchor: pos },
+    effects: EditorView.scrollIntoView(pos, { y: "start", yMargin: 16 }),
+  });
+}
