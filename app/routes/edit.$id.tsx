@@ -32,12 +32,18 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
 
   try {
     const meta = await driveGetMeta(await getDriveAccessToken(env), id);
-    return { id, name: meta.name };
+    return { id, name: meta.name, folderId: meta.parents?.[0] ?? null };
   } catch {
     throw data("file not found", { status: 404 });
   }
 }
 
 export default function EditPage({ loaderData }: Route.ComponentProps) {
-  return <PlainEditor fileId={loaderData.id} name={loaderData.name} />;
+  return (
+    <PlainEditor
+      fileId={loaderData.id}
+      name={loaderData.name}
+      folderId={loaderData.folderId ?? undefined}
+    />
+  );
 }

@@ -1,10 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { EditorState, Transaction } from "@codemirror/state";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Compartment, EditorState, Transaction } from "@codemirror/state";
 import { EditorView, keymap, highlightActiveLine, drawSelection, lineNumbers } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
 import { markdownLineStyle } from "~/lib/cm-markdown-style";
+import PlainPreview from "~/components/PlainPreview";
+import { parseBib, type BibLibrary } from "~/lib/citations";
+import { extractBibPaths } from "~/lib/slides-build";
+import { rawFrontmatter } from "~/lib/thread-serialization";
+import type { DriveMeta } from "~/shared/types";
 
 /**
  * A local file, edited.
@@ -29,7 +34,17 @@ const POLL_MS = 700;
 
 type Status = "loading" | "clean" | "dirty" | "saving" | "conflict" | "error";
 
-export default function PlainEditor({ fileId, name }: { fileId: string; name: string }) {
+type View = "editor" | "split" | "preview";
+
+export default function PlainEditor({
+  fileId,
+  name,
+  folderId,
+}: {
+  fileId: string;
+  name: string;
+  folderId?: string;
+}) {
   const host = useRef<HTMLDivElement | null>(null);
   const view = useRef<EditorView | null>(null);
   /** The version this tab loaded or last wrote: the baseline every write carries. */
@@ -38,16 +53,91 @@ export default function PlainEditor({ fileId, name }: { fileId: string; name: st
   const clean = useRef<string>("");
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [status, setStatus] = useState<Status>("loading");
+  /** Read by the save timer and the poll, which must not re-subscribe on it. */
+  const conflicted = useRef(false);
+  /** Holds the editable flag, so a conflict can freeze the buffer in place. */
+  const editable = useRef(new Compartment());
   const [note, setNote] = useState<string | null>(null);
+  const [layout, setLayout] = useState<View>("editor");
+  /** The document text, mirrored into React so the preview can render it. The
+   *  editor remains the owner; this is a copy for display, never a second
+   *  source of truth. */
+  const [text, setText] = useState("");
+  const [bibLib, setBibLib] = useState<BibLibrary | null>(null);
+
+  // Citations. The document names its library in `bibliography:`; the route
+  // resolves it, including an absolute or ~ path, which is the only way to reach
+  // a library that is not an ancestor of the file.
+  const frontmatter = useMemo(() => rawFrontmatter(text), [text]);
+  const bibPaths = useMemo(() => extractBibPaths(frontmatter).join("|"), [frontmatter]);
+  useEffect(() => {
+    let stopped = false;
+    void (async () => {
+      if (!folderId || !bibPaths) {
+        setBibLib(null);
+        return;
+      }
+      const q = new URLSearchParams({ folder: folderId });
+      for (const path of bibPaths.split("|")) q.append("path", path);
+      try {
+        const res = await fetch(`/drive/bib?${q}`);
+        if (!res.ok || stopped) return;
+        const raw = await res.text();
+        if (!stopped) setBibLib(raw.trim() ? parseBib(raw) : null);
+      } catch {
+        // no library is a normal state, not an error
+      }
+    })();
+    return () => {
+      stopped = true;
+    };
+  }, [folderId, bibPaths]);
 
   const docUrl = useCallback(
     (extra = "") => `/local/doc?id=${encodeURIComponent(fileId)}${extra}`,
     [fileId],
   );
 
-  const save = useCallback(async () => {
+  /**
+   * The file moved under us and the buffer has edits of its own.
+   *
+   * Stop saving, because every attempt is refused and retrying only hides the
+   * real problem. That leaves the buffer as the only copy of what was typed,
+   * which is exactly the state a crashed tab loses, so write it beside the
+   * document straight away. The user then chooses, with nothing at risk either
+   * way.
+   */
+  const raiseConflict = useCallback(async () => {
+    if (conflicted.current) return;
+    conflicted.current = true;
+    setStatus("conflict");
+    setNote("The file changed on disk while you were typing.");
+    if (timer.current) clearTimeout(timer.current);
+    // Freeze the buffer. Carrying on typing into something that cannot be saved
+    // only builds up work that will have to be merged by hand later, and the
+    // copy written below means nothing typed so far is at risk.
+    view.current?.dispatch({
+      effects: editable.current.reconfigure(EditorView.editable.of(false)),
+    });
     const v = view.current;
     if (!v) return;
+    try {
+      const res = await fetch(`/local/recovery?id=${encodeURIComponent(fileId)}`, {
+        method: "POST",
+        headers: { "Content-Type": "text/markdown; charset=utf-8" },
+        body: v.state.doc.toString(),
+        cache: "no-store",
+      });
+      const body = (await res.json()) as { saved?: string };
+      if (body.saved) setNote(`The file changed on disk. Your version is safe in "${body.saved}".`);
+    } catch {
+      // the copy is best effort; the conflict still stands
+    }
+  }, [fileId]);
+
+  const save = useCallback(async () => {
+    const v = view.current;
+    if (!v || conflicted.current) return;
     const text = v.state.doc.toString();
     if (text === clean.current) return;
     setStatus("saving");
@@ -60,8 +150,7 @@ export default function PlainEditor({ fileId, name }: { fileId: string; name: st
         cache: "no-store",
       });
       if (res.status === 409) {
-        setStatus("conflict");
-        setNote("The file changed on disk while you were typing.");
+        void raiseConflict();
         return;
       }
       if (!res.ok) {
@@ -78,11 +167,13 @@ export default function PlainEditor({ fileId, name }: { fileId: string; name: st
       setStatus("error");
       setNote("The local file service is not reachable.");
     }
-  }, [docUrl]);
+  }, [docUrl, raiseConflict]);
 
   const saveRef = useRef(save);
+  const raiseConflictRef = useRef(raiseConflict);
   useEffect(() => {
     saveRef.current = save;
+    raiseConflictRef.current = raiseConflict;
   });
 
   /** Replace only the span that differs, so the cursor and the scroll position
@@ -108,6 +199,7 @@ export default function PlainEditor({ fileId, name }: { fileId: string; name: st
       // Not a user edit, so it must not mark the buffer dirty or start a save.
       annotations: Transaction.remote.of(true),
     });
+    setText(text);
   }, []);
 
   useEffect(() => {
@@ -136,6 +228,7 @@ export default function PlainEditor({ fileId, name }: { fileId: string; name: st
             markdown({ base: markdownLanguage, codeLanguages: [] }),
             markdownLineStyle,
             EditorView.lineWrapping,
+            editable.current.of(EditorView.editable.of(true)),
             keymap.of([
               {
                 key: "Mod-s",
@@ -151,8 +244,10 @@ export default function PlainEditor({ fileId, name }: { fileId: string; name: st
             ]),
             EditorView.updateListener.of((u) => {
               if (!u.docChanged) return;
+              setText(u.state.doc.toString());
               const fromUser = u.transactions.some((tr) => !tr.annotation(Transaction.remote));
               if (!fromUser) return;
+              if (conflicted.current) return; // the user has a choice to make first
               setStatus("dirty");
               if (timer.current) clearTimeout(timer.current);
               timer.current = setTimeout(() => void saveRef.current(), SAVE_AFTER_MS);
@@ -160,6 +255,7 @@ export default function PlainEditor({ fileId, name }: { fileId: string; name: st
           ],
         });
         view.current = new EditorView({ state, parent: host.current });
+        setText(first.text);
         setStatus("clean");
       } catch {
         if (!stopped) {
@@ -180,8 +276,7 @@ export default function PlainEditor({ fileId, name }: { fileId: string; name: st
           const next = await read();
           if (stopped || !view.current) return;
           if (view.current.state.doc.toString() !== clean.current) {
-            setStatus("conflict");
-            setNote("The file changed on disk while you were typing.");
+            void raiseConflictRef.current();
             return;
           }
           adopt(next.text);
@@ -198,7 +293,7 @@ export default function PlainEditor({ fileId, name }: { fileId: string; name: st
     // fetch started at that moment does not.
     const flush = () => {
       const v = view.current;
-      if (!v) return;
+      if (!v || conflicted.current) return;
       const text = v.state.doc.toString();
       if (text === clean.current) return;
       const expected = version.current ? `&expected=${encodeURIComponent(version.current)}` : "";
@@ -242,6 +337,10 @@ export default function PlainEditor({ fileId, name }: { fileId: string; name: st
       adopt(next.text);
       version.current = next.version;
       clean.current = next.text;
+      conflicted.current = false;
+      view.current?.dispatch({
+        effects: editable.current.reconfigure(EditorView.editable.of(true)),
+      });
       setStatus("clean");
       setNote("Your version was saved beside the file before it was replaced.");
     } catch {
@@ -265,8 +364,38 @@ export default function PlainEditor({ fileId, name }: { fileId: string; name: st
           </button>
         )}
         {note && <span className="truncate text-xs text-muted">{note}</span>}
+        <span className="ml-auto flex items-center overflow-hidden rounded border border-border">
+          {(["editor", "split", "preview"] as View[]).map((v) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => setLayout(v)}
+              className={`cursor-pointer px-2 py-1 text-xs uppercase tracking-wider ${
+                layout === v ? "bg-border text-ink" : "text-muted hover:text-ink"
+              }`}
+            >
+              {v}
+            </button>
+          ))}
+        </span>
       </header>
-      <div ref={host} className="min-h-0 flex-1 overflow-auto" />
+      <div className="flex min-h-0 flex-1">
+        <div
+          ref={host}
+          className={`min-h-0 overflow-auto ${
+            layout === "preview" ? "hidden" : layout === "split" ? "w-1/2 border-r border-border" : "flex-1"
+          }`}
+        />
+        {layout !== "editor" && (
+          <div className={layout === "split" ? "min-h-0 w-1/2" : "min-h-0 flex-1"}>
+            <PlainPreview
+              markdown={text}
+              drive={folderId ? ({ fileId, name, folderId } as DriveMeta) : null}
+              bibLib={bibLib}
+            />
+          </div>
+        )}
+      </div>
     </div>
   );
 }
