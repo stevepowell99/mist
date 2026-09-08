@@ -6,6 +6,7 @@ import { deserializeThreads, serializeThreads } from "./thread-serialization";
 import { quickHash } from "~/shared/hash";
 import type { DocControl, DocTransport } from "./doc-transport";
 import { shouldOfferRatherThanTake } from "./outside-change";
+import { useFileLock } from "./useFileLock";
 import type { DocMode } from "~/shared/types";
 
 /** How often to ask whether the file has changed underneath the editor. */
@@ -38,6 +39,8 @@ export function useLocalEditor(fileId: string) {
   const { user, setName: setUserName, needsName, dismissNamePrompt } = useUserIdentity();
 
   const [synced, setSynced] = useState(false);
+  /** Another window already has this file open, whichever route opened it. */
+  const alreadyOpen = useFileLock(fileId);
   const [mode, setModeState] = useState<DocMode>("edit");
 
   /** The file version this tab loaded or last wrote, and the baseline every
@@ -52,6 +55,9 @@ export function useLocalEditor(fileId: string) {
    *  Y.Text means the user has typed since, which decides whether an outside
    *  change can be taken silently or has to be offered. */
   const cleanBodyRef = useRef<string | null>(null);
+  /** The lock's answer, read by the transport, which must not re-create itself
+   *  when it changes. */
+  const lockedOutRef = useRef(false);
   /** The outside version we have already told the user about, so a change they
    *  have chosen not to take is announced once rather than on every poll. */
   const warnedRef = useRef<string | null>(null);
@@ -62,6 +68,10 @@ export function useLocalEditor(fileId: string) {
   const emit = useCallback((m: DocControl) => {
     for (const fn of listeners.current) fn(m);
   }, []);
+
+  useEffect(() => {
+    lockedOutRef.current = alreadyOpen;
+  }, [alreadyOpen]);
 
   useEffect(() => {
     awareness.setLocalStateField("user", user);
@@ -128,6 +138,7 @@ export function useLocalEditor(fileId: string) {
   );
 
   useEffect(() => {
+    if (alreadyOpen) return;
     let cancelled = false;
     void load(false).then((ok) => {
       if (!cancelled && ok) setSynced(true);
@@ -135,7 +146,7 @@ export function useLocalEditor(fileId: string) {
     return () => {
       cancelled = true;
     };
-  }, [load]);
+  }, [load, alreadyOpen]);
 
   const transport = useMemo<DocTransport>(() => {
     const write = async () => {
@@ -169,6 +180,9 @@ export function useLocalEditor(fileId: string) {
 
     return {
       send(content, commitNow) {
+        // A window that does not hold the lock never writes: its buffer is a
+        // second opinion about a file somebody else is editing.
+        if (lockedOutRef.current) return;
         // Only an explicit save writes. Without commitNow this is the editor
         // telling us what it holds, which a file-backed document does not need.
         if (!commitNow) return;
@@ -202,7 +216,7 @@ export function useLocalEditor(fileId: string) {
    * it adds no server-side state to a mode whose whole point is having none.
    */
   useEffect(() => {
-    if (!synced) return;
+    if (!synced || alreadyOpen) return;
     let stopped = false;
 
     const check = async () => {
@@ -256,7 +270,7 @@ export function useLocalEditor(fileId: string) {
       window.removeEventListener("focus", onVisible);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [synced, fileId, doc, load, emit]);
+  }, [synced, alreadyOpen, fileId, doc, load, emit]);
 
   return {
     doc,
@@ -266,6 +280,7 @@ export function useLocalEditor(fileId: string) {
     socket: null,
     transport,
     synced,
+    alreadyOpen,
     paused: false,
     resume: () => {},
     user,

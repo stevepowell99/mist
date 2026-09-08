@@ -1173,7 +1173,27 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
       </header>
       )}
       <div className="relative flex flex-1 overflow-hidden">
-        {!yjs.synced && !yjs.paused && (
+        {yjs.alreadyOpen && (
+          <div className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-paper px-8 text-center">
+            <span className="text-sm uppercase tracking-wider text-amber-600">
+              Already open in another window
+            </span>
+            <p className="max-w-md text-sm text-muted">
+              This file is open in another gmist tab or window, possibly a minimised one. Two
+              windows on one file are two separate copies, and whichever saves last wins, so this
+              one will not read or write it. Close the other window and this page will open by
+              itself. Chrome&apos;s tab search, Ctrl+Shift+A, finds a tab you cannot see.
+            </p>
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="cursor-pointer rounded border border-border px-3 py-1.5 text-sm uppercase tracking-wider text-ink hover:bg-border"
+            >
+              Reload anyway
+            </button>
+          </div>
+        )}
+        {!yjs.synced && !yjs.paused && !yjs.alreadyOpen && (
           <div className="absolute inset-0 z-40 flex flex-col items-center justify-center gap-3 bg-paper">
             <span className="h-7 w-7 animate-spin rounded-full border-2 border-border border-t-ink" />
             <span className="text-sm uppercase tracking-wider text-muted">Loading document…</span>

@@ -28,6 +28,7 @@ import { livePreview } from "~/lib/cm-live-preview";
 import { resolveAssetSrc, type AssetCtx } from "~/lib/asset-urls";
 import { parseBib, type BibLibrary } from "~/lib/citations";
 import { extractBibPaths } from "~/lib/slides-build";
+import { useFileLock } from "~/lib/useFileLock";
 import { rawFrontmatter } from "~/lib/thread-serialization";
 import type { DriveMeta } from "~/shared/types";
 
@@ -134,10 +135,10 @@ export default function PlainEditor({
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [status, setStatus] = useState<Status>("loading");
   /** Another tab or window already has this file open. */
-  const [alreadyOpen, setAlreadyOpen] = useState(false);
+  const alreadyOpen = useFileLock(fileId);
   /** Read by the save timer and the poll, which must not re-subscribe on it. */
   const conflicted = useRef(false);
-  /** Read by the save path, which must not re-subscribe when it changes. */
+  /** The same answer, read by the save path, which must not re-subscribe on it. */
   const lockedOut = useRef(false);
   /** Holds the editable flag, so a conflict can freeze the buffer in place. */
   const editable = useRef(new Compartment());
@@ -233,52 +234,6 @@ export default function PlainEditor({
   useEffect(() => {
     modeRef.current = mode;
   }, [mode]);
-
-  /**
-   * One window per file.
-   *
-   * Two windows are two buffers, and the second to save wins whatever the first
-   * was doing. The conditional write cannot prevent it: it refuses the stale
-   * save, but once that window's poll adopts the newer version its baseline is
-   * current again and its older text follows with nothing left to refuse. That
-   * is what happened on 8 September 2026 at 13:12.
-   *
-   * The lock is requested normally rather than with `ifAvailable`, so it QUEUES.
-   * Asking whether it is free and answering immediately looked simpler and was
-   * wrong twice over: React mounts an effect, tears it down and mounts it again,
-   * so the second request raced this tab's own release and declared the file
-   * open elsewhere when nothing was; and a genuine second window, once told,
-   * stayed told even after the first was closed. Queuing fixes both. The notice
-   * appears only if the wait is real, and clears by itself the moment the lock
-   * arrives.
-   */
-  useEffect(() => {
-    if (typeof navigator === "undefined" || !navigator.locks) return;
-    let release = () => {};
-    let cancelled = false;
-    // Long enough to outlast a remount, short enough to feel immediate.
-    const slow = setTimeout(() => {
-      if (!cancelled) setAlreadyOpen(true);
-    }, 400);
-
-    void navigator.locks.request(`gmist-file:${fileId}`, () =>
-      new Promise<void>((resolve) => {
-        clearTimeout(slow);
-        if (cancelled) {
-          resolve();
-          return;
-        }
-        setAlreadyOpen(false);
-        release = resolve; // held until this tab lets go
-      }),
-    );
-
-    return () => {
-      cancelled = true;
-      clearTimeout(slow);
-      release();
-    };
-  }, [fileId]);
 
   /**
    * The toolbar's Comment button, and Ctrl/Cmd+Alt+M.
