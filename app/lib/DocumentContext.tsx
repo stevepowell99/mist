@@ -130,8 +130,23 @@ export interface DocumentContextValue {
   handleCommentClick: (commentText: string) => void;
 }
 
-/** Idle delay before a live save flushes to the backend. */
-const AUTOSAVE_DEBOUNCE_MS = 2500;
+/**
+ * How long the typing has to stop before a live save flushes.
+ *
+ * Twelve seconds, not two and a half. Steve edits these files while agents edit
+ * them too, and a save every two and a half seconds means the file is being
+ * rewritten almost continuously: any read an agent takes is stale within a
+ * breath, and any write it makes lands in the middle of somebody's sentence.
+ * Obsidian and VS Code write when asked, which is why editing alongside agents
+ * worked for years and then stopped.
+ *
+ * Twelve is a pause rather than a gap between keystrokes: long enough that a
+ * working session produces a handful of writes rather than hundreds, short
+ * enough that stepping away from the keyboard saves. Leaving the window, and
+ * closing the tab, still flush immediately, so nothing waits on the timer to be
+ * safe.
+ */
+const AUTOSAVE_DEBOUNCE_MS = 12000;
 
 /**
  * A genuine save-conflict (Drive's body diverged from our last save) pauses
@@ -374,6 +389,10 @@ export function DocumentProvider({
     saveNowRef.current = saveNow;
   });
 
+  // Read through a ref for the same reason as saveNow: the leave-flush listeners
+  // below must not re-subscribe on every keystroke.
+  const unsavedRef = useRef(false);
+
   // Clear the unsaved state when the agent confirms a commit.
   useEffect(() => {
     return yjs.transport.subscribe((m) => {
@@ -417,6 +436,10 @@ export function DocumentProvider({
   // an edit still clears the badge.
   const unsaved = backed && userEdited && !!currentHash && currentHash !== lastCommittedHash;
 
+  useEffect(() => {
+    unsavedRef.current = unsaved;
+  }, [unsaved]);
+
   // Auto-save toggle (persisted), so sync issues can be isolated by turning it
   // off. Manual save still works when off. Read after mount to avoid SSR drift.
   const [autoSave, setAutoSaveState] = useState(true);
@@ -440,14 +463,34 @@ export function DocumentProvider({
   const [followCursor, setFollowCursor] = useState(true);
 
   // Live save: once the document core became a faithful Y.Text (#13), a save is
-  // byte-identical, so auto-save is safe. Debounce on edit-idle and let the
-  // relay write conditionally (it rejects rather than clobbering an upstream
-  // edit). A conflict pauses auto-save until the user reloads.
+  // byte-identical, so auto-save is safe. Wait for the typing to stop, and let
+  // the backend write conditionally (it refuses rather than clobbering an
+  // upstream edit). A conflict pauses auto-save until the user reloads.
   useEffect(() => {
     if (!autoSave || !unsaved || conflict || upstreamChanged) return;
     const t = setTimeout(saveNow, AUTOSAVE_DEBOUNCE_MS);
     return () => clearTimeout(t);
   }, [autoSave, unsaved, conflict, upstreamChanged, saveNow]);
+
+  // Waiting for a pause is only safe if leaving flushes. Blur and hiding the tab
+  // are the moments the user stops thinking about the document, and they are the
+  // moments an agent is most likely to pick it up, so save on both rather than
+  // letting the longer pause become a longer window in which work is unwritten.
+  useEffect(() => {
+    if (!autoSave) return;
+    const flush = () => {
+      if (unsavedRef.current) saveNowRef.current();
+    };
+    const onHidden = () => {
+      if (document.hidden) flush();
+    };
+    window.addEventListener("blur", flush);
+    document.addEventListener("visibilitychange", onHidden);
+    return () => {
+      window.removeEventListener("blur", flush);
+      document.removeEventListener("visibilitychange", onHidden);
+    };
+  }, [autoSave]);
 
   // Self-heal a conflict caused by transient Drive-for-Desktop churn. While
   // conflicted, re-attempt the save on a widening backoff: the relay only
