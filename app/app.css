@@ -832,3 +832,18 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .upstream-flash { animation: upstream-flash 2.5s ease-in-out infinite; }
 }
+
+/* Live preview reveals the source of the line you are on.
+ *
+ * clean-view hides delimiters outright, which is right for reading and wrong
+ * for writing: you cannot edit a heading's level or fix a bold marker you
+ * cannot see. Obsidian's answer is to show the marks on the active line only,
+ * so the document reads as typeset and the line under the cursor reads as
+ * source. */
+.live-preview .cm-activeLine .cm-delimiter {
+  display: inline;
+}
+
+.live-preview .cm-activeLine .cm-comment {
+  font-size: inherit;
+}

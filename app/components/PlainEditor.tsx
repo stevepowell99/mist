@@ -48,9 +48,9 @@ const POLL_MS = 700;
  * The live layer: the decorations that hide the marks, and the class that
  * typesets what is left.
  *
- * Both, always, together. The decorations alone hide the syntax and change
- * nothing else, which reads as plain source and is what the first attempt
- * shipped. The typography lives in `.live-preview` in app.css, and per the
+ * All three, always, together. The decorations alone hide nothing visible and
+ * read as plain source; the typography alone leaves every hash and asterisk in
+ * place. Each was shipped on its own before this comment existed. The typography lives in `.live-preview` in app.css, and per the
  * repo's own invariant a view-wide class has to ride in `editorAttributes`,
  * never on the DOM node, because CodeMirror rewrites that attribute whenever it
  * takes focus.
@@ -58,7 +58,11 @@ const POLL_MS = 700;
 function liveLayer(getBib: () => BibLibrary | null) {
   return [
     livePreview({ resolveSrc: (src) => resolveAssetSrc(src, null, ""), getBib }),
-    EditorView.editorAttributes.of({ class: "live-preview" }),
+    // Both classes, because they do different halves of the job: live-preview
+    // sets the typography, clean-view hides the delimiters. Only the first is
+    // what shipped, which gave headings at heading size with their hashes still
+    // in front of them.
+    EditorView.editorAttributes.of({ class: "live-preview clean-view" }),
   ];
 }
 
