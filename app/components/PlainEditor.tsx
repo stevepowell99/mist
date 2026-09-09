@@ -140,7 +140,7 @@ export default function PlainEditor({
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [status, setStatus] = useState<Status>("loading");
   /** Another tab or window already has this file open. */
-  const alreadyOpen = useFileLock(fileId);
+  const alreadyOpen = useFileLock(fileId) === "blocked";
   /** Read by the save timer and the poll, which must not re-subscribe on it. */
   const conflicted = useRef(false);
   /** The same answer, read by the save path, which must not re-subscribe on it. */

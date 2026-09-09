@@ -43,7 +43,7 @@ export function useLocalEditor(fileId: string) {
 
   const [synced, setSynced] = useState(false);
   /** Another window already has this file open, whichever route opened it. */
-  const alreadyOpen = useFileLock(fileId);
+  const alreadyOpen = useFileLock(fileId) === "blocked";
   const [mode, setModeState] = useState<DocMode>("edit");
 
   /** The file version this tab loaded or last wrote, and the baseline every

@@ -4,6 +4,18 @@ import { useEffect, useState } from "react";
 const SLOW_MS = 400;
 
 /**
+ * Whether this window may touch the file.
+ *
+ *  - `waiting`: we have asked and not been answered. Do nothing at all, and show
+ *    nothing: this is the ordinary first moment of every open, and a window that
+ *    read the file here would be reading one somebody else is editing.
+ *  - `held`: ours. Read, poll and write.
+ *  - `blocked`: another window has it, and has had it long enough that saying so
+ *    is not a flicker.
+ */
+export type FileLock = "waiting" | "held" | "blocked";
+
+/**
  * One window per file.
  *
  * Two windows on one file are two buffers, and the second to save wins whatever
@@ -26,19 +38,24 @@ const SLOW_MS = 400;
  * file open at /docs/<id> exclude each other. They are two editors over one
  * file, which is the case this exists for.
  *
- * The answer starts clear rather than locked out, so an ordinary open does not
- * flash a warning while the lock is being taken. A save path that must not
- * re-subscribe on it mirrors it into a ref of its own.
+ * `blocked` and `waiting` are separate answers because they want opposite
+ * treatment: one is shown to the user and the other must never be, while both
+ * have to stop the file being touched. Collapsing them into a boolean is how a
+ * second window came to read a file it had been refused.
  */
-export function useFileLock(fileId: string) {
-  const [lockedOut, setLockedOut] = useState(false);
+export function useFileLock(fileId: string): FileLock {
+  // No Web Locks means no way to ask, and refusing to open every file is a worse
+  // answer than the hazard. Decided here so the rest of the file has three
+  // states rather than four.
+  const supported = typeof navigator !== "undefined" && !!navigator.locks;
+  const [lock, setLock] = useState<FileLock>(supported ? "waiting" : "held");
 
   useEffect(() => {
-    if (typeof navigator === "undefined" || !navigator.locks) return;
+    if (!supported) return;
     let release = () => {};
     let cancelled = false;
     const slow = setTimeout(() => {
-      if (!cancelled) setLockedOut(true);
+      if (!cancelled) setLock("blocked");
     }, SLOW_MS);
 
     void navigator.locks.request(
@@ -50,7 +67,7 @@ export function useFileLock(fileId: string) {
             resolve();
             return;
           }
-          setLockedOut(false);
+          setLock("held");
           release = resolve; // held until this tab lets go
         }),
     );
@@ -60,7 +77,7 @@ export function useFileLock(fileId: string) {
       clearTimeout(slow);
       release();
     };
-  }, [fileId]);
+  }, [fileId, supported]);
 
-  return lockedOut;
+  return lock;
 }
