@@ -28,8 +28,7 @@ import { livePreview } from "~/lib/cm-live-preview";
 import { resolveAssetSrc, type AssetCtx } from "~/lib/asset-urls";
 import { parseBib, type BibLibrary } from "~/lib/citations";
 import { extractBibPaths } from "~/lib/slides-build";
-import { useFileLock } from "~/lib/useFileLock";
-import { shouldOfferRatherThanTake } from "~/lib/outside-change";
+import { useFileSync, type FileSyncBuffer } from "~/lib/useFileSync";
 import { rawFrontmatter } from "~/lib/thread-serialization";
 import type { DriveMeta } from "~/shared/types";
 
@@ -51,9 +50,6 @@ import type { DriveMeta } from "~/shared/types";
  *    Dirty buffer, say so and let the user choose.
  *  - Never resolve a real clash. Refuse the write, keep a copy, ask.
  */
-const SAVE_AFTER_MS = 1000;
-const POLL_MS = 700;
-
 /**
  * The live layer: the decorations that hide the marks, and the class that
  * typesets what is left.
@@ -129,22 +125,14 @@ export default function PlainEditor({
 }) {
   const host = useRef<HTMLDivElement | null>(null);
   const view = useRef<EditorView | null>(null);
-  /** The version this tab loaded or last wrote: the baseline every write carries. */
-  const version = useRef<string | null>(null);
-  /** The text as it stood at that moment, so "has the user typed" is answerable. */
-  const clean = useRef<string>("");
-  /** Every version this tab has loaded or written. A change arriving on one of
-   *  these is the file being put back to a state we have already been at, which
-   *  is a revert rather than somebody's new work. */
-  const seen = useRef(new Set<string>());
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** The file's content, from the moment it is read until the editor exists to
+   *  hold it. The sync layer reads the file before there is anywhere to put it,
+   *  because the editor is built around what it finds. */
+  const initial = useRef<string | null>(null);
   const [status, setStatus] = useState<Status>("loading");
-  /** Another tab or window already has this file open. */
-  const alreadyOpen = useFileLock(fileId) === "blocked";
-  /** Read by the save timer and the poll, which must not re-subscribe on it. */
+  /** The file has moved under us and the buffer is frozen. Read by the toolbar
+   *  and the comment action, which must not re-subscribe when it changes. */
   const conflicted = useRef(false);
-  /** The same answer, read by the save path, which must not re-subscribe on it. */
-  const lockedOut = useRef(false);
   /** Holds the editable flag, so a conflict can freeze the buffer in place. */
   const editable = useRef(new Compartment());
   const [note, setNote] = useState<string | null>(null);
@@ -233,10 +221,6 @@ export default function PlainEditor({
   }, [bibLib]);
 
   useEffect(() => {
-    lockedOut.current = alreadyOpen;
-  }, [alreadyOpen]);
-
-  useEffect(() => {
     modeRef.current = mode;
   }, [mode]);
 
@@ -284,90 +268,6 @@ export default function PlainEditor({
     });
   }, [layout, resolveSrc]);
 
-  const docUrl = useCallback(
-    (extra = "") => `/local/doc?id=${encodeURIComponent(fileId)}${extra}`,
-    [fileId],
-  );
-
-  /**
-   * The file moved under us and the buffer has edits of its own.
-   *
-   * Stop saving, because every attempt is refused and retrying only hides the
-   * real problem. That leaves the buffer as the only copy of what was typed,
-   * which is exactly the state a crashed tab loses, so write it beside the
-   * document straight away. The user then chooses, with nothing at risk either
-   * way.
-   */
-  const raiseConflict = useCallback(async (why: string) => {
-    if (conflicted.current) return;
-    conflicted.current = true;
-    setStatus("conflict");
-    setNote(why);
-    if (timer.current) clearTimeout(timer.current);
-    // Freeze the buffer. Carrying on typing into something that cannot be saved
-    // only builds up work that will have to be merged by hand later, and the
-    // copy written below means nothing typed so far is at risk.
-    view.current?.dispatch({
-      effects: editable.current.reconfigure(EditorView.editable.of(false)),
-    });
-    const v = view.current;
-    if (!v) return;
-    try {
-      const res = await fetch(`/local/recovery?id=${encodeURIComponent(fileId)}`, {
-        method: "POST",
-        headers: { "Content-Type": "text/markdown; charset=utf-8" },
-        body: v.state.doc.toString(),
-        cache: "no-store",
-      });
-      const body = (await res.json()) as { saved?: string };
-      if (body.saved) setNote(`${why} Your version is safe in "${body.saved}".`);
-    } catch {
-      // the copy is best effort; the conflict still stands
-    }
-  }, [fileId]);
-
-  const save = useCallback(async () => {
-    const v = view.current;
-    if (!v || conflicted.current || lockedOut.current) return;
-    const text = v.state.doc.toString();
-    if (text === clean.current) return;
-    setStatus("saving");
-    try {
-      const expected = version.current ? `&expected=${encodeURIComponent(version.current)}` : "";
-      const res = await fetch(docUrl(expected), {
-        method: "POST",
-        headers: { "Content-Type": "text/markdown; charset=utf-8" },
-        body: text,
-        cache: "no-store",
-      });
-      if (res.status === 409) {
-        void raiseConflict("The file changed on disk while you were typing.");
-        return;
-      }
-      if (!res.ok) {
-        setStatus("error");
-        setNote("Could not write the file.");
-        return;
-      }
-      const body = (await res.json()) as { version: string | null };
-      version.current = body.version;
-      if (body.version) seen.current.add(body.version);
-      clean.current = text;
-      setStatus("clean");
-      setNote(null);
-    } catch {
-      setStatus("error");
-      setNote("The local file service is not reachable.");
-    }
-  }, [docUrl, raiseConflict]);
-
-  const saveRef = useRef(save);
-  const raiseConflictRef = useRef(raiseConflict);
-  useEffect(() => {
-    saveRef.current = save;
-    raiseConflictRef.current = raiseConflict;
-  });
-
   /** Replace only the span that differs, so the cursor and the scroll position
    *  survive an outside edit that did not touch the line being worked on. */
   const adopt = useCallback((text: string) => {
@@ -394,24 +294,105 @@ export default function PlainEditor({
     setText(text);
   }, []);
 
+  /**
+   * A CodeMirror document, in the terms the sync layer asks for.
+   *
+   * The simpler of the two buffers: what is on screen is the file, so nothing is
+   * normalised on the way in or out. The one wrinkle is that the file is read
+   * before the editor exists, because the editor is built around what it finds,
+   * so the first content waits in a ref until there is a view to put it in.
+   */
+  const buffer = useMemo<FileSyncBuffer>(
+    () => ({
+      normalise: (text) => text,
+      held: () => view.current?.state.doc.toString() ?? initial.current,
+      put(text, first) {
+        if (first || !view.current) initial.current = text;
+        else adopt(text);
+      },
+      serialise: () => view.current?.state.doc.toString() ?? null,
+    }),
+    [adopt],
+  );
+
+  const raiseConflictRef = useRef<(why: string) => void>(() => {});
+  /** The typing signal and the explicit save, read at edit time so a new
+   *  callback identity does not tear down and rebuild the editor. */
+  const touchedRef = useRef<() => void>(() => {});
+  const saveNowRef = useRef<() => void>(() => {});
+
+  const sync = useFileSync(fileId, buffer, {
+    onAdopted: (text) => {
+      setText(text);
+      setStatus("clean");
+    },
+    onOffered: (why) =>
+      raiseConflictRef.current(
+        why === "dirty"
+          ? "The file changed on disk while you were typing."
+          : why === "reverted"
+            ? "Something put the file back to a version you have already seen."
+            : "Something rewrote the file on disk and it is shorter than what you have.",
+      ),
+    onConflict: () => raiseConflictRef.current("The file changed on disk while you were typing."),
+    onSaved: () => {
+      setStatus("clean");
+      setNote(null);
+    },
+    onError: (message) => {
+      setStatus("error");
+      setNote(message);
+    },
+  });
+
+  /** Another window has this file, so this one reads nothing and writes nothing. */
+  const alreadyOpen = sync.alreadyOpen;
+
+  /**
+   * The file moved under us, and taking the change would lose something.
+   *
+   * Stop saving, because every attempt would be refused and retrying only hides
+   * the real problem. That leaves the buffer as the only copy of what is here,
+   * which is exactly the state a crashed tab loses, so write it beside the
+   * document straight away. The user then chooses, with nothing at risk either
+   * way.
+   */
+  const raiseConflict = useCallback(
+    async (why: string) => {
+      if (conflicted.current) return;
+      conflicted.current = true;
+      sync.halt();
+      setStatus("conflict");
+      setNote(why);
+      // Freeze the buffer. Carrying on typing into something that cannot be
+      // saved only builds up work that will have to be merged by hand later, and
+      // the copy written below means nothing typed so far is at risk.
+      view.current?.dispatch({
+        effects: editable.current.reconfigure(EditorView.editable.of(false)),
+      });
+      const saved = await sync.saveRecovery();
+      if (saved) setNote(`${why} Your version is safe in "${saved}".`);
+    },
+    [sync],
+  );
+
   useEffect(() => {
-    let stopped = false;
+    raiseConflictRef.current = (why: string) => void raiseConflict(why);
+    touchedRef.current = sync.touched;
+    saveNowRef.current = () => sync.save();
+  });
 
-    const read = async () => {
-      const res = await fetch(docUrl(), { cache: "no-store" });
-      if (!res.ok) throw new Error("could not read the file");
-      return (await res.json()) as { text: string; version: string | null };
-    };
 
-    void (async () => {
-      try {
-        const first = await read();
-        if (stopped || !host.current) return;
-        version.current = first.version;
-        if (first.version) seen.current.add(first.version);
-        clean.current = first.text;
+  // Build the editor once the file has been read, around what it found. The
+  // reading, the polling and the saving are all the sync layer's; this effect
+  // owns the view and nothing else.
+  useEffect(() => {
+    if (!sync.ready || view.current || !host.current || initial.current === null) return;
+    const first = initial.current;
+    {
+      {
         const state = EditorState.create({
-          doc: first.text,
+          doc: first,
           extensions: [
             lineNumbers(),
             history(),
@@ -474,7 +455,7 @@ export default function PlainEditor({
               {
                 key: "Mod-s",
                 run: () => {
-                  void saveRef.current();
+                  saveNowRef.current();
                   return true;
                 },
               },
@@ -493,127 +474,39 @@ export default function PlainEditor({
               if (!fromUser) return;
               if (conflicted.current) return; // the user has a choice to make first
               setStatus("dirty");
-              if (timer.current) clearTimeout(timer.current);
-              timer.current = setTimeout(() => void saveRef.current(), SAVE_AFTER_MS);
+              touchedRef.current();
             }),
           ],
         });
         view.current = new EditorView({ state, parent: host.current });
         setEditorView(view.current);
-        setText(first.text);
+        setText(first);
         setStatus("clean");
-      } catch {
-        if (!stopped) {
-          setStatus("error");
-          setNote("Could not open the file.");
-        }
       }
-    })();
-
-    const poll = setInterval(() => {
-      if (stopped || document.hidden || !view.current) return;
-      void (async () => {
-        try {
-          const res = await fetch(docUrl("&stat=1"), { cache: "no-store" });
-          if (!res.ok) return;
-          const seen = (await res.json()) as { version: string | null };
-          if (stopped || !seen.version || seen.version === version.current) return;
-          const next = await read();
-          if (stopped || !view.current) return;
-          const current = view.current.state.doc.toString();
-          const dirty = current !== clean.current;
-          // A version we have already been at means the file has been put back
-          // rather than moved on, which is what an agent restoring its own copy
-          // of the file looks like from here.
-          const reverted = next.version ? seen.current.has(next.version) : false;
-          if (
-            shouldOfferRatherThanTake({
-              dirty,
-              reverted,
-              currentLength: current.length,
-              incomingLength: next.text.length,
-            })
-          ) {
-            void raiseConflictRef.current(
-              dirty
-                ? "The file changed on disk while you were typing."
-                : reverted
-                  ? "Something put the file back to a version you have already seen."
-                  : "Something rewrote the file on disk and it is shorter than what you have.",
-            );
-            return;
-          }
-          adopt(next.text);
-          version.current = next.version;
-          if (next.version) seen.current.add(next.version);
-          clean.current = next.text;
-          setStatus("clean");
-        } catch {
-          // briefly unreachable; the next tick tries again
-        }
-      })();
-    }, POLL_MS);
-
-    // Leaving must write. sendBeacon survives the page being torn down, which a
-    // fetch started at that moment does not.
-    const flush = () => {
-      const v = view.current;
-      if (!v || conflicted.current || lockedOut.current) return;
-      const text = v.state.doc.toString();
-      if (text === clean.current) return;
-      const expected = version.current ? `&expected=${encodeURIComponent(version.current)}` : "";
-      navigator.sendBeacon?.(
-        docUrl(expected),
-        new Blob([text], { type: "text/markdown; charset=utf-8" }),
-      );
-    };
-    const onHidden = () => {
-      if (document.hidden) flush();
-    };
-    window.addEventListener("pagehide", flush);
-    window.addEventListener("blur", flush);
-    document.addEventListener("visibilitychange", onHidden);
+    }
 
     return () => {
-      stopped = true;
-      clearInterval(poll);
-      if (timer.current) clearTimeout(timer.current);
-      window.removeEventListener("pagehide", flush);
-      window.removeEventListener("blur", flush);
-      document.removeEventListener("visibilitychange", onHidden);
+      // Hand the buffer back to the ref the editor is built from, so a rebuild
+      // starts from what is on screen rather than from what the file held when
+      // it was first read.
+      if (view.current) initial.current = view.current.state.doc.toString();
       view.current?.destroy();
       view.current = null;
+      setEditorView(null);
     };
-  }, [docUrl, adopt, resolveSrc]);
+  }, [sync.ready, resolveSrc]);
 
   /** Take the version on disk, keeping a copy of this buffer first. */
   const takeDisk = useCallback(async () => {
-    const v = view.current;
-    if (!v) return;
-    try {
-      await fetch(`/local/recovery?id=${encodeURIComponent(fileId)}`, {
-        method: "POST",
-        headers: { "Content-Type": "text/markdown; charset=utf-8" },
-        body: v.state.doc.toString(),
-        cache: "no-store",
-      });
-      const res = await fetch(docUrl(), { cache: "no-store" });
-      const next = (await res.json()) as { text: string; version: string | null };
-      adopt(next.text);
-      version.current = next.version;
-      if (next.version) seen.current.add(next.version);
-      clean.current = next.text;
-      conflicted.current = false;
-      view.current?.dispatch({
-        effects: editable.current.reconfigure(EditorView.editable.of(true)),
-      });
-      setStatus("clean");
-      setNote("Your version was saved beside the file before it was replaced.");
-    } catch {
-      setStatus("error");
-      setNote("Could not load the file from disk.");
-    }
-  }, [fileId, docUrl, adopt]);
+    if (!view.current) return;
+    await sync.saveRecovery();
+    await sync.takeDisk();
+    conflicted.current = false;
+    view.current?.dispatch({
+      effects: editable.current.reconfigure(EditorView.editable.of(true)),
+    });
+    setNote("Your version was saved beside the file before it was replaced.");
+  }, [sync]);
 
   return (
     <div className="flex h-screen flex-col bg-paper">

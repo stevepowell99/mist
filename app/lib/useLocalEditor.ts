@@ -5,17 +5,8 @@ import { useUserIdentity } from "./useUserIdentity";
 import { deserializeThreads, serializeThreads } from "./thread-serialization";
 import { quickHash } from "~/shared/hash";
 import type { DocControl, DocTransport } from "./doc-transport";
-import { shouldOfferRatherThanTake } from "./outside-change";
-import { useFileLock } from "./useFileLock";
-import { useQuietPoll } from "./useQuietPoll";
+import { useFileSync, type FileSyncBuffer } from "./useFileSync";
 import type { DocMode } from "~/shared/types";
-
-/** How often to ask whether the file has changed underneath the editor. */
-const WATCH_MS = 2000;
-/** The slowest that gap is allowed to become while nothing changes. */
-const WATCH_MAX_MS = 10000;
-
-
 
 /**
  * A document that is just a file.
@@ -32,8 +23,10 @@ const WATCH_MAX_MS = 10000;
  * awareness map, and a reconciliation layer (adopt, fork, re-anchor) that existed
  * only to decide which copy won. With one copy there is nothing to decide.
  *
- * What remains is an ordinary editor's contract: read the file, edit a buffer,
- * write it back, and refuse the write if the file moved underneath us.
+ * What is left of that contract lives in `useFileSync`, which the plain editor
+ * keeps too. All this file does now is say what a Y.Doc buffer means in the four
+ * terms that layer asks for, and turn what happens to the file into the control
+ * messages the rest of this editor already listens to.
  */
 export function useLocalEditor(fileId: string) {
   const doc = useMemo(() => new Y.Doc({ guid: fileId }), [fileId]);
@@ -41,40 +34,85 @@ export function useLocalEditor(fileId: string) {
   const docState = useMemo(() => doc.getMap<string>("docState"), [doc]);
   const { user, setName: setUserName, needsName, dismissNamePrompt } = useUserIdentity();
 
-  const [synced, setSynced] = useState(false);
-  /** Another window already has this file open, whichever route opened it. */
-  const alreadyOpen = useFileLock(fileId) === "blocked";
   const [mode, setModeState] = useState<DocMode>("edit");
-
-  /** The file version this tab loaded or last wrote, and the baseline every
-   *  write is conditional on. Null until the first read lands. */
-  const versionRef = useRef<string | null>(null);
   const listeners = useRef(new Set<(m: DocControl) => void>());
-  /** One write at a time, carrying only the newest content: a save that arrives
-   *  while another is in flight replaces it rather than queueing behind it. */
-  const chainRef = useRef<Promise<void>>(Promise.resolve());
-  const pendingRef = useRef<string | null>(null);
-  /** The editor body as it stood at the last load or save. Anything else in the
-   *  Y.Text means the user has typed since, which decides whether an outside
-   *  change can be taken silently or has to be offered. */
-  const cleanBodyRef = useRef<string | null>(null);
-  /** The lock's answer, read by the transport, which must not re-create itself
-   *  when it changes. */
-  const lockedOutRef = useRef(false);
-  /** The outside version we have already told the user about, so a change they
-   *  have chosen not to take is announced once rather than on every poll. */
-  const warnedRef = useRef<string | null>(null);
-  /** Every version of this file we have loaded or written. An outside change
-   *  that lands on one of these is a revert to a state we have already been in,
-   *  not somebody's new work, so it is never taken silently. */
-  const seenRef = useRef(new Set<string>());
+  /** Whether the Y.Text has been seeded. An empty Y.Text and an empty file look
+   *  the same, and the sync layer reads null as "no buffer here yet". */
+  const seeded = useRef(false);
+  /** The latest serialisation the editor has pushed down. The Y.Text holds the
+   *  body with its threads in a map, so what a save writes is not what the
+   *  buffer holds, and only the layer above can produce it. */
+  const outgoing = useRef<string | null>(null);
+
   const emit = useCallback((m: DocControl) => {
     for (const fn of listeners.current) fn(m);
   }, []);
 
-  useEffect(() => {
-    lockedOutRef.current = alreadyOpen;
-  }, [alreadyOpen]);
+  /**
+   * A Y.Doc, in the terms the sync layer asks for.
+   *
+   * `normalise` is the whole reason that term exists. The body is LF-only,
+   * because CodeMirror discards a carriage return and a CRLF document then
+   * desyncs every editor position after a line break, and the `mist:` block is
+   * lifted out into the threads map. So the file's bytes and the buffer's are
+   * never equal, and comparing the two directly reads that difference as text
+   * going missing.
+   */
+  const buffer = useMemo<FileSyncBuffer>(
+    () => ({
+      normalise(text) {
+        const { body, frontmatter } = deserializeThreads(text);
+        return serializeThreads(body, [], frontmatter).replace(/\r\n?/g, "\n");
+      },
+      held() {
+        return seeded.current ? doc.getText("body").toString() : null;
+      },
+      put(text, first) {
+        const { threads } = deserializeThreads(text);
+        const next = this.normalise(text);
+        const ytext = doc.getText("body");
+        doc.transact(() => {
+          if (first) {
+            if (ytext.length === 0) ytext.insert(0, next);
+          } else {
+            // Rewrite only the span that actually differs. Deleting the whole
+            // body and reinserting it would work, but it throws the cursor to
+            // the top and drops the scroll position on every outside edit,
+            // however small.
+            const current = ytext.toString();
+            if (current !== next) {
+              let head = 0;
+              const max = Math.min(current.length, next.length);
+              while (head < max && current[head] === next[head]) head++;
+              let tail = 0;
+              while (
+                tail < max - head &&
+                current[current.length - 1 - tail] === next[next.length - 1 - tail]
+              ) {
+                tail++;
+              }
+              ytext.delete(head, current.length - head - tail);
+              ytext.insert(head, next.slice(head, next.length - tail));
+            }
+          }
+          const map = doc.getMap<string>("threads");
+          for (const thread of threads) map.set(thread.id, JSON.stringify(thread));
+        });
+        seeded.current = true;
+      },
+      serialise() {
+        return outgoing.current;
+      },
+    }),
+    [doc],
+  );
+
+  const sync = useFileSync(fileId, buffer, {
+    onAdopted: () => emit({ type: "reloaded" }),
+    onOffered: () => emit({ type: "upstream-changed" }),
+    onSaved: (written) => emit({ type: "committed", hash: quickHash(written) }),
+    onConflict: () => emit({ type: "conflict" }),
+  });
 
   useEffect(() => {
     awareness.setLocalStateField("user", user);
@@ -92,185 +130,28 @@ export function useLocalEditor(fileId: string) {
 
   const setMode = useCallback((next: DocMode) => docState.set("mode", next), [docState]);
 
-  /** Put the file's current content into the editor, in the same shape a save
-   *  will write back: the file's own frontmatter with the `mist:` block lifted
-   *  out, threads in the Yjs map, body as text. */
-  const load = useCallback(
-    async (replace: boolean) => {
-      const res = await fetch(`/local/doc?id=${encodeURIComponent(fileId)}`, { cache: "no-store" });
-      if (!res.ok) return false;
-      const { text, version } = (await res.json()) as { text: string; version: string | null };
-      versionRef.current = version;
-      if (version) seenRef.current.add(version);
-
-      const { body, threads, frontmatter } = deserializeThreads(text);
-      // LF only. CodeMirror drops \r, so CRLF in the Y.Text desyncs every editor
-      // position after a line break.
-      const seeded = serializeThreads(body, [], frontmatter).replace(/\r\n?/g, "\n");
-      const ytext = doc.getText("body");
-      doc.transact(() => {
-        if (replace) {
-          // Rewrite only the span that actually differs. Deleting the whole body
-          // and reinserting it would work, but it throws the cursor to the top and
-          // drops the scroll position on every outside edit, however small.
-          const current = ytext.toString();
-          if (current !== seeded) {
-            let head = 0;
-            const max = Math.min(current.length, seeded.length);
-            while (head < max && current[head] === seeded[head]) head++;
-            let tail = 0;
-            while (
-              tail < max - head &&
-              current[current.length - 1 - tail] === seeded[seeded.length - 1 - tail]
-            ) {
-              tail++;
-            }
-            ytext.delete(head, current.length - head - tail);
-            ytext.insert(head, seeded.slice(head, seeded.length - tail));
-          }
-        } else if (ytext.length === 0) {
-          ytext.insert(0, seeded);
-        }
-        const map = doc.getMap<string>("threads");
-        for (const thread of threads) map.set(thread.id, JSON.stringify(thread));
-      });
-      cleanBodyRef.current = ytext.toString();
-      return true;
-    },
-    [doc, fileId],
-  );
-
-  useEffect(() => {
-    if (alreadyOpen) return;
-    let cancelled = false;
-    void load(false).then((ok) => {
-      if (!cancelled && ok) setSynced(true);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [load, alreadyOpen]);
-
-  const transport = useMemo<DocTransport>(() => {
-    const write = async () => {
-      const content = pendingRef.current;
-      pendingRef.current = null;
-      if (content === null) return;
-      const expected = versionRef.current;
-      const url =
-        `/local/doc?id=${encodeURIComponent(fileId)}` +
-        (expected ? `&expected=${encodeURIComponent(expected)}` : "");
-      try {
-        const res = await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "text/markdown; charset=utf-8" },
-          body: content,
-        });
-        if (res.status === 409) {
-          emit({ type: "conflict" });
-          return;
-        }
-        if (!res.ok) return; // transient; the next edit retries
-        const { version } = (await res.json()) as { version: string | null };
-        versionRef.current = version;
-        if (version) seenRef.current.add(version);
-        cleanBodyRef.current = doc.getText("body").toString();
-        emit({ type: "committed", hash: quickHash(content) });
-      } catch {
-        // the sidecar is unreachable; the next edit retries
-      }
-    };
-
-    return {
+  const save = sync.save;
+  const takeDisk = sync.takeDisk;
+  const transport = useMemo<DocTransport>(
+    () => ({
       send(content, commitNow) {
-        // A window that does not hold the lock never writes: its buffer is a
-        // second opinion about a file somebody else is editing.
-        if (lockedOutRef.current) return;
-        // Only an explicit save writes. Without commitNow this is the editor
-        // telling us what it holds, which a file-backed document does not need.
-        if (!commitNow) return;
-        pendingRef.current = content;
-        chainRef.current = chainRef.current.then(write);
+        // Every send is worth keeping, because it is the only account of what a
+        // save would write, and the write on the way out of the tab needs it.
+        // Only an explicit one writes: without commitNow this is the editor
+        // saying what it holds, and the debounce lives above.
+        outgoing.current = content;
+        if (commitNow) save(content);
       },
       pull() {
-        chainRef.current = chainRef.current.then(async () => {
-          if (await load(true)) emit({ type: "reloaded" });
-        });
+        void takeDisk();
       },
       subscribe(listener) {
         listeners.current.add(listener);
         return () => listeners.current.delete(listener);
       },
-    };
-  }, [doc, fileId, emit, load]);
-
-  /**
-   * Notice the file changing underneath us, the way a desktop editor does.
-   *
-   * An agent, a git checkout, Drive for Desktop or another editor writes the
-   * file; a poll of its content hash spots the new version within a couple of
-   * seconds. With nothing typed here since the last load or save, the change is
-   * taken silently and the editor updates in place. With local edits
-   * outstanding it is not taken: the upstream-changed banner offers it, so the
-   * choice stays the user's.
-   *
-   * Polling rather than a file watcher and a socket, deliberately. The sidecar
-   * is on loopback and the answer is one content hash, so the cost is nil, and
-   * it adds no server-side state to a mode whose whole point is having none.
-   */
-  const watching = synced && !alreadyOpen;
-  const stoppedRef = useRef(false);
-  useEffect(() => {
-    stoppedRef.current = false;
-    return () => {
-      stoppedRef.current = true;
-    };
-  }, []);
-
-  const check = useCallback(async () => {
-    if (stoppedRef.current) return false;
-    try {
-      const res = await fetch(`/local/doc?stat=1&id=${encodeURIComponent(fileId)}`, { cache: "no-store" });
-      if (!res.ok) return false;
-      const { version } = (await res.json()) as { version: string | null };
-      if (stoppedRef.current || !version || version === versionRef.current) return false;
-
-      const current = doc.getText("body").toString();
-      const dirty = cleanBodyRef.current !== null && current !== cleanBodyRef.current;
-
-      const reverted = seenRef.current.has(version);
-      // The incoming length decides whether text has gone, so it has to be
-      // read before the change can be taken. Skipped when the answer is
-      // already settled, to keep the ordinary poll to one small request.
-      let incomingLength: number | null = null;
-      if (!dirty && !reverted) {
-        const peek = await fetch(`/local/doc?id=${encodeURIComponent(fileId)}`, { cache: "no-store" });
-        if (peek.ok) {
-          const { text } = (await peek.json()) as { text: string };
-          incomingLength = text.length;
-        }
-      }
-
-      if (shouldOfferRatherThanTake({ dirty, reverted, currentLength: current.length, incomingLength })) {
-        if (warnedRef.current !== version) {
-          warnedRef.current = version;
-          emit({ type: "upstream-changed" });
-        }
-        return true;
-      }
-      if (await load(true)) emit({ type: "reloaded" });
-      return true;
-    } catch {
-      // the sidecar is briefly unreachable; the next tick tries again
-      return false;
-    }
-  }, [fileId, doc, load, emit]);
-
-  // Hidden tabs do not poll, and the gap widens while the file sits untouched.
-  // The widening is bounded low on purpose: this is the promise that a file
-  // edited in Obsidian or by an agent shows up here on its own, so ten seconds
-  // is as slow as it may get, and returning to the tab makes it immediate again.
-  useQuietPoll(check, { base: WATCH_MS, max: WATCH_MAX_MS, enabled: watching });
+    }),
+    [save, takeDisk],
+  );
 
   return {
     doc,
@@ -279,8 +160,8 @@ export function useLocalEditor(fileId: string) {
     // open and no Durable Object staying warm behind it.
     socket: null,
     transport,
-    synced,
-    alreadyOpen,
+    synced: sync.ready,
+    alreadyOpen: sync.alreadyOpen,
     paused: false,
     resume: () => {},
     user,
