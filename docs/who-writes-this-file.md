@@ -4,6 +4,15 @@ Between 2 and 7 September 2026 the same document was reverted five times. This
 page says where to look, so the next investigation starts where the last one
 stopped.
 
+**The eight-week run of reverts on `principles.md` and `open-format.md` was
+TagFox, and it is fixed** (TagFox `7008c7f`, 9 September 2026). Its Viewer armed
+the markdown autosave when a file was previewed rather than when the editor was
+opened, and flushed that buffer on blur without reading what was on disk, so
+looking at a file saved its stale text back over whatever had written it since.
+gmist was blamed for three days and was never doing it: its watcher reads,
+snapshots and commits, and never writes the file. Before opening a fresh hunt,
+check that TagFox is running the current renderer.
+
 ## The two things that are recorded
 
 - **`logs/file-history.log`** — one line per observed change to any file gmist
