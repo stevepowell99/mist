@@ -251,6 +251,88 @@ setInterval(() => {
   }
 }, SNAP_POLL_MS).unref();
 
+/**
+ * Commit one file. Shared by the editor's Commit button and the idle commit
+ * below, so there is one set of git arguments rather than two.
+ *
+ * Returns rather than throws, because the idle path has nobody to throw to; the
+ * route turns an `error` back into an HTTP status.
+ */
+async function commitFile(abs, message) {
+  const cwd = path.dirname(abs);
+  const inside = await git(["rev-parse", "--is-inside-work-tree"], cwd);
+  if (!inside.ok || inside.out !== "true") return { committed: false, reason: "not in a git work tree" };
+
+  const text = (message || "").trim() || `docs: edit ${path.basename(abs)} in gmist`;
+
+  const status = await git(["status", "--porcelain", "--", abs], cwd);
+  if (status.ok && status.out === "") return { committed: false, reason: "nothing to commit" };
+
+  // A file git has never seen has to be added before it can be named in a
+  // commit: `git commit -- <path>` matches tracked paths only, and answers an
+  // untracked one with "did not match any file(s) known to git". Adding this
+  // one path is still not `git add -A`, so anything else staged in the repo is
+  // left exactly as it was.
+  if (status.ok && status.out.startsWith("??")) {
+    const added = await git(["add", "--", abs], cwd);
+    if (!added.ok) return { committed: false, error: added.err || "could not add the file", status: 500 };
+  }
+
+  const done = await git(["commit", "-m", text, "--", abs], cwd);
+  if (!done.ok) {
+    record({ op: "commit-failed", path: abs, bytes: 0, was: 0, expected: null, onDisk: null, client: done.err.slice(0, 200) });
+    return { committed: false, error: done.err || done.out || "commit failed", status: 500 };
+  }
+  const hash = await git(["rev-parse", "--short", "HEAD"], cwd);
+  record({ op: "committed", path: abs, bytes: 0, was: 0, expected: null, onDisk: hash.out, client: text.slice(0, 200) });
+  console.log(`localfs: committed ${abs} as ${hash.out}`);
+  return { committed: true, hash: hash.out, message: text };
+}
+
+/**
+ * Commit what gmist wrote, once the writing has stopped.
+ *
+ * The snapshots above make a clobber recoverable, but only by somebody who knows
+ * that folder exists. A commit makes it recoverable with git, by anyone,
+ * including the agent that did the clobbering. Nothing that has destroyed work
+ * in this repo's history can reach an object already in git.
+ *
+ * Not on every save: gmist saves a second after the typing stops, so that would
+ * be dozens of commits an hour into a repo agents also commit to, and two git
+ * processes fighting them for `index.lock`. Not on a long timer either, because
+ * the window is the whole point, and an overwrite that lands before the commit
+ * is not covered by it. A minute is short enough to survive an agent arriving
+ * between two paragraphs, and long enough that a burst of typing produces one
+ * commit rather than twenty.
+ *
+ * Armed by a document write only, so creating a file, uploading an image and
+ * writing a recovery sibling commit nothing.
+ *
+ * It lives here rather than in the editor because it has to outlive the tab.
+ * Closing the window is when the work is most at risk, and is exactly when a
+ * timer in the page would be thrown away.
+ */
+const COMMIT_IDLE_MS = 60 * 1000;
+/** One retry, for the one case worth retrying: an agent holding `index.lock`. */
+const COMMIT_RETRY_MS = 8 * 1000;
+const pendingCommit = new Map();
+
+function armIdleCommit(abs, attempt = 0) {
+  const running = pendingCommit.get(abs);
+  if (running) clearTimeout(running);
+  const timer = setTimeout(async () => {
+    pendingCommit.delete(abs);
+    try {
+      const result = await commitFile(abs);
+      if (result.error && attempt === 0) armIdleCommit(abs, 1);
+    } catch {
+      // never let a commit take the sidecar down; the next save arms it again
+    }
+  }, attempt === 0 ? COMMIT_IDLE_MS : COMMIT_RETRY_MS);
+  timer.unref();
+  pendingCommit.set(abs, timer);
+}
+
 const LOG_PATH = path.join(process.cwd(), "logs", "file-history.log");
 /** Local time with its offset. The first version of this log wrote UTC, which
  *  then had to be compared against file times in local time; reading the two an
@@ -488,6 +570,7 @@ const handlers = {
     // it is invisible in a byte count on its own.
     record({ op: "wrote", path: abs, bytes: toWrite.length, was: existing ? existing.length : 0, expected: expected ?? null, onDisk: current, version, client });
     console.log(`localfs: wrote ${abs} (${buf.length} bytes, was ${existing ? existing.length : 0})`);
+    if (params.get("commit") === "idle") armIdleCommit(abs);
     return { version };
   },
 
@@ -527,10 +610,6 @@ const handlers = {
 
   "POST /git-commit": async (params, req) => {
     const abs = absOf(params.get("path"));
-    const cwd = path.dirname(abs);
-    const inside = await git(["rev-parse", "--is-inside-work-tree"], cwd);
-    if (!inside.ok || inside.out !== "true") throw new HttpError(400, "not inside a git work tree");
-
     const body = (await readBody(req)).toString("utf8");
     let message = "";
     try {
@@ -538,30 +617,9 @@ const handlers = {
     } catch {
       message = "";
     }
-    message = message.trim() || `docs: edit ${path.basename(abs)} in gmist`;
-
-    const status = await git(["status", "--porcelain", "--", abs], cwd);
-    if (status.ok && status.out === "") return { committed: false, reason: "nothing to commit" };
-
-    // A file git has never seen has to be added before it can be named in a
-    // commit: `git commit -- <path>` matches tracked paths only, and answers an
-    // untracked one with "did not match any file(s) known to git". Adding this
-    // one path is still not `git add -A`, so anything else staged in the repo is
-    // left exactly as it was.
-    if (status.ok && status.out.startsWith("??")) {
-      const added = await git(["add", "--", abs], cwd);
-      if (!added.ok) throw new HttpError(500, added.err || "could not add the file");
-    }
-
-    const done = await git(["commit", "-m", message, "--", abs], cwd);
-    if (!done.ok) {
-      record({ op: "commit-failed", path: abs, bytes: 0, was: 0, expected: null, onDisk: null, client: done.err.slice(0, 200) });
-      throw new HttpError(500, done.err || done.out || "commit failed");
-    }
-    const hash = await git(["rev-parse", "--short", "HEAD"], cwd);
-    record({ op: "committed", path: abs, bytes: 0, was: 0, expected: null, onDisk: hash.out, client: message.slice(0, 200) });
-    console.log(`localfs: committed ${abs} as ${hash.out}`);
-    return { committed: true, hash: hash.out, message };
+    const result = await commitFile(abs, message);
+    if (result.error) throw new HttpError(result.status || 500, result.error);
+    return result;
   },
 
   "GET /list": async (params) => ({ entries: await listDir(absOf(params.get("path"))) }),

@@ -147,16 +147,24 @@ export async function driveWrite(
   expectedVersion?: string | null,
   client?: string | null,
 ): Promise<{ version: string | null }> {
-  return call<{ version: string | null }>(token, "/write" + q({ path: pathOf(fileId), expected: expectedVersion ?? undefined }), {
-    method: "POST",
-    headers: {
-      "Content-Type": "text/markdown; charset=utf-8",
-      // Who asked for this write. The sidecar records it, so an overwrite names
-      // its own source instead of being reconstructed from commit sizes later.
-      ...(client ? { "X-Gmist-Client": client } : {}),
+  // `commit=idle` asks the sidecar to commit this file once the writing stops.
+  // Only a document save carries it: creating a file, uploading an image and
+  // writing a recovery sibling all use the same route and none of them is work
+  // worth a commit of its own.
+  return call<{ version: string | null }>(
+    token,
+    "/write" + q({ path: pathOf(fileId), expected: expectedVersion ?? undefined, commit: "idle" }),
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "text/markdown; charset=utf-8",
+        // Who asked for this write. The sidecar records it, so an overwrite names
+        // its own source instead of being reconstructed from commit sizes later.
+        ...(client ? { "X-Gmist-Client": client } : {}),
+      },
+      body: content,
     },
-    body: content,
-  });
+  );
 }
 
 export async function driveListFolder(token: string, folderId: string): Promise<DriveEntry[]> {
