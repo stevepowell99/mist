@@ -29,6 +29,7 @@ import { resolveAssetSrc, type AssetCtx } from "~/lib/asset-urls";
 import { parseBib, type BibLibrary } from "~/lib/citations";
 import { extractBibPaths } from "~/lib/slides-build";
 import { useFileLock } from "~/lib/useFileLock";
+import { shouldOfferRatherThanTake } from "~/lib/outside-change";
 import { rawFrontmatter } from "~/lib/thread-serialization";
 import type { DriveMeta } from "~/shared/types";
 
@@ -132,6 +133,10 @@ export default function PlainEditor({
   const version = useRef<string | null>(null);
   /** The text as it stood at that moment, so "has the user typed" is answerable. */
   const clean = useRef<string>("");
+  /** Every version this tab has loaded or written. A change arriving on one of
+   *  these is the file being put back to a state we have already been at, which
+   *  is a revert rather than somebody's new work. */
+  const seen = useRef(new Set<string>());
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [status, setStatus] = useState<Status>("loading");
   /** Another tab or window already has this file open. */
@@ -293,11 +298,11 @@ export default function PlainEditor({
    * document straight away. The user then chooses, with nothing at risk either
    * way.
    */
-  const raiseConflict = useCallback(async () => {
+  const raiseConflict = useCallback(async (why: string) => {
     if (conflicted.current) return;
     conflicted.current = true;
     setStatus("conflict");
-    setNote("The file changed on disk while you were typing.");
+    setNote(why);
     if (timer.current) clearTimeout(timer.current);
     // Freeze the buffer. Carrying on typing into something that cannot be saved
     // only builds up work that will have to be merged by hand later, and the
@@ -315,7 +320,7 @@ export default function PlainEditor({
         cache: "no-store",
       });
       const body = (await res.json()) as { saved?: string };
-      if (body.saved) setNote(`The file changed on disk. Your version is safe in "${body.saved}".`);
+      if (body.saved) setNote(`${why} Your version is safe in "${body.saved}".`);
     } catch {
       // the copy is best effort; the conflict still stands
     }
@@ -336,7 +341,7 @@ export default function PlainEditor({
         cache: "no-store",
       });
       if (res.status === 409) {
-        void raiseConflict();
+        void raiseConflict("The file changed on disk while you were typing.");
         return;
       }
       if (!res.ok) {
@@ -346,6 +351,7 @@ export default function PlainEditor({
       }
       const body = (await res.json()) as { version: string | null };
       version.current = body.version;
+      if (body.version) seen.current.add(body.version);
       clean.current = text;
       setStatus("clean");
       setNote(null);
@@ -402,6 +408,7 @@ export default function PlainEditor({
         const first = await read();
         if (stopped || !host.current) return;
         version.current = first.version;
+        if (first.version) seen.current.add(first.version);
         clean.current = first.text;
         const state = EditorState.create({
           doc: first.text,
@@ -513,12 +520,32 @@ export default function PlainEditor({
           if (stopped || !seen.version || seen.version === version.current) return;
           const next = await read();
           if (stopped || !view.current) return;
-          if (view.current.state.doc.toString() !== clean.current) {
-            void raiseConflictRef.current();
+          const current = view.current.state.doc.toString();
+          const dirty = current !== clean.current;
+          // A version we have already been at means the file has been put back
+          // rather than moved on, which is what an agent restoring its own copy
+          // of the file looks like from here.
+          const reverted = next.version ? seen.current.has(next.version) : false;
+          if (
+            shouldOfferRatherThanTake({
+              dirty,
+              reverted,
+              currentLength: current.length,
+              incomingLength: next.text.length,
+            })
+          ) {
+            void raiseConflictRef.current(
+              dirty
+                ? "The file changed on disk while you were typing."
+                : reverted
+                  ? "Something put the file back to a version you have already seen."
+                  : "Something rewrote the file on disk and it is shorter than what you have.",
+            );
             return;
           }
           adopt(next.text);
           version.current = next.version;
+          if (next.version) seen.current.add(next.version);
           clean.current = next.text;
           setStatus("clean");
         } catch {
@@ -574,6 +601,7 @@ export default function PlainEditor({
       const next = (await res.json()) as { text: string; version: string | null };
       adopt(next.text);
       version.current = next.version;
+      if (next.version) seen.current.add(next.version);
       clean.current = next.text;
       conflicted.current = false;
       view.current?.dispatch({
