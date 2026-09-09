@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from "react";
-import { useDocument } from "~/lib/DocumentContext";
 import { isLocalFileId } from "~/lib/localfs-ids";
 import { useQuietPoll } from "~/lib/useQuietPoll";
 
@@ -16,10 +15,21 @@ type GitInfo = { repo: boolean; dirty: boolean; branch: string | null };
  *
  * Local files only. A Drive document has no working tree, and the button hides
  * itself for a file that is not in a repo.
+ *
+ * The sidecar commits by itself a minute after the writing stops. This is the
+ * same commit, taken now, for the moment you want the work safe before doing
+ * something else to it.
  */
-export default function CommitButton() {
-  const { drive, unsaved, saveNow } = useDocument();
-  const fileId = drive?.fileId;
+export default function CommitButton({
+  fileId,
+  unsaved,
+  saveNow,
+}: {
+  fileId: string | undefined;
+  /** The buffer holds something not yet on disk, so save before committing. */
+  unsaved: boolean;
+  saveNow: () => void;
+}) {
   const local = !!fileId && isLocalFileId(fileId);
 
   const [info, setInfo] = useState<GitInfo>({ repo: false, dirty: false, branch: null });

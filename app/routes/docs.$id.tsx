@@ -1,4 +1,4 @@
-import { data, Link } from "react-router";
+import { data, redirect, Link } from "react-router";
 import { useRef, useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import type { Route } from "./+types/docs.$id";
 import { APP_NAME, isValidDocumentId } from "~/shared/constants";
@@ -18,14 +18,12 @@ import { resolveAssetSrc } from "~/lib/asset-urls";
 import { usePresence } from "~/lib/usePresence";
 import PresenceBar from "~/components/PresenceBar";
 import { useYjsEditor } from "~/lib/useYjsEditor";
-import { useLocalEditor } from "~/lib/useLocalEditor";
 import { DocumentProvider, useDocument } from "~/lib/DocumentContext";
 import CodeMirrorEditor from "~/components/CodeMirrorEditor";
 import Preview from "~/components/Preview";
 import ConnectionStatus from "~/components/ConnectionStatus";
 import UserName from "~/components/UserName";
 import SaveStatus from "~/components/SaveStatus";
-import CommitButton from "~/components/CommitButton";
 import ShareButton from "~/components/ShareButton";
 import CleanViewToggle from "~/components/CleanViewToggle";
 import SuggestionList from "~/components/SuggestionList";
@@ -65,10 +63,14 @@ export function meta({ data }: Route.MetaArgs) {
 
 export async function loader({ params, request, context }: Route.LoaderArgs) {
   const id = params.id;
-  // Two id shapes. A room id is eight characters; a local id is the file's own
-  // path, because local mode has no rooms to name.
-  const localFile = isLocalFileId(id);
-  if (!localFile && !isValidDocumentId(id)) {
+  // A local file belongs to the plain editor, which is where /open sends every
+  // one of them. This route stays reachable for a local id only through an old
+  // link, a bookmark or a restored tab, so it forwards rather than opening a
+  // second editor over the same file. One editor per file is not a preference:
+  // two of them were two buffers, two save machines and two copies of every
+  // rule about a file, and the rules kept being fixed in one and not the other.
+  if (isLocalFileId(id)) throw redirect(`/edit/${encodeURIComponent(id)}`);
+  if (!isValidDocumentId(id)) {
     throw data(null, { status: 404 });
   }
 
@@ -89,16 +91,11 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
   // user the file is shared with (Drive sharing is the source of truth). The
   // same check gates the WebSocket in workers/app.ts. The effective role is the
   // more restrictive of the link's role and the user's Drive role.
-  // A local file is the machine user's own and has no sharing to consult, so
-  // there is nobody to authorise. Only a Drive document has an ACL.
-  let effectiveRole = role;
-  if (!localFile) {
-    const auth = await authorizeDoc(env as unknown as DriveSessionEnv, request, drive, role);
-    if (auth.status === "badkey") throw data(null, { status: 404 });
-    if (auth.status === "needsAuth") return { id, gate: "needsAuth" as const };
-    if (auth.status === "forbidden") return { id, gate: "forbidden" as const };
-    effectiveRole = auth.role ?? role;
-  }
+  const auth = await authorizeDoc(env as unknown as DriveSessionEnv, request, drive, role);
+  if (auth.status === "badkey") throw data(null, { status: 404 });
+  if (auth.status === "needsAuth") return { id, gate: "needsAuth" as const };
+  if (auth.status === "forbidden") return { id, gate: "forbidden" as const };
+  const effectiveRole = auth.role ?? role;
 
   // Short-lived token so the sandboxed slides iframe (and document preview) can
   // fetch private-Drive assets without the session cookie.
@@ -200,19 +197,10 @@ export default function DocumentPage({ loaderData }: Route.ComponentProps) {
   return <DocumentRoot key={loaderData.id} {...loaderData} />;
 }
 
-/** A local file has no room, so it takes the file-backed session; anything else
- *  joins its room. Two components rather than a branch inside one, so each calls
- *  exactly one session hook and neither can swap hooks under React. */
+/** Every document this route opens is a room. A local file is a file, and the
+ *  loader forwards it to the plain editor before it reaches here. */
 function DocumentRoot(props: EditorData) {
-  return isLocalFileId(props.id) ? <LocalDocumentRoot {...props} /> : <RoomDocumentRoot {...props} />;
-}
-
-function RoomDocumentRoot(props: EditorData) {
   return <DocumentShell {...props} yjs={useYjsEditor(props.id, props.docKey)} />;
-}
-
-function LocalDocumentRoot(props: EditorData) {
-  return <DocumentShell {...props} yjs={useLocalEditor(props.id)} />;
 }
 
 function DocumentShell({
@@ -227,7 +215,7 @@ function DocumentShell({
   assetToken,
   local,
   yjs,
-}: EditorData & { yjs: ReturnType<typeof useYjsEditor> | ReturnType<typeof useLocalEditor> }) {
+}: EditorData & { yjs: ReturnType<typeof useYjsEditor> }) {
   return (
     <DocumentProvider
       docId={id}
@@ -328,6 +316,15 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
   const slidesFull = slidesMode && !splitOpen;
   // Present mode only applies to a deck; it fills the app and hides the chrome.
   const present = presenting && deck;
+  const slideProps = {
+    markdown,
+    drive,
+    frontmatter,
+    cursorOffset,
+    assetToken,
+    followCursor,
+    bibLib,
+  };
 
   // The View is one of four exclusive layouts. It is derived from the preview
   // toggle, the split ratio and the live flag, and setView drives all three, so
@@ -1143,7 +1140,6 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
           </div>
           <div className="flex shrink-0 items-stretch border-l border-border">
             <SaveStatus />
-            <CommitButton />
           </div>
           <div className="shrink-0 border-l border-border">
             <ShareButton />
@@ -1173,27 +1169,7 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
       </header>
       )}
       <div className="relative flex flex-1 overflow-hidden">
-        {yjs.alreadyOpen && (
-          <div className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-paper px-8 text-center">
-            <span className="text-sm uppercase tracking-wider text-amber-600">
-              Already open in another window
-            </span>
-            <p className="max-w-md text-sm text-muted">
-              This file is open in another gmist tab or window, possibly a minimised one. Two
-              windows on one file are two separate copies, and whichever saves last wins, so this
-              one will not read or write it. Close the other window and this page will open by
-              itself. Chrome&apos;s tab search, Ctrl+Shift+A, finds a tab you cannot see.
-            </p>
-            <button
-              type="button"
-              onClick={() => window.location.reload()}
-              className="cursor-pointer rounded border border-border px-3 py-1.5 text-sm uppercase tracking-wider text-ink hover:bg-border"
-            >
-              Reload anyway
-            </button>
-          </div>
-        )}
-        {!yjs.synced && !yjs.paused && !yjs.alreadyOpen && (
+        {!yjs.synced && !yjs.paused && (
           <div className="absolute inset-0 z-40 flex flex-col items-center justify-center gap-3 bg-paper">
             <span className="h-7 w-7 animate-spin rounded-full border-2 border-border border-t-ink" />
             <span className="text-sm uppercase tracking-wider text-muted">Loading document…</span>
@@ -1212,7 +1188,7 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
         )}
         {present ? (
           <div className="relative h-full w-full overflow-hidden bg-black">
-            <SlidesView />
+            <SlidesView {...slideProps} />
             <button
               type="button"
               onClick={exitPresent}
@@ -1356,7 +1332,7 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
           )}
           {(splitOpen || slidesFull) && (
             <section className="flex-1 overflow-hidden">
-              {deck ? <SlidesView /> : <div ref={previewScrollRef} className="h-full overflow-y-auto"><Preview /></div>}
+              {deck ? <SlidesView {...slideProps} /> : <div ref={previewScrollRef} className="h-full overflow-y-auto"><Preview /></div>}
             </section>
           )}
         </div>

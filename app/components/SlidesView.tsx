@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useDocument } from "~/lib/DocumentContext";
+import type { BibLibrary } from "~/lib/citations";
+import type { DriveMeta } from "~/shared/types";
 import { buildSlidesHtml, buildSlideSections } from "~/lib/slides-build";
 import { slideIndexForOffset, fragmentIndexForOffset } from "~/lib/slide-cursor";
 
@@ -17,9 +18,28 @@ const SLIDES_REFRESH_DEBOUNCE_MS = 700;
  * document Preview. Presentational, not a Quarto render. The deck HTML is built
  * by the shared buildSlidesHtml and shown with real reveal.js (from a CDN) in a
  * sandboxed iframe. The deck's theme/css come from the document frontmatter.
+ *
+ * Everything it needs arrives as props rather than out of the room's document
+ * context, because the local editor has no room and renders the same decks.
  */
-export default function SlidesView() {
-  const { markdown, drive, frontmatter, cursorOffset, assetToken, followCursor, bibLib } = useDocument();
+export default function SlidesView({
+  markdown,
+  drive,
+  frontmatter,
+  cursorOffset,
+  assetToken,
+  followCursor,
+  bibLib,
+}: {
+  markdown: string;
+  drive: DriveMeta | null;
+  frontmatter: string;
+  cursorOffset: number;
+  /** Lets the sandboxed iframe fetch private-Drive assets; Drive mode only. */
+  assetToken?: string | null;
+  followCursor: boolean;
+  bibLib: BibLibrary | null;
+}) {
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   // The session-minted asset token lets the sandboxed iframe fetch private-Drive
   // assets (it cannot send the session cookie).

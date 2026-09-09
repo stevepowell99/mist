@@ -3,7 +3,6 @@ import type { EditorView } from "@codemirror/view";
 import type { CapturedSelection, DocMode, DocRole, DriveMeta } from "~/shared/types";
 import type { MatchedThread } from "~/lib/comment-threads";
 import type { useYjsEditor } from "~/lib/useYjsEditor";
-import type { useLocalEditor } from "~/lib/useLocalEditor";
 import { useTextThreads } from "~/lib/useTextThreads";
 import { commentTextAt } from "~/lib/cm-comments";
 import { serializeThreads, rawFrontmatter } from "~/lib/thread-serialization";
@@ -21,7 +20,7 @@ const DEFAULT_CLASSES = parseCssClasses(DECK_BASE_CSS);
 export interface DocumentContextValue {
   docId: string;
   createdAt: number | null;
-  yjs: ReturnType<typeof useYjsEditor> | ReturnType<typeof useLocalEditor>;
+  yjs: ReturnType<typeof useYjsEditor>;
   /** The CodeMirror view backing the editor (Y.Text core). */
   view: EditorView | null;
   markdown: string;
@@ -186,7 +185,7 @@ export function DocumentProvider({
 }: {
   docId: string;
   createdAt: number | null;
-  yjs: ReturnType<typeof useYjsEditor> | ReturnType<typeof useLocalEditor>;
+  yjs: ReturnType<typeof useYjsEditor>;
   role?: DocRole;
   docKey?: string | null;
   suggestKey?: string | null;

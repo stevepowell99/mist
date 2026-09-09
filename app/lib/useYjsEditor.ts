@@ -148,7 +148,5 @@ export function useYjsEditor(docId: string, docKey: string | null = null) {
   // socket, so the same code drives a local file, which has no socket at all.
   const transport = useMemo(() => agentTransport(socket), [socket]);
 
-  // Never locked out. A room is meant to hold several windows at once; the file
-  // lock exists for local mode, where a window is a buffer over a file.
-  return { doc, awareness, socket, transport, synced, alreadyOpen: false, paused, resume, user, setUserName, needsName, dismissNamePrompt, mode, setMode, docState, isOnboarding };
+  return { doc, awareness, socket, transport, synced, paused, resume, user, setUserName, needsName, dismissNamePrompt, mode, setMode, docState, isOnboarding };
 }

@@ -23,6 +23,10 @@ import { wrapOnSelection } from "~/lib/cm-shortcuts";
 import PlainReview from "~/components/PlainReview";
 import { markdownLineStyle } from "~/lib/cm-markdown-style";
 import PlainPreview from "~/components/PlainPreview";
+import SlidesView, { isSlideDeck } from "~/components/SlidesView";
+import { slideIndexForOffset } from "~/lib/slide-cursor";
+import PresenterRail from "~/components/PresenterRail";
+import CommitButton from "~/components/CommitButton";
 import OutlinePanel from "~/components/OutlinePanel";
 import { livePreview } from "~/lib/cm-live-preview";
 import { resolveAssetSrc, type AssetCtx } from "~/lib/asset-urls";
@@ -156,6 +160,13 @@ export default function PlainEditor({
    *  editor remains the owner; this is a copy for display, never a second
    *  source of truth. */
   const [text, setText] = useState("");
+  /** Where the cursor is, so a deck can show the slide being written. */
+  const [cursorOffset, setCursorOffset] = useState(0);
+  /** Fullscreen, chrome hidden, the deck filling the screen. */
+  const [presenting, setPresenting] = useState(false);
+  /** The presenter card, and when the talk started, for its clock. */
+  const [railOpen, setRailOpen] = useState(false);
+  const [presentStart, setPresentStart] = useState(0);
   const [bibLib, setBibLib] = useState<BibLibrary | null>(null);
   /** Spellcheck language, from a `lang:` in the frontmatter. British by default,
    *  which is the house style. */
@@ -348,6 +359,72 @@ export default function PlainEditor({
   /** Another window has this file, so this one reads nothing and writes nothing. */
   const alreadyOpen = sync.alreadyOpen;
 
+  /** A deck is the same document with a different preview: the source is
+   *  markdown either way, and the editor does not change. */
+  const deck = useMemo(() => isSlideDeck(text), [text]);
+  const slideProps = {
+    markdown: text,
+    drive: folderId ? ({ fileId, name, folderId } as DriveMeta) : null,
+    frontmatter,
+    cursorOffset,
+    followCursor: true,
+    bibLib,
+  };
+
+  /**
+   * Present: fullscreen the whole app, not the deck's iframe.
+   *
+   * Fullscreening the iframe hides everything the app draws beside the slide,
+   * including the presenter card, which is why this takes the document element.
+   * Leaving fullscreen by any route leaves Present, through the listener below.
+   */
+  const enterPresent = useCallback(() => {
+    if (!deck) return;
+    setPresentStart(Date.now());
+    setPresenting(true);
+    document.documentElement.requestFullscreen?.().catch(() => {});
+  }, [deck]);
+
+  const exitPresent = useCallback(() => {
+    setPresenting(false);
+    if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+  }, []);
+
+  const presentingRef = useRef(presenting);
+  useEffect(() => {
+    presentingRef.current = presenting;
+  }, [presenting]);
+
+  useEffect(() => {
+    const onFs = () => {
+      if (!document.fullscreenElement && presentingRef.current) setPresenting(false);
+    };
+    document.addEventListener("fullscreenchange", onFs);
+    return () => document.removeEventListener("fullscreenchange", onFs);
+  }, []);
+
+  // The deck runtime intercepts plain F inside its iframe and posts this, so
+  // reveal's own fullscreen never fires and the presenter card stays visible.
+  useEffect(() => {
+    const onMessage = (e: MessageEvent) => {
+      if (e.data === "mist-present" || e.data?.type === "mist-present") enterPresent();
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [enterPresent]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || !e.altKey) return;
+      if (e.key.toLowerCase() !== "p" || !deck) return;
+      e.preventDefault();
+      if (presentingRef.current) exitPresent();
+      else enterPresent();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [deck, enterPresent, exitPresent]);
+
   /**
    * The file moved under us, and taking the change would lose something.
    *
@@ -468,8 +545,10 @@ export default function PlainEditor({
               indentWithTab,
             ]),
             EditorView.updateListener.of((u) => {
+              if (u.selectionSet && !u.docChanged) setCursorOffset(u.state.selection.main.head);
               if (!u.docChanged) return;
               setText(u.state.doc.toString());
+              setCursorOffset(u.state.selection.main.head);
               const fromUser = u.transactions.some((tr) => !tr.annotation(Transaction.remote));
               if (!fromUser) return;
               if (conflicted.current) return; // the user has a choice to make first
@@ -513,6 +592,11 @@ export default function PlainEditor({
       <header className="flex h-11 shrink-0 items-center gap-3 border-b border-border px-3 text-sm">
         <span className="font-medium text-ink">{name}</span>
         <span className="text-xs uppercase tracking-wider text-muted">{describe(status)}</span>
+        <CommitButton
+          fileId={fileId}
+          unsaved={status === "dirty" || status === "saving"}
+          saveNow={() => saveNowRef.current()}
+        />
         {status === "conflict" && (
           <button
             type="button"
@@ -575,6 +659,16 @@ export default function PlainEditor({
         >
           Contents
         </button>
+        {deck && (
+          <button
+            type="button"
+            onClick={enterPresent}
+            title="Present (Ctrl/Cmd+Alt+P)"
+            className="cursor-pointer rounded px-2 py-1 text-xs uppercase tracking-wider text-muted hover:text-ink"
+          >
+            Present
+          </button>
+        )}
         <span className="flex items-center overflow-hidden rounded border border-border">
           {(["live", "editor", "split", "preview"] as View[]).map((v) => (
             <button
@@ -613,13 +707,44 @@ export default function PlainEditor({
           </button>
         </div>
       )}
-      <div className={`flex min-h-0 flex-1 ${alreadyOpen ? "hidden" : ""}`}>
+      {presenting && (
+        <div className="fixed inset-0 z-50 bg-black">
+          <SlidesView {...slideProps} />
+          {railOpen && (
+            <PresenterRail
+              markdown={text}
+              frontmatter={frontmatter}
+              currentSlide={slideIndexForOffset(text, cursorOffset)}
+              startedAt={presentStart}
+              onMouseLeave={() => setRailOpen(false)}
+            />
+          )}
+          {!railOpen && (
+            // A right-edge target that reveals the presenter card on hover.
+            <div
+              onMouseEnter={() => setRailOpen(true)}
+              title="Presenter info"
+              className="absolute right-0 top-1/2 z-40 h-48 w-4 -translate-y-1/2"
+            />
+          )}
+          <button
+            type="button"
+            onClick={exitPresent}
+            title="Exit present (Esc)"
+            aria-label="Exit present"
+            className="absolute right-3 top-3 cursor-pointer rounded bg-black/40 px-2 py-1 text-xs uppercase tracking-wider text-white/70 hover:text-white"
+          >
+            Exit
+          </button>
+        </div>
+      )}
+      <div className={`flex min-h-0 flex-1 ${alreadyOpen || presenting ? "hidden" : ""}`}>
         {outlineOpen && (
           <div className="min-h-0 w-64 shrink-0 overflow-auto border-r border-border">
             <OutlinePanel
               view={editorView}
               text={text}
-              deck={false}
+              deck={deck}
               canEdit={status !== "conflict"}
               onClose={() => setOutlineOpen(false)}
             />
@@ -636,14 +761,18 @@ export default function PlainEditor({
           }`}
         />
         {/* Live is the editor alone, typeset in place. Only split and preview put a
-            second pane beside it. */}
+            second pane beside it. For a deck that pane is the deck itself. */}
         {(layout === "split" || layout === "preview") && (
           <div className={layout === "split" ? "min-h-0 w-1/2" : "min-h-0 flex-1"}>
-            <PlainPreview
-              markdown={text}
-              drive={folderId ? ({ fileId, name, folderId } as DriveMeta) : null}
-              bibLib={bibLib}
-            />
+            {deck ? (
+              <SlidesView {...slideProps} />
+            ) : (
+              <PlainPreview
+                markdown={text}
+                drive={folderId ? ({ fileId, name, folderId } as DriveMeta) : null}
+                bibLib={bibLib}
+              />
+            )}
           </div>
         )}
         {reviewOpen && (
