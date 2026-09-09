@@ -7,10 +7,13 @@ import { quickHash } from "~/shared/hash";
 import type { DocControl, DocTransport } from "./doc-transport";
 import { shouldOfferRatherThanTake } from "./outside-change";
 import { useFileLock } from "./useFileLock";
+import { useQuietPoll } from "./useQuietPoll";
 import type { DocMode } from "~/shared/types";
 
 /** How often to ask whether the file has changed underneath the editor. */
 const WATCH_MS = 2000;
+/** The slowest that gap is allowed to become while nothing changes. */
+const WATCH_MAX_MS = 10000;
 
 
 
@@ -215,62 +218,59 @@ export function useLocalEditor(fileId: string) {
    * is on loopback and the answer is one content hash, so the cost is nil, and
    * it adds no server-side state to a mode whose whole point is having none.
    */
+  const watching = synced && !alreadyOpen;
+  const stoppedRef = useRef(false);
   useEffect(() => {
-    if (!synced || alreadyOpen) return;
-    let stopped = false;
-
-    const check = async () => {
-      if (stopped || document.hidden) return;
-      try {
-        const res = await fetch(`/local/doc?stat=1&id=${encodeURIComponent(fileId)}`, { cache: "no-store" });
-        if (!res.ok) return;
-        const { version } = (await res.json()) as { version: string | null };
-        if (stopped || !version || version === versionRef.current) return;
-
-        const current = doc.getText("body").toString();
-        const dirty = cleanBodyRef.current !== null && current !== cleanBodyRef.current;
-
-        const reverted = seenRef.current.has(version);
-        // The incoming length decides whether text has gone, so it has to be
-        // read before the change can be taken. Skipped when the answer is
-        // already settled, to keep the ordinary poll to one small request.
-        let incomingLength: number | null = null;
-        if (!dirty && !reverted) {
-          const peek = await fetch(`/local/doc?id=${encodeURIComponent(fileId)}`, { cache: "no-store" });
-          if (peek.ok) {
-            const { text } = (await peek.json()) as { text: string };
-            incomingLength = text.length;
-          }
-        }
-
-        if (shouldOfferRatherThanTake({ dirty, reverted, currentLength: current.length, incomingLength })) {
-          if (warnedRef.current !== version) {
-            warnedRef.current = version;
-            emit({ type: "upstream-changed" });
-          }
-          return;
-        }
-        if (await load(true)) emit({ type: "reloaded" });
-      } catch {
-        // the sidecar is briefly unreachable; the next tick tries again
-      }
-    };
-
-    const timer = setInterval(check, WATCH_MS);
-    // Returning to the tab is when an outside change is most likely to be
-    // waiting, so look then rather than waiting out the interval.
-    const onVisible = () => {
-      if (!document.hidden) void check();
-    };
-    window.addEventListener("focus", onVisible);
-    document.addEventListener("visibilitychange", onVisible);
+    stoppedRef.current = false;
     return () => {
-      stopped = true;
-      clearInterval(timer);
-      window.removeEventListener("focus", onVisible);
-      document.removeEventListener("visibilitychange", onVisible);
+      stoppedRef.current = true;
     };
-  }, [synced, alreadyOpen, fileId, doc, load, emit]);
+  }, []);
+
+  const check = useCallback(async () => {
+    if (stoppedRef.current) return false;
+    try {
+      const res = await fetch(`/local/doc?stat=1&id=${encodeURIComponent(fileId)}`, { cache: "no-store" });
+      if (!res.ok) return false;
+      const { version } = (await res.json()) as { version: string | null };
+      if (stoppedRef.current || !version || version === versionRef.current) return false;
+
+      const current = doc.getText("body").toString();
+      const dirty = cleanBodyRef.current !== null && current !== cleanBodyRef.current;
+
+      const reverted = seenRef.current.has(version);
+      // The incoming length decides whether text has gone, so it has to be
+      // read before the change can be taken. Skipped when the answer is
+      // already settled, to keep the ordinary poll to one small request.
+      let incomingLength: number | null = null;
+      if (!dirty && !reverted) {
+        const peek = await fetch(`/local/doc?id=${encodeURIComponent(fileId)}`, { cache: "no-store" });
+        if (peek.ok) {
+          const { text } = (await peek.json()) as { text: string };
+          incomingLength = text.length;
+        }
+      }
+
+      if (shouldOfferRatherThanTake({ dirty, reverted, currentLength: current.length, incomingLength })) {
+        if (warnedRef.current !== version) {
+          warnedRef.current = version;
+          emit({ type: "upstream-changed" });
+        }
+        return true;
+      }
+      if (await load(true)) emit({ type: "reloaded" });
+      return true;
+    } catch {
+      // the sidecar is briefly unreachable; the next tick tries again
+      return false;
+    }
+  }, [fileId, doc, load, emit]);
+
+  // Hidden tabs do not poll, and the gap widens while the file sits untouched.
+  // The widening is bounded low on purpose: this is the promise that a file
+  // edited in Obsidian or by an agent shows up here on its own, so ten seconds
+  // is as slow as it may get, and returning to the tab makes it immediate again.
+  useQuietPoll(check, { base: WATCH_MS, max: WATCH_MAX_MS, enabled: watching });
 
   return {
     doc,

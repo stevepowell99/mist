@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useDocument } from "~/lib/DocumentContext";
 import { isLocalFileId } from "~/lib/localfs-ids";
+import { useQuietPoll } from "~/lib/useQuietPoll";
 
 type GitInfo = { repo: boolean; dirty: boolean; branch: string | null };
 
@@ -26,23 +27,36 @@ export default function CommitButton() {
   const [note, setNote] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    if (!local || !fileId) return;
+    if (!local || !fileId) return false;
     try {
       const res = await fetch(`/local/git?id=${encodeURIComponent(fileId)}`);
-      if (res.ok) setInfo((await res.json()) as GitInfo);
+      if (!res.ok) return false;
+      const next = (await res.json()) as GitInfo;
+      let moved = false;
+      setInfo((prev) => {
+        moved = prev.repo !== next.repo || prev.dirty !== next.dirty || prev.branch !== next.branch;
+        return moved ? next : prev;
+      });
+      return moved;
     } catch {
       // the sidecar is briefly unreachable; the next poll tries again
+      return false;
     }
   }, [local, fileId]);
 
   // Follow the file's git state rather than asking once: an agent committing or
   // reverting it underneath changes whether there is anything here to commit.
+  //
+  // This is the expensive poll of the two. Each answer costs the sidecar a git
+  // process, and process creation on Windows is slow and gets inspected by
+  // antivirus on the way, so a five-second timer left running overnight is most
+  // of what made the dev server sit at half a core with nobody typing. It now
+  // sleeps with the tab and widens to a minute while the answer keeps coming
+  // back the same.
   useEffect(() => {
-    if (!local) return;
-    void refresh();
-    const timer = setInterval(refresh, 5000);
-    return () => clearInterval(timer);
+    if (local) void refresh();
   }, [local, refresh]);
+  useQuietPoll(refresh, { base: 5000, max: 60000, enabled: local });
 
   const commit = useCallback(async () => {
     if (!fileId || busy) return;

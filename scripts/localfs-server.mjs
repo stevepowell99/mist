@@ -124,6 +124,27 @@ function git(args, cwd) {
  */
 const eolFor = new Map();
 
+/**
+ * Where a directory's git directory is, or null if it is not in a work tree.
+ *
+ * Cached for the life of the process, because a repository does not move and
+ * this is the one question `/git-info` cannot answer from a stat. `git commit`
+ * invalidates nothing here: the path is the same, and the index mtime inside it
+ * is what tells the caller something happened.
+ */
+const gitDirFound = new Map();
+
+async function gitDirFor(cwd) {
+  if (gitDirFound.has(cwd)) return gitDirFound.get(cwd);
+  const found = await git(["rev-parse", "--absolute-git-dir"], cwd);
+  const dir = found.ok && found.out ? found.out : null;
+  gitDirFound.set(cwd, dir);
+  return dir;
+}
+
+/** The last answer `/git-info` gave for a file, against the stat stamp it was true for. */
+const gitInfoCache = new Map();
+
 async function decideEol(abs, existing) {
   if (eolFor.has(abs)) return eolFor.get(abs);
   let eol = existing && existing.includes(13) ? "crlf" : "lf";
@@ -473,16 +494,35 @@ const handlers = {
   // Whether this file sits in a git work tree, and whether it differs from what
   // is committed. The editor asks so it can offer a commit only where one means
   // something, and say whether there is anything to commit.
+  //
+  // The editor asks on a timer, and the answer is almost always the same one as
+  // last time, so the answer is cached against the two things that can change
+  // it. The file's own mtime and size cover an edit; the git directory's index
+  // mtime covers a commit, a checkout or a staging change made elsewhere, none
+  // of which need touch the file at all. Two stats replace three subprocesses,
+  // and process creation is the expensive part on Windows.
   "GET /git-info": async (params) => {
     const abs = absOf(params.get("path"));
     const cwd = path.dirname(abs);
-    const inside = await git(["rev-parse", "--is-inside-work-tree"], cwd);
-    if (!inside.ok || inside.out !== "true") return { repo: false, dirty: false, branch: null };
+
+    const gitDir = await gitDirFor(cwd);
+    if (!gitDir) return { repo: false, dirty: false, branch: null };
+
+    const [fileSt, indexSt] = await Promise.all([
+      fs.stat(abs).catch(() => null),
+      fs.stat(path.join(gitDir, "index")).catch(() => null),
+    ]);
+    const stamp = `${fileSt ? fileSt.mtimeMs : 0}:${fileSt ? fileSt.size : -1}:${indexSt ? indexSt.mtimeMs : 0}`;
+    const hit = gitInfoCache.get(abs);
+    if (hit && hit.stamp === stamp) return hit.info;
+
     const [status, branch] = await Promise.all([
       git(["status", "--porcelain", "--", abs], cwd),
       git(["rev-parse", "--abbrev-ref", "HEAD"], cwd),
     ]);
-    return { repo: true, dirty: status.ok && status.out !== "", branch: branch.ok ? branch.out : null };
+    const info = { repo: true, dirty: status.ok && status.out !== "", branch: branch.ok ? branch.out : null };
+    gitInfoCache.set(abs, { stamp, info });
+    return info;
   },
 
   "POST /git-commit": async (params, req) => {
