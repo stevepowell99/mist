@@ -279,37 +279,52 @@ export function useFileSync(fileId: string, buffer: FileSyncBuffer, events: File
   /**
    * Leaving must write.
    *
-   * `sendBeacon` survives the page being torn down, which a fetch started at
-   * that moment does not. It cannot read the reply, so a write refused here is
-   * refused in silence: the conditional write still protects the file, but the
-   * user is not told. That is the price of saving at all on the way out, and it
-   * is only reached for a buffer that is dirty when the tab closes.
+   * Switching away (blur, or the tab hidden) leaves the page alive, so it saves
+   * through the ordinary chain, which reads the reply and takes the new version.
+   * It used to send a beacon here too, and a beacon cannot read its reply: the
+   * write landed, this page kept the version from before it, and the next
+   * autosave was refused as a conflict and forked an "(unsaved ...)" copy of
+   * text that was already saved. On 14 September 2026 that happened every time
+   * Steve switched windows mid-sentence.
+   *
+   * Only the page being torn down still needs `sendBeacon`, which survives that
+   * where a fetch does not. A write refused there is refused in silence: the
+   * conditional write still protects the file, but nobody is left to tell.
    */
   useEffect(() => {
-    const flush = () => {
-      if (conflicted.current || lockedOut.current) return;
-      const content = buf.current.serialise();
+    const dirty = () => {
+      if (conflicted.current || lockedOut.current) return false;
       const current = buf.current.held();
-      if (content === null || current === null || current === clean.current) return;
+      return current !== null && current !== clean.current;
+    };
+    const saveNow = () => {
+      if (!dirty()) return;
+      if (timer.current) clearTimeout(timer.current);
+      save();
+    };
+    const onHidden = () => {
+      if (document.hidden) saveNow();
+    };
+    const onPageHide = () => {
+      if (!dirty()) return;
+      const content = buf.current.serialise();
+      if (content === null) return;
       const expected = version.current ? `&expected=${encodeURIComponent(version.current)}` : "";
       navigator.sendBeacon?.(
         url(expected),
         new Blob([content], { type: "text/markdown; charset=utf-8" }),
       );
     };
-    const onHidden = () => {
-      if (document.hidden) flush();
-    };
-    window.addEventListener("pagehide", flush);
-    window.addEventListener("blur", flush);
+    window.addEventListener("pagehide", onPageHide);
+    window.addEventListener("blur", saveNow);
     document.addEventListener("visibilitychange", onHidden);
     return () => {
-      window.removeEventListener("pagehide", flush);
-      window.removeEventListener("blur", flush);
+      window.removeEventListener("pagehide", onPageHide);
+      window.removeEventListener("blur", saveNow);
       document.removeEventListener("visibilitychange", onHidden);
       if (timer.current) clearTimeout(timer.current);
     };
-  }, [url]);
+  }, [url, save]);
 
   /** Take what is on disk, discarding the offer. The editor is expected to have
    *  kept a copy of the buffer first; `saveRecovery` is how. */
