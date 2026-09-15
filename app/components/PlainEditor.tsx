@@ -21,6 +21,7 @@ import { selectionToolbar } from "~/lib/cm-selection-toolbar";
 import { insertCommentChange } from "~/lib/cm-comments";
 import { wrapOnSelection } from "~/lib/cm-shortcuts";
 import PlainReview from "~/components/PlainReview";
+import CommentBox from "~/components/CommentBox";
 import { markdownLineStyle } from "~/lib/cm-markdown-style";
 import PlainPreview from "~/components/PlainPreview";
 import SlidesView, { isSlideDeck } from "~/components/SlidesView";
@@ -140,6 +141,10 @@ export default function PlainEditor({
   /** Holds the editable flag, so a conflict can freeze the buffer in place. */
   const editable = useRef(new Compartment());
   const [note, setNote] = useState<string | null>(null);
+  /** The comment being typed: the range it is about, and where to float the box. */
+  const [commentAt, setCommentAt] = useState<
+    { from: number; to: number; selected: string; x: number; y: number } | null
+  >(null);
   // Live is the default for prose: the document typeset in place, which is what
   // you want when writing. The three-pane arrangement earns its keep for a deck,
   // where the slide and its source are different things.
@@ -246,16 +251,29 @@ export default function PlainEditor({
     const onComment = () => {
       const v = view.current;
       if (!v || conflicted.current) return;
-      const note = window.prompt("Comment");
-      if (!note) return;
       const { from, to } = v.state.selection.main;
-      const { changes, cursor } = insertCommentChange(v.state.doc.toString(), from, to, note);
-      v.dispatch({ changes, selection: { anchor: cursor }, userEvent: "input.comment" });
-      v.focus();
+      const c = v.coordsAtPos(to) ?? v.coordsAtPos(from);
+      setCommentAt({ from, to, selected: v.state.sliceDoc(from, to), x: c?.left ?? 0, y: c?.bottom ?? 0 });
     };
     window.addEventListener("mist-comment", onComment);
     return () => window.removeEventListener("mist-comment", onComment);
   }, []);
+
+  const saveComment = (note: string) => {
+    const v = view.current;
+    const at = commentAt;
+    setCommentAt(null);
+    if (!v || !at || conflicted.current) return;
+    // The file can move while the box is open; if the words are no longer where
+    // they were, comment at the cursor rather than on the wrong text.
+    let { from, to } = at;
+    if (to > v.state.doc.length || v.state.sliceDoc(from, to) !== at.selected) {
+      ({ from, to } = v.state.selection.main);
+    }
+    const { changes, cursor } = insertCommentChange(v.state.doc.toString(), from, to, note);
+    v.dispatch({ changes, selection: { anchor: cursor }, userEvent: "input.comment" });
+    v.focus();
+  };
 
   // Restore the remembered view and panel once, on the client. The server has
   // no localStorage, so this is a deliberate post-mount correction rather than
@@ -495,9 +513,6 @@ export default function PlainEditor({
             liveOn.current.of(
               layoutRef.current === "live" ? liveLayer(resolveSrc, () => bibRef.current) : [],
             ),
-            // The editing behaviour the other editor has, minus the parts that
-            // belong to comments and suggest mode: those are phase 3 and need
-            // storage decisions this editor has deliberately not made.
             bracketMatching(),
             closeBrackets(),
             codeFolding(),
@@ -781,6 +796,17 @@ export default function PlainEditor({
           </div>
         )}
       </div>
+      {commentAt && (
+        <CommentBox
+          x={commentAt.x}
+          y={commentAt.y}
+          onSave={saveComment}
+          onCancel={() => {
+            setCommentAt(null);
+            view.current?.focus();
+          }}
+        />
+      )}
     </div>
   );
 }
