@@ -3,10 +3,11 @@ import {
   EditorView,
   ViewPlugin,
   WidgetType,
+  keymap,
   type DecorationSet,
   type ViewUpdate,
 } from "@codemirror/view";
-import { RangeSetBuilder, StateField, type EditorState } from "@codemirror/state";
+import { Prec, RangeSetBuilder, StateField, type EditorState } from "@codemirror/state";
 import { syntaxTree, HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { markdownLanguage } from "@codemirror/lang-markdown";
 import { tags } from "@lezer/highlight";
@@ -17,7 +18,6 @@ import { runMermaid } from "./mermaid";
 import { criticSpans } from "./critic";
 import { CALLOUT_ALIAS } from "./slides-build";
 import { citationSpans, type BibLibrary } from "./citations";
-import { revealPos } from "./cm-reveal";
 
 /**
  * Live preview (the fourth View): the markdown syntax marks recede while you
@@ -672,11 +672,20 @@ class BlockWidget extends WidgetType {
       wrap.appendChild(pre);
       void runMermaid(wrap);
     }
-    // Click to edit: put the cursor at the start of the block, which reveals the
-    // source in the same update.
+    // Click to edit: put the cursor where the click was, which reveals the source
+    // in the same update. The position is read from the DOM at click time, since
+    // `eq` reuses this widget after edits above it have moved `this.from`, and
+    // there is no scroll: the source occupies the same place the table did.
     wrap.addEventListener("mousedown", (e) => {
       e.preventDefault();
-      revealPos(view, this.from);
+      let start: number;
+      try {
+        start = view.posAtDOM(wrap);
+      } catch {
+        start = this.from;
+      }
+      const pos = this.kind === "table" ? tableClickPos(view, start, e.target) : start;
+      view.dispatch({ selection: { anchor: pos }, scrollIntoView: false });
       view.focus();
     });
     return wrap;
@@ -684,10 +693,72 @@ class BlockWidget extends WidgetType {
   get estimatedHeight() {
     return this.kind === "mermaid" ? 220 : 40 + 28 * this.source.split("\n").length;
   }
-  ignoreEvent() {
-    return false;
+  // The widget handles its own mousedown. Letting CodeMirror run its mouse
+  // selection too placed the cursor from coordinates measured against the layout
+  // the click had just replaced, which usually meant the top of the document.
+  ignoreEvent(e: Event) {
+    return e.type === "mousedown";
   }
 }
+
+/** Source position of the table cell a click landed in: the row's line (the
+ *  delimiter row is not rendered, so body rows sit one line further down), then
+ *  the text after the cell's opening pipe. Falls back to the table's start. */
+function tableClickPos(view: EditorView, start: number, target: EventTarget | null): number {
+  const cell = target instanceof Element ? target.closest("td, th") : null;
+  const row = cell?.closest("tr");
+  const table = row?.closest("table");
+  if (!cell || !row || !table) return start;
+  const rowIndex = Array.from(table.querySelectorAll("tr")).indexOf(row);
+  const colIndex = Array.from(row.children).indexOf(cell);
+  const doc = view.state.doc;
+  const lineNo = doc.lineAt(start).number + (rowIndex === 0 ? 0 : rowIndex + 1);
+  if (rowIndex < 0 || lineNo > doc.lines) return start;
+  const line = doc.line(lineNo);
+  let col = 0;
+  let i = line.text.startsWith("|") ? 1 : line.text.search(/\S|$/);
+  while (col < colIndex) {
+    const next = line.text.indexOf("|", i);
+    if (next < 0) break;
+    i = next + 1;
+    col++;
+  }
+  while (line.text[i] === " ") i++;
+  return line.from + Math.min(i, line.length);
+}
+
+/**
+ * Up and Down step into a table or diagram rather than over it. A block widget
+ * is one unit to vertical motion, so the cursor jumped from the line above to the
+ * line below and the source was never revealed. When a move would cross a block,
+ * land on its nearest line instead, which reveals it.
+ */
+function stepIntoBlock(forward: boolean) {
+  return (view: EditorView): boolean => {
+    const sel = view.state.selection;
+    if (sel.ranges.length !== 1) return false;
+    const head = sel.main.head;
+    const target = view.moveVertically(sel.main, forward).head;
+    let hit: { from: number; to: number } | null = null;
+    view.state.field(blockField).between(Math.min(head, target), Math.max(head, target), (from, to) => {
+      if (forward ? from >= head && from <= target : to <= head && to >= target) {
+        if (!hit || (forward ? from < hit.from : to > hit.to)) hit = { from, to };
+      }
+    });
+    if (!hit) return false;
+    const { from, to } = hit as { from: number; to: number };
+    const pos = forward ? from : view.state.doc.lineAt(to).from;
+    view.dispatch({ selection: { anchor: pos }, scrollIntoView: true, userEvent: "select" });
+    return true;
+  };
+}
+
+const blockKeys = Prec.high(
+  keymap.of([
+    { key: "ArrowDown", run: stepIntoBlock(true) },
+    { key: "ArrowUp", run: stepIntoBlock(false) },
+  ]),
+);
 
 /** Line-span of every table and mermaid fence the selection is not inside. */
 function blockRanges(state: EditorState): { from: number; to: number; widget: BlockWidget }[] {
@@ -758,5 +829,6 @@ export const livePreview = (opts: {
 } = {}) => [
   livePlugin(opts.resolveSrc ?? ((s) => s), opts.getBib ?? (() => null)),
   blockField,
+  blockKeys,
   syntaxHighlighting(liveHighlight),
 ];
