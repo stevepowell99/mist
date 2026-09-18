@@ -15,6 +15,24 @@ export function shareLink(href: string, key: string | null, asPreview: boolean):
   return url.toString();
 }
 
+/**
+ * A deck's standalone viewer link: the same `/slides/:id` page "Print to PDF"
+ * already opens, minus `print-pdf`, so it is the full interactive presentation
+ * rather than the paginated print layout. Unlike `/docs/:id`, this route is
+ * gated by the doc's own secret key alone (`resolveDoc`), with no Google
+ * sign-in check, because it never touches per-user Drive ACL. That is what
+ * makes it the right link for "shared with anyone with the link": `/docs/:id`
+ * always requires a signed-in Google account the file's Drive sharing grants
+ * (by design, for editing), so it asks a public viewer to sign in even when
+ * the Drive file itself is shared with anyone.
+ */
+export function deckViewLink(origin: string, docId: string, key: string | null, assetToken: string | null): string {
+  const url = new URL(`/slides/${docId}`, origin);
+  if (key) url.searchParams.set("k", key);
+  if (assetToken) url.searchParams.set("token", assetToken);
+  return url.toString();
+}
+
 export default function ShareButton() {
   const { docId, markdown, threads, frontmatter, role, docKey, suggestKey, assetToken, drive } = useDocument();
   const [copied, setCopied] = useState<"edit" | "suggest" | null>(null);
@@ -27,11 +45,21 @@ export default function ShareButton() {
 
   const handleCopy = useCallback(
     async (kind: "edit" | "suggest", key: string | null) => {
-      await navigator.clipboard.writeText(shareLink(window.location.href, key, asPreview));
+      // A deck's preview link goes straight to the standalone viewer page
+      // (no Google sign-in) rather than /docs/:id?view=preview (which always
+      // needs one, since that route also has to check Drive's per-user ACL
+      // for the editor it can drop into). A share meant only for viewing
+      // should not ask a reader who is not signing in to edit anything to
+      // sign in at all.
+      const url =
+        deck && asPreview
+          ? deckViewLink(window.location.origin, docId, key, assetToken)
+          : shareLink(window.location.href, key, asPreview);
+      await navigator.clipboard.writeText(url);
       setCopied(kind);
       setTimeout(() => setCopied(null), 2000);
     },
-    [asPreview],
+    [asPreview, deck, docId, assetToken],
   );
 
   const handleDownload = useCallback(() => {
@@ -68,12 +96,17 @@ export default function ShareButton() {
             checked={asPreview}
             onCheckedChange={setAsPreview}
             onSelect={(e) => e.preventDefault()}
+            title={
+              deck
+                ? "For a deck this is the standalone viewer link: no Google sign-in, matching a Drive share of anyone with the link"
+                : "Opens read-only in the app's own preview, which still needs Google sign-in for a Drive-bound document"
+            }
             className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-sm outline-none data-[highlighted]:bg-border"
           >
             <span className="inline-flex h-3.5 w-3.5 items-center justify-center border border-ink">
               {asPreview ? "✓" : ""}
             </span>
-            Open link as preview
+            {deck ? "Open link as preview (no sign-in)" : "Open link as preview"}
           </DropdownMenu.CheckboxItem>
           <div className="my-1 border-t border-border" />
           {role === "edit" ? (
