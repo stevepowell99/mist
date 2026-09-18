@@ -17,7 +17,7 @@ import DOMPurify from "dompurify";
 import { runMermaid } from "./mermaid";
 import { criticSpans } from "./critic";
 import { CALLOUT_ALIAS, isSlideDeck, slideSpans, stripFrontmatter } from "./slides-build";
-import { slideThumbHtml } from "./slide-thumb";
+import { slideLiveHtml } from "./slide-thumb";
 import { citationSpans, type BibLibrary } from "./citations";
 
 /**
@@ -712,14 +712,16 @@ class BlockWidget extends WidgetType {
 }
 
 /**
- * A whole slide, rendered the same way the library gallery and the presenter
- * rail already render one (`slideThumbHtml`, the house grammar as global CSS,
- * no reveal iframe needed): a `.preview` card in place of the slide's source.
- * Cursor or click into it and it drops back to plain markdown, the same
+ * A whole slide, rendered the house grammar as global CSS the way the library
+ * gallery and the presenter rail already render one (no reveal iframe needed):
+ * a `.preview` card in place of the slide's source, via `slideLiveHtml`, the
+ * variant of that render carrying `data-pos` anchors (for `slideClickPos`
+ * below) and CriticMarkup rendered rather than left as literal braces. Cursor
+ * or click into it and it drops back to plain markdown, the same
  * reveal-on-touch rule as a table or a mermaid fence, so ordinary edits,
  * comments and suggestions happen on the real text underneath. Structural
  * work (columns, overlays, backgrounds) still wants Split or Present, which
- * run the full deck grammar reveal.js itself.
+ * run the full deck grammar through reveal.js itself.
  */
 class SlideWidget extends WidgetType {
   constructor(
@@ -734,28 +736,52 @@ class SlideWidget extends WidgetType {
   toDOM(view: EditorView) {
     const wrap = document.createElement("div");
     wrap.className = "cm-lp-slide preview font-serif";
-    wrap.innerHTML = slideThumbHtml(this.source);
+    wrap.innerHTML = slideLiveHtml(this.source);
     void runMermaid(wrap);
     wrap.addEventListener("mousedown", (e) => {
       e.preventDefault();
-      let pos: number;
-      try {
-        pos = view.posAtDOM(wrap);
-      } catch {
-        pos = this.from;
-      }
+      const pos = slideClickPos(wrap, e.clientY, this.from, this.source.length);
       view.dispatch({ selection: { anchor: pos }, scrollIntoView: false });
       view.focus();
     });
     return wrap;
   }
   get estimatedHeight() {
-    return 260;
+    // A rough guess only: CodeMirror re-measures the real height once the
+    // widget is in the DOM. Scaled with the source rather than a flat number,
+    // so a short slide and a dense one are not equally (mis)guessed before
+    // that first measurement lands.
+    return 120 + 22 * this.source.split("\n").length;
   }
   // As for a table/mermaid block: the widget places the cursor itself.
   ignoreEvent(e: Event) {
     return e.type === "mousedown";
   }
+}
+
+/**
+ * Source position for a click on a rendered slide: the `data-pos` anchor
+ * (`insertPosAnchors`, the same marker the split-view scroll sync reads) whose
+ * block sits at or just above the click's y, the same pixel-to-block mapping
+ * `docs.$id.tsx` already uses for scroll sync, rather than the DOM position of
+ * the click's own target. A click on a paragraph's own text and a click on the
+ * blank padding around it are the same "click on this block" gesture to a
+ * reader, but only the first has a text node under the pointer, so matching
+ * against `e.target` (tried first, and reverted) resolved the second to
+ * whatever ancestor container caught the event instead, typically the whole
+ * slide. `posAtDOM` on the widget's root has the same failure for every click:
+ * it resolves to the widget's own position (the slide's first line) regardless
+ * of where inside it was clicked.
+ */
+function slideClickPos(wrap: HTMLElement, clientY: number, from: number, sourceLen: number): number {
+  const anchors = wrap.querySelectorAll<HTMLElement>("br[data-pos]");
+  for (let i = anchors.length - 1; i >= 0; i--) {
+    const top = anchors[i].nextElementSibling?.getBoundingClientRect().top;
+    if (top === undefined || top > clientY) continue;
+    const pos = Number(anchors[i].getAttribute("data-pos"));
+    if (Number.isFinite(pos)) return from + Math.min(Math.max(pos, 0), sourceLen);
+  }
+  return from;
 }
 
 /** Source position of the table cell a click landed in: the row's line (the

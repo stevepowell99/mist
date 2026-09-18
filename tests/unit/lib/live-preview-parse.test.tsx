@@ -112,6 +112,60 @@ describe("live preview over a deck", () => {
       view.destroy();
     }
   });
+
+  it("a click inside a fenced-div panel lands on the paragraph it hit, not the slide start", () => {
+    const panelDeck =
+      "---\nformat: revealjs\n---\n\n# Slide one\n\n::: {.panel .navy .light}\n\n" +
+      "First para.\n\nSecond para.\n\n:::\n";
+    const view = new EditorView({
+      state: EditorState.create({
+        doc: panelDeck,
+        selection: { anchor: 0 },
+        extensions: [markdown({ base: markdownLanguage }), livePreview()],
+      }),
+      parent: document.body,
+    });
+    // jsdom does no layout, so every real rect is zero; fake one block per
+    // anchor stepping down the page, the one thing `slideClickPos` relies on
+    // (later blocks sit lower than earlier ones), so a click's y can be made
+    // to land on a specific block the way a real click would.
+    const blockTop = new Map<Element, number>();
+    let y = 0;
+    for (const a of view.dom.querySelectorAll("br[data-pos]")) {
+      if (a.nextElementSibling) blockTop.set(a.nextElementSibling, y);
+      y += 20;
+    }
+    const original = Element.prototype.getBoundingClientRect;
+    Element.prototype.getBoundingClientRect = function (this: Element) {
+      const top = blockTop.get(this) ?? 0;
+      return { top, bottom: top + 20, left: 0, right: 0, width: 0, height: 20, x: 0, y: top, toJSON() {} } as DOMRect;
+    };
+    try {
+      const target = Array.from(view.dom.querySelectorAll("p")).find(
+        (p) => p.textContent === "Second para.",
+      )!;
+      expect(target).toBeTruthy();
+      // A click at the paragraph's own y, but landing on its parent (the
+      // panel div) rather than the paragraph itself: exactly what a click on
+      // the blank padding around real rendered text does, and the case that
+      // broke when this matched the click's DOM target instead of its y.
+      const clientY = target.getBoundingClientRect().top;
+      target.parentElement!.dispatchEvent(
+        new MouseEvent("mousedown", { bubbles: true, cancelable: true, clientY }),
+      );
+      const head = view.state.selection.main.head;
+      const secondParaAt = panelDeck.indexOf("Second para.");
+      const closer = panelDeck.indexOf(":::", secondParaAt);
+      // Landed in (or right at the start of) the second paragraph, not back at
+      // the slide's own heading, which `posAtDOM` on the widget root alone
+      // would have given.
+      expect(head).toBeGreaterThanOrEqual(secondParaAt);
+      expect(head).toBeLessThan(closer);
+    } finally {
+      Element.prototype.getBoundingClientRect = original;
+      view.destroy();
+    }
+  });
 });
 
 describe("live preview over a document with an image", () => {

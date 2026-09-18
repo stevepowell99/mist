@@ -413,6 +413,11 @@ body {
   color: var(--ink, var(--color-ink));
   box-shadow: 0 1px 4px color-mix(in srgb, var(--color-ink) 10%, transparent);
 }
+/* The click-position markers `slideLiveHtml` inserts (source-anchors.ts):
+   read by `slideClickPos`, never shown. */
+.cm-lp-slide br[data-pos] {
+  display: none;
+}
 
 /* Pandoc attributes (`{.rounded}`, `{#id}`, `{width=4cm}`) dim rather than
    hide: they are authoring detail, but you still need to see and edit them. */
