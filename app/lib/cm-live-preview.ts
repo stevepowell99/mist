@@ -16,7 +16,8 @@ import { marked } from "marked";
 import DOMPurify from "dompurify";
 import { runMermaid } from "./mermaid";
 import { criticSpans } from "./critic";
-import { CALLOUT_ALIAS } from "./slides-build";
+import { CALLOUT_ALIAS, isSlideDeck, slideSpans, stripFrontmatter } from "./slides-build";
+import { slideThumbHtml } from "./slide-thumb";
 import { citationSpans, type BibLibrary } from "./citations";
 
 /**
@@ -33,6 +34,9 @@ import { citationSpans, type BibLibrary } from "./citations";
  *    span's own edges included, so arrowing in from outside reveals first.
  * Nothing inside a CriticMarkup span is ever hidden: there the delimiters are
  * the content under review.
+ *
+ * For a deck (`isSlideDeck`) the same View also renders each slide as the
+ * slide, not just the generic marks: see the block constructs further down.
  */
 
 export interface HideRange {
@@ -636,16 +640,22 @@ const liveHighlight = HighlightStyle.define([
 ]);
 
 /**
- * The two block constructs: a table shown as a real table, and a mermaid fence
- * shown as the diagram. Both replace several lines at once, and a decoration
- * that changes the vertical layout cannot come from a ViewPlugin (plugins are
- * computed after the layout they would change), so these live in a state field
- * over the whole document rather than the visible range.
+ * The block constructs: a table shown as a real table, a mermaid fence shown
+ * as the diagram, and, for a deck, each slide shown as the slide. All of them
+ * replace several lines at once, and a decoration that changes the vertical
+ * layout cannot come from a ViewPlugin (plugins are computed after the layout
+ * they would change), so these live in a state field over the whole document
+ * rather than the visible range.
  *
  * Putting the cursor anywhere in the block drops the decoration, which is the
  * whole editing story: the table becomes its own source, you edit the pipes, you
  * move away and it is a table again. Clicking the rendered block does the same,
- * because a widget swallows the click that would otherwise place the cursor.
+ * because a widget swallows the click that would otherwise place the cursor. A
+ * slide is the same rule at a coarser grain, so editing, commenting and
+ * suggesting all still happen on the real markdown once you are in one; only
+ * structural changes (columns, overlays, backgrounds) want Split or Present,
+ * which run the full deck grammar through reveal.js rather than this widget's
+ * plain HTML render.
  */
 class BlockWidget extends WidgetType {
   constructor(
@@ -696,6 +706,53 @@ class BlockWidget extends WidgetType {
   // The widget handles its own mousedown. Letting CodeMirror run its mouse
   // selection too placed the cursor from coordinates measured against the layout
   // the click had just replaced, which usually meant the top of the document.
+  ignoreEvent(e: Event) {
+    return e.type === "mousedown";
+  }
+}
+
+/**
+ * A whole slide, rendered the same way the library gallery and the presenter
+ * rail already render one (`slideThumbHtml`, the house grammar as global CSS,
+ * no reveal iframe needed): a `.preview` card in place of the slide's source.
+ * Cursor or click into it and it drops back to plain markdown, the same
+ * reveal-on-touch rule as a table or a mermaid fence, so ordinary edits,
+ * comments and suggestions happen on the real text underneath. Structural
+ * work (columns, overlays, backgrounds) still wants Split or Present, which
+ * run the full deck grammar reveal.js itself.
+ */
+class SlideWidget extends WidgetType {
+  constructor(
+    readonly source: string,
+    readonly from: number,
+  ) {
+    super();
+  }
+  eq(other: SlideWidget) {
+    return other.source === this.source;
+  }
+  toDOM(view: EditorView) {
+    const wrap = document.createElement("div");
+    wrap.className = "cm-lp-slide preview font-serif";
+    wrap.innerHTML = slideThumbHtml(this.source);
+    void runMermaid(wrap);
+    wrap.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      let pos: number;
+      try {
+        pos = view.posAtDOM(wrap);
+      } catch {
+        pos = this.from;
+      }
+      view.dispatch({ selection: { anchor: pos }, scrollIntoView: false });
+      view.focus();
+    });
+    return wrap;
+  }
+  get estimatedHeight() {
+    return 260;
+  }
+  // As for a table/mermaid block: the widget places the cursor itself.
   ignoreEvent(e: Event) {
     return e.type === "mousedown";
   }
@@ -811,11 +868,39 @@ const blockField = StateField.define<DecorationSet>({
   provide: (f) => EditorView.decorations.from(f),
 });
 
-function buildBlocks(state: EditorState): DecorationSet {
-  const builder = new RangeSetBuilder<Decoration>();
-  for (const b of blockRanges(state)) {
-    builder.add(b.from, b.to, Decoration.replace({ widget: b.widget, block: true }));
+/** Slide spans the cursor is not touching, in full-document offsets: what
+ *  `buildBlocks` renders as `SlideWidget`s instead of raw markdown. Empty, for
+ *  anything that isn't a deck (`isSlideDeck` is the same check the rest of the
+ *  app uses), so a plain document never runs this at all. */
+function hiddenSlides(state: EditorState, text: string): { from: number; to: number; widget: SlideWidget }[] {
+  if (!isSlideDeck(text)) return [];
+  const { body } = stripFrontmatter(text);
+  const bodyOffset = text.length - body.length;
+  const sel = state.selection.ranges;
+  const out: { from: number; to: number; widget: SlideWidget }[] = [];
+  for (const span of slideSpans(body)) {
+    if (!span.text.trim()) continue;
+    const from = bodyOffset + span.from;
+    const to = bodyOffset + span.to;
+    if (sel.some((r) => r.from <= to && r.to >= from)) continue;
+    out.push({ from, to, widget: new SlideWidget(span.text, from) });
   }
+  return out;
+}
+
+function buildBlocks(state: EditorState): DecorationSet {
+  const slides = hiddenSlides(state, state.doc.toString());
+  // A table or mermaid fence already inside a hidden slide is rendered as part
+  // of that slide's own HTML (`slideThumbHtml` runs the same grammar), so it
+  // must not also get its own widget: two block-replace decorations from this
+  // field covering the same range is a genuine conflict, not just redundant.
+  const blocks = blockRanges(state).filter(
+    (b) => !slides.some((s) => b.from >= s.from && b.to <= s.to),
+  );
+  const items: { from: number; to: number; widget: WidgetType }[] = [...slides, ...blocks];
+  items.sort((a, b) => a.from - b.from);
+  const builder = new RangeSetBuilder<Decoration>();
+  for (const it of items) builder.add(it.from, it.to, Decoration.replace({ widget: it.widget, block: true }));
   return builder.finish();
 }
 

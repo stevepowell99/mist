@@ -71,6 +71,49 @@ describe("live preview and the lazy parse", () => {
   });
 });
 
+describe("live preview over a deck", () => {
+  const deck = (
+    "---\nformat: revealjs\n---\n\n# Slide one\n\nfirst\n\n## Slide two\n\nsecond\n"
+  );
+
+  it("renders each slide as a card, hiding its raw markdown", () => {
+    const view = new EditorView({
+      state: EditorState.create({
+        doc: deck,
+        selection: { anchor: 0 },
+        extensions: [markdown({ base: markdownLanguage }), livePreview()],
+      }),
+      parent: document.body,
+    });
+    try {
+      expect(view.dom.querySelectorAll(".cm-lp-slide")).toHaveLength(2);
+      expect(view.dom.textContent).not.toContain("# Slide one");
+      expect(view.dom.textContent).not.toContain("## Slide two");
+    } finally {
+      view.destroy();
+    }
+  });
+
+  it("drops back to raw markdown for the slide the cursor is in", () => {
+    const view = new EditorView({
+      state: EditorState.create({
+        doc: deck,
+        selection: { anchor: deck.indexOf("first") },
+        extensions: [markdown({ base: markdownLanguage }), livePreview()],
+      }),
+      parent: document.body,
+    });
+    try {
+      // The slide under the cursor is source, so its heading mark is present in
+      // the DOM (hidden by the mark-level decoration, not the block widget).
+      expect(view.dom.querySelectorAll(".cm-lp-slide")).toHaveLength(1);
+      expect(view.dom.textContent).not.toContain("## Slide two");
+    } finally {
+      view.destroy();
+    }
+  });
+});
+
 describe("live preview over a document with an image", () => {
   it("keeps hiding marks rather than throwing the plugin away", async () => {
     const doc = "# Title\n\nSome **bold** text.\n\n![a picture](img/x.png)\n\nMore text.\n";

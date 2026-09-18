@@ -46,29 +46,49 @@ export function isSlideDeck(markdown: string, frontmatter = ""): boolean {
   return /revealjs/i.test(fm) || /^\s*format:\s*['"]?slides?['"]?\s*$/im.test(fm);
 }
 
-/** Split into slides at level-1/2 headings and standalone `---` rules, Quarto-style. */
-function splitSlides(body: string): string[] {
+/** Slide spans with their `body`-relative offsets: the same split as below, but
+ *  keeping each slide's source range so a caller (the live-preview slide
+ *  widget) can map a rendered slide back to the text it replaces. The one
+ *  place this split is done; `splitSlides` is a thin wrapper over it. */
+export function slideSpans(body: string): { from: number; to: number; text: string }[] {
   const lines = body.split("\n");
-  const slides: string[] = [];
+  const starts: number[] = [];
+  for (let p = 0, i = 0; i < lines.length; i++) {
+    starts.push(p);
+    p += lines[i].length + 1;
+  }
+  const spans: { from: number; to: number; text: string }[] = [];
+  let curFrom = -1;
   let cur: string[] = [];
-  const flush = () => {
-    if (cur.some((l) => l.trim() !== "")) slides.push(cur.join("\n"));
+  const flush = (lastIdx: number) => {
+    if (curFrom !== -1 && cur.some((l) => l.trim() !== "")) {
+      const to = lastIdx < lines.length - 1 ? starts[lastIdx + 1] - 1 : body.length;
+      spans.push({ from: curFrom, to, text: cur.join("\n") });
+    }
+    curFrom = -1;
     cur = [];
   };
-  for (const line of lines) {
+  lines.forEach((line, i) => {
+    if (curFrom === -1) curFrom = starts[i];
     if (line.trim() === "---") {
-      flush();
-      continue;
+      flush(i - 1);
+      return;
     }
     if (/^#{1,2}\s/.test(line) && cur.some((l) => l.trim() !== "")) {
-      flush();
+      flush(i - 1);
+      curFrom = starts[i];
       cur = [line];
-    } else {
-      cur.push(line);
+      return;
     }
-  }
-  flush();
-  return slides.length ? slides : [body];
+    cur.push(line);
+  });
+  flush(lines.length - 1);
+  return spans.length ? spans : [{ from: 0, to: body.length, text: body }];
+}
+
+/** Split into slides at level-1/2 headings and standalone `---` rules, Quarto-style. */
+function splitSlides(body: string): string[] {
+  return slideSpans(body).map((s) => s.text);
 }
 
 /** The heading level of a slide (1 for `#`, 2 for `##`, 0 for none), skipping

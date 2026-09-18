@@ -400,6 +400,20 @@ body {
   height: auto;
 }
 
+/* A slide, rendered as the deck would show it. Framed as its own card so a run
+   of slides in Live view reads as a deck rather than one flowing document; the
+   fill and ink come from the theme variables `deck-base.css` sets, with a
+   sane fallback for a deck whose theme only fully applies in the real preview. */
+.cm-lp-slide {
+  margin: 1.1em 0;
+  padding: 1.5em 1.75em;
+  border: 1px solid var(--color-border);
+  border-radius: 0.5em;
+  background: var(--slide-bg, var(--color-paper));
+  color: var(--ink, var(--color-ink));
+  box-shadow: 0 1px 4px color-mix(in srgb, var(--color-ink) 10%, transparent);
+}
+
 /* Pandoc attributes (`{.rounded}`, `{#id}`, `{width=4cm}`) dim rather than
    hide: they are authoring detail, but you still need to see and edit them. */
 .cm-lp-attr {
