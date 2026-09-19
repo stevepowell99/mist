@@ -68,16 +68,22 @@ export default function OutlinePanel({
   );
 
   // Clicking a row: a deck navigates the slide preview (the editor cursor then
-  // follows via reverse sync); a document scrolls the editor to the heading.
+  // follows via reverse sync) AND, since that event only reaches a mounted
+  // deck pane (Split/Preview/Present), scrolls the editor itself too, or Live
+  // view - where the slide IS the editor, rendered as a widget - never moves
+  // at all. No view.focus() there: stealing focus from a live deck pane, Present
+  // especially, would break reveal's own keyboard navigation. A document just
+  // scrolls the editor to the heading.
   const pick = useCallback(
     (item: OutlineItem) => {
       if (deck) {
         window.dispatchEvent(new CustomEvent("mist-goto-slide", { detail: slideIndexForOffset(text, item.pos) }));
+        if (view) revealPosAtTop(view, item.pos);
       } else {
         jump(item.pos);
       }
     },
-    [deck, text, jump],
+    [deck, text, jump, view],
   );
 
   // Keep the current slide's row in view as the deck moves.
