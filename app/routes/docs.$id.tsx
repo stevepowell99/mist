@@ -41,6 +41,7 @@ import LibraryGallery from "~/components/LibraryGallery";
 import DocGate from "~/components/DocGate";
 import ShareOnOpen from "~/components/ShareOnOpen";
 import SlidesView, { isSlideDeck } from "~/components/SlidesView";
+import PresentControls from "~/components/PresentControls";
 import { fillPrintTab } from "~/lib/print-paged.client";
 
 // useLayoutEffect on the client (so scroll is restored before paint, no flash),
@@ -985,7 +986,7 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
         <button
           type="button"
           onClick={() => setOutlineOpen((v) => !v)}
-          title={`${deck ? "Slide list" : "Outline"} (Ctrl/Cmd+Alt+O)`}
+          title={`${deck ? "Slide list" : "Outline"} (Ctrl/Cmd+Alt+D)`}
           aria-label="Toggle outline"
           aria-pressed={outlineOpen}
           className={`flex shrink-0 cursor-pointer items-center border-r border-border px-3 transition-colors ${outlineOpen ? "bg-ink text-paper" : "hover:bg-border hover:text-ink"}`}
@@ -1189,17 +1190,13 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
         {present ? (
           <div className="relative h-full w-full overflow-hidden bg-black">
             <SlidesView {...slideProps} />
-            <button
-              type="button"
-              onClick={exitPresent}
-              title="Exit present (Esc)"
-              aria-label="Exit present"
-              className="absolute right-3 top-3 z-50 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-white/15 text-white backdrop-blur hover:bg-white/30"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <line x1="6" y1="6" x2="18" y2="18" /><line x1="18" y1="6" x2="6" y2="18" />
-              </svg>
-            </button>
+            <PresentControls
+              notesOpen={railOpen}
+              slidesOpen={outlineOpen}
+              onToggleNotes={() => setRailOpen((v) => !v)}
+              onToggleSlides={() => setOutlineOpen((v) => !v)}
+              onExit={exitPresent}
+            />
             {/* The slide list is still reachable in Present with Ctrl/Cmd+Alt+D. */}
             {outlineOpen && (
               <OutlinePanel

@@ -28,6 +28,8 @@ import PlainPreview from "~/components/PlainPreview";
 import SlidesView, { isSlideDeck } from "~/components/SlidesView";
 import { slideIndexForOffset } from "~/lib/slide-cursor";
 import PresenterRail from "~/components/PresenterRail";
+import PresentControls from "~/components/PresentControls";
+import { useChordListener } from "~/lib/useChordListener";
 import CommitButton from "~/components/CommitButton";
 import OutlinePanel from "~/components/OutlinePanel";
 import { livePreview } from "~/lib/cm-live-preview";
@@ -150,6 +152,12 @@ export default function PlainEditor({
   // you want when writing. The three-pane arrangement earns its keep for a deck,
   // where the slide and its source are different things.
   const [layout, setLayout] = useState<View>("live");
+  /** Set the view AND remember it. One place, so the header pills and the
+   *  Ctrl/Cmd+Alt+1..4 chords cannot persist differently. */
+  const setLayoutPersist = useCallback((v: View) => {
+    remember(VIEW_KEY, v);
+    setLayout(v);
+  }, []);
   /** The same value, readable at the moment the editor is built. The editor is
    *  created after a fetch, so the remembered view has long since been restored
    *  by then, but the creation effect cannot see the state it landed in. */
@@ -432,17 +440,37 @@ export default function PlainEditor({
     return () => window.removeEventListener("message", onMessage);
   }, [enterPresent]);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (!(e.ctrlKey || e.metaKey) || !e.altKey) return;
-      if (e.key.toLowerCase() !== "p" || !deck) return;
-      e.preventDefault();
-      if (presentingRef.current) exitPresent();
-      else enterPresent();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [deck, enterPresent, exitPresent]);
+  /**
+   * The same chords as the Drive editor, through the same hook, because the two
+   * are meant to be one app and a shortcut that works in one and not the other
+   * is just a trap. Only P was wired here before. The table is docs.$id's
+   * `runChord` minus what local has no equivalent for (the folder sidebar, the
+   * split nudge, the deck-to-editor jump, the help panel).
+   */
+  const runChord = useCallback(
+    (c: string): boolean => {
+      switch (c) {
+        case "s":
+          setMode((m) => {
+            const next = m === "edit" ? "suggest" : "edit";
+            remember(MODE_KEY, next);
+            return next;
+          });
+          return true;
+        case "1": setLayoutPersist("editor"); return true;
+        case "2": setLayoutPersist("split"); return true;
+        case "3": setLayoutPersist("preview"); return true;
+        case "4": setLayoutPersist("live"); return true;
+        case "d": setOutlineOpen((v) => { remember(OUTLINE_KEY, v ? "no" : "yes"); return !v; }); return true;
+        case "c": setReviewOpen((v) => { remember(REVIEW_KEY, v ? "no" : "yes"); return !v; }); return true;
+        case "p": if (!deck) return false; if (presentingRef.current) exitPresent(); else enterPresent(); return true;
+        case "n": setRailOpen((v) => !v); return true;
+        default: return false;
+      }
+    },
+    [deck, enterPresent, exitPresent, setLayoutPersist],
+  );
+  useChordListener(runChord);
 
   /**
    * The file moved under us, and taking the change would lose something.
@@ -719,15 +747,22 @@ export default function PlainEditor({
         >
           Online
         </a>
+        {/* Same four views, in the same order, on the same chords as the Drive
+            editor's pills (docs.$id). The order is that one's, not this one's:
+            two apps offering the same views in different orders is the kind of
+            difference that makes you look twice every time. */}
         <span className="flex items-center overflow-hidden rounded border border-border">
-          {(["live", "editor", "split", "preview"] as View[]).map((v) => (
+          {([
+            ["editor", "Editor only (Ctrl/Cmd+Alt+1)"],
+            ["live", "Live preview (Ctrl/Cmd+Alt+4)"],
+            ["split", "Split (Ctrl/Cmd+Alt+2)"],
+            ["preview", "Preview only (Ctrl/Cmd+Alt+3)"],
+          ] as [View, string][]).map(([v, tip]) => (
             <button
               key={v}
               type="button"
-              onClick={() => {
-                remember(VIEW_KEY, v);
-                setLayout(v);
-              }}
+              onClick={() => setLayoutPersist(v)}
+              title={tip}
               className={`cursor-pointer px-2 py-1 text-xs uppercase tracking-wider ${
                 layout === v ? "bg-border text-ink" : "text-muted hover:text-ink"
               }`}
@@ -777,15 +812,27 @@ export default function PlainEditor({
               className="absolute right-0 top-1/2 z-40 h-48 w-4 -translate-y-1/2"
             />
           )}
-          <button
-            type="button"
-            onClick={exitPresent}
-            title="Exit present (Esc)"
-            aria-label="Exit present"
-            className="absolute right-3 top-3 cursor-pointer rounded bg-black/40 px-2 py-1 text-xs uppercase tracking-wider text-white/70 hover:text-white"
-          >
-            Exit
-          </button>
+          {/* The slide list, reachable while presenting exactly as on the Drive
+              side (Ctrl/Cmd+Alt+D, or the Slides button). */}
+          {outlineOpen && (
+            <OutlinePanel
+              view={editorView}
+              text={text}
+              deck={deck}
+              canEdit={false}
+              currentSlide={slideIndexForOffset(text, cursorOffset)}
+              overlay
+              onClose={() => setOutlineOpen(false)}
+              onMouseLeave={() => setOutlineOpen(false)}
+            />
+          )}
+          <PresentControls
+            notesOpen={railOpen}
+            slidesOpen={outlineOpen}
+            onToggleNotes={() => setRailOpen((v) => !v)}
+            onToggleSlides={() => setOutlineOpen((v) => !v)}
+            onExit={exitPresent}
+          />
         </div>
       )}
       <div className={`flex min-h-0 flex-1 ${alreadyOpen || presenting ? "hidden" : ""}`}>
