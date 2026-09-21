@@ -479,6 +479,17 @@ html,body{margin:0;height:100%}
    transformed grid, and forcing height/overflow on each section pulls the slide
    content out of its overview cell, so the selection outline stops lining up. */
 .reveal:not(.overview) .slides section:not(.stack){height:100%;overflow:hidden}
+/* Print is the one place height:100% has nothing to resolve against: reveal
+   lays each slide out into its own page box rather than a sized stage, so the
+   percentage falls back to the content and the section collapses (measured at
+   82px). On its own that is invisible, because the content simply overflows.
+   It stops being invisible the moment a slide centres itself: .align-middle
+   makes the section a centring flex box, and centring inside an 82px box puts
+   half the content above the page. That is the title slide printing low with a
+   band of empty space over it. Reveal publishes the real slide height as a
+   variable, so use it where the percentage cannot work. The class is on <html>,
+   not on .reveal. */
+html.print-pdf .reveal .slides section:not(.stack){height:var(--slide-height)}
 /* In the embedded preview, tint the letterbox (the area above/below or beside
    the 16:9 slide) light grey so it is clear where the slide ends, while keeping
    the slide itself white. Only the default (transparent) slide background gets
