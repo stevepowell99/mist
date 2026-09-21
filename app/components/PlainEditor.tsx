@@ -684,6 +684,22 @@ export default function PlainEditor({
             Present
           </button>
         )}
+        {deck && (
+          // The same print page the Drive side reaches through its Share menu.
+          // There is no Share menu here, and should not be: a local file has no
+          // room, no key and no address anyone else can open. Printing is the
+          // one item in that menu that means anything locally, so it stands on
+          // its own. /slides resolves a local id like any other (resolveDoc).
+          <a
+            href={`/slides/${fileId}?print-pdf&combine-fragments`}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Open a print view of the deck, then Ctrl/Cmd+P to Save as PDF"
+            className="cursor-pointer rounded px-2 py-1 text-xs uppercase tracking-wider text-muted hover:text-ink"
+          >
+            PDF
+          </a>
+        )}
         <span className="flex items-center overflow-hidden rounded border border-border">
           {(["live", "editor", "split", "preview"] as View[]).map((v) => (
             <button

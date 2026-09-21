@@ -443,6 +443,14 @@
 .reveal code { font-size: 0.85em; background: rgba(128,128,128,0.18); padding: 0.1em 0.3em; border-radius: 3px; color: inherit; }
 .reveal blockquote { border-left: 3px solid var(--teal); background: none; padding: 0.2em 0 0.2em 0.8em; margin: 0.4em 0; font-style: italic; font-size: 0.85em; box-shadow: none; width: auto; }
 
+/* Speaker notes belong off the slide. `::: {.notes}` becomes `aside.notes`
+   (parseAttrs in slides-build.ts) and reveal hides that inside its own deck,
+   but the same slide rendered into a `.preview` box gets none of reveal's CSS:
+   the live-preview slide widget, the library thumbnails and the presenter
+   rail's next-slide thumb all printed the notes onto the slide. The rail shows
+   them deliberately, on its own, through slideNotes(). */
+:is(.reveal, .preview) aside.notes { display: none; }
+
 /* Deck media labels */
 .caption { display: block; font-size: 0.6em; color: #666; margin-top: 0.2em; line-height: 1.3; }
 /* .caption-bar (a caption bar over a full-bleed image; .shot-cap is a back-compat
