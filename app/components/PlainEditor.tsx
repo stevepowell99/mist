@@ -6,6 +6,7 @@ import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
 import { bracketMatching, codeFolding, foldGutter, foldKeymap } from "@codemirror/language";
 import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } from "@codemirror/autocomplete";
+import { DEPLOYED_ORIGIN } from "~/shared/constants";
 import { mistFolds } from "~/lib/cm-folding";
 import { wrapKeymap } from "~/lib/cm-shortcuts";
 import { criticMarkup } from "~/lib/cm-criticmarkup";
@@ -686,10 +687,7 @@ export default function PlainEditor({
         )}
         {deck && (
           // The same print page the Drive side reaches through its Share menu.
-          // There is no Share menu here, and should not be: a local file has no
-          // room, no key and no address anyone else can open. Printing is the
-          // one item in that menu that means anything locally, so it stands on
-          // its own. /slides resolves a local id like any other (resolveDoc).
+          // /slides resolves a local id like any other (resolveDoc).
           <a
             href={`/slides/${fileId}?print-pdf&combine-fragments`}
             target="_blank"
@@ -700,6 +698,27 @@ export default function PlainEditor({
             PDF
           </a>
         )}
+        {/* The same file, online, where sharing actually means something. There
+            is deliberately no Share menu here: a local link is this machine's
+            own address and reaches nobody. Sharing is a thing you do to the
+            Drive copy, so this hands you over to it rather than inventing a
+            second, useless kind of link.
+
+            It goes by NAME, through the launcher, rather than straight to the
+            file. A Drive-mirrored path carries no Drive id to link to (mirror
+            mode writes no `:user.drive.id` stream, checked on both mounts), and
+            resolving one needs the Drive API, which local mode holds no
+            credentials for and should not. The browser is signed in, so it can
+            do in one click what this process cannot do at all. */}
+        <a
+          href={`${DEPLOYED_ORIGIN}/go?q=${encodeURIComponent(name)}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          title="Find this file in the online gmist, where it can be shared or presented to others"
+          className="cursor-pointer rounded px-2 py-1 text-xs uppercase tracking-wider text-muted hover:text-ink"
+        >
+          Online
+        </a>
         <span className="flex items-center overflow-hidden rounded border border-border">
           {(["live", "editor", "split", "preview"] as View[]).map((v) => (
             <button

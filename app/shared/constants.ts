@@ -2,6 +2,15 @@
 // frontmatter key, DOM events) stay `mist` on purpose; see CLAUDE.md "Naming".
 export const APP_NAME = "gmist";
 
+/**
+ * The deployed worker, for the one case that has to name it: local-fs mode
+ * sending you to the same file online. Everywhere else a URL is relative,
+ * because the app is talking to itself. Local mode cannot be, since the whole
+ * point is to reach the OTHER deployment. Hardcoded like TagFox's own
+ * GMIST_BASE_URL rather than configured, because there is one deployment.
+ */
+export const DEPLOYED_ORIGIN = "https://mist.broad-smoke-cc64.workers.dev";
+
 export function isValidDocumentId(id: string): boolean {
   if (id.length !== 8) return false;
   return /^[a-z0-9]+$/.test(id);

@@ -15,6 +15,12 @@ export function meta(_args: Route.MetaArgs) {
 }
 
 export default function Go(_props: Route.ComponentProps) {
+  // `?q=` prefills the search. Local-fs mode's Online button sends the file's
+  // name here: a Drive-mirrored path carries no Drive id (mirror mode writes no
+  // `:user.drive.id` stream), and local mode holds no Drive credentials to look
+  // one up with, so the name is all it can pass. The palette then resolves it
+  // in the browser, which IS signed in.
+  const q = typeof window === "undefined" ? "" : new URL(window.location.href).searchParams.get("q") ?? "";
   // No onClose: this page IS the palette, so there is nothing to close back to.
-  return <QuickOpen />;
+  return <QuickOpen initialQuery={q} />;
 }

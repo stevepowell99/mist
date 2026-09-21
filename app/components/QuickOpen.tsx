@@ -79,11 +79,20 @@ function resultToRow(r: SearchResult): Row {
   };
 }
 
-export function QuickOpen({ onClose }: { onClose?: () => void }) {
+export function QuickOpen({
+  onClose,
+  initialQuery = "",
+}: {
+  onClose?: () => void;
+  /** Prefill, for `/go?q=`: local-fs mode sends you here by NAME to reach the
+   *  same file online, because a mirrored path carries no Drive id it could
+   *  link to directly (see PlainEditor's Online button). */
+  initialQuery?: string;
+}) {
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
   const reqId = useRef(0);
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialQuery);
   const [types, setTypes] = useState<DriveKind[]>(["markdown", "folder"]);
   const [context, setContext] = useState<Context | null>(null);
   const [rows, setRows] = useState<Row[]>([]);
