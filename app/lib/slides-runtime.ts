@@ -262,6 +262,56 @@ window.addEventListener("wheel", function(e){
   while (wheelAccum >= 100) { Reveal.next(); wheelAccum -= 100; }
   while (wheelAccum <= -100) { Reveal.prev(); wheelAccum += 100; }
 }, { passive: false });
+/**
+ * The standalone page's own controls, so a deck shown full-screen offers the
+ * same three things wherever it is shown.
+ *
+ * This page is where a share link lands and where Print opens, and it had no
+ * controls at all: the person you send a deck to is exactly the person who does
+ * not know that S opens the speaker notes and O the slide grid. In the editor's
+ * iframe the app draws its own bar (PresentControls) and this one stays out of
+ * the way; in print there is no UI at all.
+ *
+ * Notes goes to reveal's real speaker view here (a second window with notes and
+ * a timer), which only works on a standalone page, so this page gets the better
+ * one rather than a copy of the in-app card.
+ *
+ * It hides itself in fullscreen, which is the actually-presenting state: chrome
+ * is for finding your way around, not for the projector.
+ */
+function mountDeckControls(){
+  if (EMBEDDED || /[?&]print-pdf/.test(window.location.search)) return;
+  var bar = document.createElement('div');
+  bar.id = 'mist-deck-controls';
+  bar.style.cssText = 'position:fixed;top:12px;right:12px;z-index:60;display:flex;gap:4px;opacity:.35;transition:opacity .15s';
+  bar.addEventListener('mouseenter', function(){ bar.style.opacity = '1'; });
+  bar.addEventListener('mouseleave', function(){ bar.style.opacity = '.35'; });
+  var mk = function(label, title, onClick){
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = label;
+    b.title = title;
+    b.style.cssText = 'cursor:pointer;border:0;border-radius:4px;padding:4px 8px;font:600 11px/1.2 system-ui,sans-serif;letter-spacing:.08em;text-transform:uppercase;background:rgba(0,0,0,.45);color:rgba(255,255,255,.75)';
+    b.addEventListener('mouseenter', function(){ b.style.color = '#fff'; });
+    b.addEventListener('mouseleave', function(){ b.style.color = 'rgba(255,255,255,.75)'; });
+    b.addEventListener('click', function(e){ e.preventDefault(); onClick(); });
+    bar.appendChild(b);
+  };
+  mk('Slides', 'Slide grid (O)', function(){ try { Reveal.toggleOverview(); } catch (e) {} });
+  mk('Notes', 'Speaker notes in a second window (S)', function(){
+    try {
+      var p = Reveal.getPlugin && Reveal.getPlugin('notes');
+      if (p && typeof p.open === 'function') p.open();
+    } catch (e) {}
+  });
+  mk('Full screen', 'Full screen (F)', function(){
+    try { document.documentElement.requestFullscreen(); } catch (e) {}
+  });
+  document.body.appendChild(bar);
+  var sync = function(){ bar.style.display = document.fullscreenElement ? 'none' : 'flex'; };
+  document.addEventListener('fullscreenchange', sync);
+  sync();
+}
 Reveal.initialize(REVEAL_CONFIG).then(async function(){
   // Rebuild slide backgrounds: the markdown plugin sets data-background-image
   // (from the <!-- .slide: --> comment) during init, after reveal first built
@@ -286,6 +336,7 @@ Reveal.initialize(REVEAL_CONFIG).then(async function(){
   // so attach them once here, not on every in-place rebuild.
   if (window.ResizeObserver) new ResizeObserver(relayout).observe(document.body);
   window.addEventListener("resize", relayout);
+  mountDeckControls();
   await runMermaid();
   drainRender(); // apply any render that arrived before reveal finished booting
 });`;
