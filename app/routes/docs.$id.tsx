@@ -42,6 +42,10 @@ import DocGate from "~/components/DocGate";
 import ShareOnOpen from "~/components/ShareOnOpen";
 import SlidesView, { isSlideDeck } from "~/components/SlidesView";
 import PresentControls from "~/components/PresentControls";
+import {
+  ToolbarToggle, ToolbarGroup, VIEW_BUTTONS, IconEditing, IconSuggesting,
+  type DocView,
+} from "~/components/Toolbar";
 import { fillPrintTab } from "~/lib/print-paged.client";
 
 // useLayoutEffect on the client (so scroll is restored before paint, no flash),
@@ -119,56 +123,6 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
     local: isLocalMode(env),
     gate: null,
   };
-}
-
-// Navbar toggle icons. Stroke-only 18px glyphs so they sit quietly in the bar.
-const svg = (paths: React.ReactNode) => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    {paths}
-  </svg>
-);
-const IconEditing = () => svg(<><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></>);
-const IconSuggesting = () => svg(<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z" />);
-const IconEditorOnly = () => svg(<><path d="M4 6h16M4 10h16M4 14h10M4 18h10" /></>);
-// Live preview: the same lines as the editor icon, but the top one is a heading
-// bar, so the pair reads as "source" then "typeset".
-const IconLive = () => svg(<><path d="M4 6h9" strokeWidth="3.5" /><path d="M4 11h16M4 15h16M4 19h10" /></>);
-const IconSplit = () => svg(<><rect x="3" y="4" width="18" height="16" rx="1" /><path d="M12 4v16" /></>);
-const IconPreviewOnly = () => svg(<><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" /><circle cx="12" cy="12" r="3" /></>);
-
-/** The four exclusive layouts the navbar, keyboard and URL all name. */
-type DocView = "editor" | "live" | "split" | "preview";
-
-/** A segmented navbar toggle, kept DRY across the Mode and View groups. */
-function ToolbarToggle({
-  active,
-  onClick,
-  title,
-  disabled,
-  activeClass,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  title: string;
-  disabled?: boolean;
-  activeClass: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      title={title}
-      aria-pressed={active}
-      className={`flex items-center px-3 py-1.5 transition-colors ${
-        active ? activeClass : "text-muted hover:bg-border hover:text-ink"
-      } ${disabled ? "opacity-40" : "cursor-pointer"}`}
-    >
-      {children}
-    </button>
-  );
 }
 
 /** The editor payload (the loader's non-gate return). */
@@ -1068,7 +1022,7 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
             every width: these are the single mode/view control, on mobile too
             (Split is desktop-only and drops out below lg). */}
         <div className="flex shrink-0 items-center gap-2 border-l border-border pl-3 pr-1">
-          <div className="flex divide-x divide-border overflow-hidden rounded-md border border-border">
+          <ToolbarGroup>
             <ToolbarToggle
               active={mode === "edit"}
               onClick={() => role === "edit" && mode !== "edit" && toggleMode()}
@@ -1087,43 +1041,23 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
             >
               <IconSuggesting />
             </ToolbarToggle>
-          </div>
-          <div className="flex divide-x divide-border overflow-hidden rounded-md border border-border">
-            <ToolbarToggle
-              active={view === "editor"}
-              onClick={() => setView("editor")}
-              title="Editor only (Ctrl/Cmd+Alt+1)"
-              activeClass="bg-ink text-paper"
-            >
-              <IconEditorOnly />
-            </ToolbarToggle>
-            <ToolbarToggle
-              active={view === "live"}
-              onClick={() => setView("live")}
-              title="Live preview (Ctrl/Cmd+Alt+4)"
-              activeClass="bg-ink text-paper"
-            >
-              <IconLive />
-            </ToolbarToggle>
-            {isDesktop && (
-              <ToolbarToggle
-                active={view === "split"}
-                onClick={() => setView("split")}
-                title="Split (Ctrl/Cmd+Alt+2)"
-                activeClass="bg-ink text-paper"
-              >
-                <IconSplit />
-              </ToolbarToggle>
+          </ToolbarGroup>
+          <ToolbarGroup>
+            {VIEW_BUTTONS.map(({ view: v, title, Icon }) =>
+              // Split needs the width for two panes, so it drops out below lg.
+              v === "split" && !isDesktop ? null : (
+                <ToolbarToggle
+                  key={v}
+                  active={view === v}
+                  onClick={() => setView(v)}
+                  title={title}
+                  activeClass={v === "preview" ? "bg-emerald-600 text-paper" : "bg-ink text-paper"}
+                >
+                  <Icon />
+                </ToolbarToggle>
+              ),
             )}
-            <ToolbarToggle
-              active={view === "preview"}
-              onClick={() => setView("preview")}
-              title="Preview only (Ctrl/Cmd+Alt+3)"
-              activeClass="bg-emerald-600 text-paper"
-            >
-              <IconPreviewOnly />
-            </ToolbarToggle>
-          </div>
+          </ToolbarGroup>
         </div>
         {/* On desktop the right group is the aside width so its left edge lines up with
             the body/sidebar divide. On mobile there is no sidebar, so it sizes naturally. */}

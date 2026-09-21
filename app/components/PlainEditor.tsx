@@ -29,6 +29,10 @@ import SlidesView, { isSlideDeck } from "~/components/SlidesView";
 import { slideIndexForOffset } from "~/lib/slide-cursor";
 import PresenterRail from "~/components/PresenterRail";
 import PresentControls from "~/components/PresentControls";
+import {
+  ToolbarToggle, ToolbarGroup, ToolbarButton, VIEW_BUTTONS, IconEditing, IconSuggesting,
+  IconOutline, IconPresent, IconPrint, IconComments, IconOnline,
+} from "~/components/Toolbar";
 import { useChordListener } from "~/lib/useChordListener";
 import CommitButton from "~/components/CommitButton";
 import OutlinePanel from "~/components/OutlinePanel";
@@ -651,126 +655,95 @@ export default function PlainEditor({
           </button>
         )}
         {note && <span className="truncate text-xs text-muted">{note}</span>}
-        <span className="ml-auto flex items-center overflow-hidden rounded border border-border">
-          {(["edit", "suggest"] as const).map((m) => (
-            <button
-              key={m}
-              type="button"
+        {/* From here right, the same controls as the Drive editor and drawn from
+            the same parts (components/Toolbar): an outline toggle, the deck
+            actions, then the Mode and View groups. They were lowercase words in
+            a different order, which made two editors of one app look like two
+            programs. What differs is only what genuinely differs: no Share (a
+            local file has no address to share), and an Online button, which
+            only a local file needs. */}
+        <div className="ml-auto flex shrink-0 items-stretch gap-2">
+          <ToolbarButton
+            onClick={() =>
+              setOutlineOpen((o) => {
+                remember(OUTLINE_KEY, o ? "no" : "yes");
+                return !o;
+              })
+            }
+            title={`${deck ? "Slide list" : "Outline"} (Ctrl/Cmd+Alt+D)`}
+            active={outlineOpen}
+          >
+            <IconOutline />
+          </ToolbarButton>
+          {deck && (
+            <ToolbarButton onClick={enterPresent} title="Present (Ctrl/Cmd+Alt+P)">
+              <IconPresent />
+            </ToolbarButton>
+          )}
+          {deck && (
+            <ToolbarButton
+              href={`/slides/${fileId}?print-pdf&combine-fragments`}
+              title="Print to PDF: opens the deck's print view, then Ctrl/Cmd+P to save"
+            >
+              <IconPrint />
+            </ToolbarButton>
+          )}
+          <ToolbarButton
+            href={`${DEPLOYED_ORIGIN}/go?q=${encodeURIComponent(name)}`}
+            title="Find this file in the online gmist, where it can be shared or presented to others"
+          >
+            <IconOnline />
+          </ToolbarButton>
+          <ToolbarGroup>
+            <ToolbarToggle
+              active={mode === "edit"}
               onClick={() => {
-                remember(MODE_KEY, m);
-                setMode(m);
+                remember(MODE_KEY, "edit");
+                setMode("edit");
               }}
-              title={
-                m === "suggest"
-                  ? "Your edits become tracked changes in the text itself"
-                  : "Your edits are applied"
-              }
-              className={`cursor-pointer px-2 py-1 text-xs uppercase tracking-wider ${
-                mode === m ? "bg-border text-ink" : "text-muted hover:text-ink"
-              }`}
+              title="Editing: your edits are applied (Ctrl/Cmd+Alt+E)"
+              activeClass="bg-coral text-paper"
             >
-              {m === "edit" ? "Editing" : "Suggesting"}
-            </button>
-          ))}
-        </span>
-        <button
-          type="button"
-          onClick={() =>
-            setReviewOpen((o) => {
-              remember(REVIEW_KEY, o ? "no" : "yes");
-              return !o;
-            })
-          }
-          title="Suggested edits and comments"
-          className={`cursor-pointer rounded px-2 py-1 text-xs uppercase tracking-wider ${
-            reviewOpen ? "bg-border text-ink" : "text-muted hover:text-ink"
-          }`}
-        >
-          Review
-        </button>
-        <button
-          type="button"
-          onClick={() =>
-            setOutlineOpen((o) => {
-              remember(OUTLINE_KEY, o ? "no" : "yes");
-              return !o;
-            })
-          }
-          title="Contents"
-          className={`ml-auto cursor-pointer rounded px-2 py-1 text-xs uppercase tracking-wider ${
-            outlineOpen ? "bg-border text-ink" : "text-muted hover:text-ink"
-          }`}
-        >
-          Contents
-        </button>
-        {deck && (
-          <button
-            type="button"
-            onClick={enterPresent}
-            title="Present (Ctrl/Cmd+Alt+P)"
-            className="cursor-pointer rounded px-2 py-1 text-xs uppercase tracking-wider text-muted hover:text-ink"
-          >
-            Present
-          </button>
-        )}
-        {deck && (
-          // The same print page the Drive side reaches through its Share menu.
-          // /slides resolves a local id like any other (resolveDoc).
-          <a
-            href={`/slides/${fileId}?print-pdf&combine-fragments`}
-            target="_blank"
-            rel="noopener noreferrer"
-            title="Open a print view of the deck, then Ctrl/Cmd+P to Save as PDF"
-            className="cursor-pointer rounded px-2 py-1 text-xs uppercase tracking-wider text-muted hover:text-ink"
-          >
-            PDF
-          </a>
-        )}
-        {/* The same file, online, where sharing actually means something. There
-            is deliberately no Share menu here: a local link is this machine's
-            own address and reaches nobody. Sharing is a thing you do to the
-            Drive copy, so this hands you over to it rather than inventing a
-            second, useless kind of link.
-
-            It goes by NAME, through the launcher, rather than straight to the
-            file. A Drive-mirrored path carries no Drive id to link to (mirror
-            mode writes no `:user.drive.id` stream, checked on both mounts), and
-            resolving one needs the Drive API, which local mode holds no
-            credentials for and should not. The browser is signed in, so it can
-            do in one click what this process cannot do at all. */}
-        <a
-          href={`${DEPLOYED_ORIGIN}/go?q=${encodeURIComponent(name)}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          title="Find this file in the online gmist, where it can be shared or presented to others"
-          className="cursor-pointer rounded px-2 py-1 text-xs uppercase tracking-wider text-muted hover:text-ink"
-        >
-          Online
-        </a>
-        {/* Same four views, in the same order, on the same chords as the Drive
-            editor's pills (docs.$id). The order is that one's, not this one's:
-            two apps offering the same views in different orders is the kind of
-            difference that makes you look twice every time. */}
-        <span className="flex items-center overflow-hidden rounded border border-border">
-          {([
-            ["editor", "Editor only (Ctrl/Cmd+Alt+1)"],
-            ["live", "Live preview (Ctrl/Cmd+Alt+4)"],
-            ["split", "Split (Ctrl/Cmd+Alt+2)"],
-            ["preview", "Preview only (Ctrl/Cmd+Alt+3)"],
-          ] as [View, string][]).map(([v, tip]) => (
-            <button
-              key={v}
-              type="button"
-              onClick={() => setLayoutPersist(v)}
-              title={tip}
-              className={`cursor-pointer px-2 py-1 text-xs uppercase tracking-wider ${
-                layout === v ? "bg-border text-ink" : "text-muted hover:text-ink"
-              }`}
+              <IconEditing />
+            </ToolbarToggle>
+            <ToolbarToggle
+              active={mode === "suggest"}
+              onClick={() => {
+                remember(MODE_KEY, "suggest");
+                setMode("suggest");
+              }}
+              title="Suggesting: your edits become tracked changes (Ctrl/Cmd+Alt+S)"
+              activeClass="bg-amber-500 text-paper"
             >
-              {v}
-            </button>
-          ))}
-        </span>
+              <IconSuggesting />
+            </ToolbarToggle>
+          </ToolbarGroup>
+          <ToolbarGroup>
+            {VIEW_BUTTONS.map(({ view: v, title, Icon }) => (
+              <ToolbarToggle
+                key={v}
+                active={layout === v}
+                onClick={() => setLayoutPersist(v)}
+                title={title}
+                activeClass={v === "preview" ? "bg-emerald-600 text-paper" : "bg-ink text-paper"}
+              >
+                <Icon />
+              </ToolbarToggle>
+            ))}
+          </ToolbarGroup>
+          <ToolbarButton
+            onClick={() =>
+              setReviewOpen((o) => {
+                remember(REVIEW_KEY, o ? "no" : "yes");
+                return !o;
+              })
+            }
+            title="Suggested edits and comments (Ctrl/Cmd+Alt+C)"
+            active={reviewOpen}
+          >
+            <IconComments />
+          </ToolbarButton>
+        </div>
       </header>
       {alreadyOpen && (
         <div className="flex flex-1 flex-col items-center justify-center gap-4 px-8 text-center">
