@@ -19,7 +19,7 @@
         "lead": "Larger intro paragraph",
         "footer": "Small dimmed footer text",
         "fineprint": "Smallest dimmed print",
-        "brand": "Causal Map logo pinned top-left (the logo's only home)",
+        "brand": "Causal Map logo pinned top-right; inverts itself on a dark slide",
         "caption": "Plain small caption under an image (no background)"
       }
     },
