@@ -70,7 +70,26 @@ export default function SlidesView({
     setBust(Date.now().toString(36)); // eslint-disable-line react-hooks/set-state-in-effect
   }, []);
 
-  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  /**
+   * A callback ref, NOT `ref={iframeRef}`, and this is load-bearing.
+   *
+   * React 19 passes `ref` through as an ordinary prop, and its dev-mode render
+   * logging (on whenever React DevTools is installed) deep-walks prop objects
+   * to diff them. Walking a ref object reaches `.current`, the iframe element,
+   * and then its `contentWindow` — which is cross-origin here, because the
+   * sandbox has no `allow-same-origin`. Reading any property of it throws
+   * SecurityError, inside a passive effect, which takes React's work loop down
+   * with it ("Should not already be working") and leaves the whole page dead:
+   * every button silently does nothing while anchors still work, because they
+   * need no handler. That is exactly the "frozen on open from TagFox" report.
+   *
+   * A function prop is not walked, so the element never becomes reachable.
+   * Everything below still uses iframeRef.current as before.
+   */
+  const setIframe = useCallback((el: HTMLIFrameElement | null) => {
+    iframeRef.current = el;
+  }, []);
   // The slide the editor cursor is in, kept in a ref so the in-place render
   // (declared before the cursor logic below) can read the latest value. This is
   // the authoritative target after an edit: derived from the live markdown, so
@@ -227,7 +246,7 @@ export default function SlidesView({
 
   return (
     <iframe
-      ref={iframeRef}
+      ref={setIframe}
       onLoad={onLoad}
       title="Slides preview"
       sandbox="allow-scripts"

@@ -1125,6 +1125,7 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
           <div className="relative h-full w-full overflow-hidden bg-black">
             <SlidesView {...slideProps} />
             <PresentControls
+              speakerHref={`/slides/${id}?k=${encodeURIComponent(docKey ?? "")}&token=${encodeURIComponent(assetToken ?? "")}`}
               notesOpen={railOpen}
               slidesOpen={outlineOpen}
               onToggleNotes={() => setRailOpen((v) => !v)}

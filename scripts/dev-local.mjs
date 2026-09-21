@@ -1,7 +1,23 @@
 /**
- * Start gmist in local-fs mode: the localfs sidecar plus the normal dev
- * server, one command (`npm run dev:local`), dying together. Config comes
- * from .dev.vars (LOCAL_FS_URL, LOCAL_FS_TOKEN); see .dev.vars.example.
+ * Start gmist in local-fs mode: the localfs sidecar plus a server, one command,
+ * dying together. Config comes from .dev.vars (LOCAL_FS_URL, LOCAL_FS_TOKEN);
+ * see .dev.vars.example.
+ *
+ * Two flavours, same address (5173), so nothing that opens gmist has to care:
+ *
+ *   npm run dev:local      the Vite dev server, for working ON gmist.
+ *   npm run preview:local  a production build, for working IN gmist. Slower to
+ *                          start, and the right one for TagFox to launch.
+ *
+ * The difference is not just speed. React's dev build logs every commit, and
+ * that logging deep-walks component props: React Router hangs the real `window`
+ * off its router object, and `window[0]` is the deck's sandboxed iframe, which
+ * is cross-origin, so reading it throws SecurityError inside a passive effect
+ * and takes React's work loop down ("Should not already be working"). The page
+ * then looks fine and is completely dead: every button silently does nothing,
+ * while links still work because they need no handler. Any deck with the slide
+ * pane open does it, every time. None of that code exists in a production
+ * build, which is why this flavour is here.
  */
 import { spawn } from "node:child_process";
 import { appendFileSync, readFileSync } from "node:fs";
@@ -66,7 +82,15 @@ function launch(label, cmd, args, useShell) {
 }
 
 launch("localfs sidecar", process.execPath, [resolve(repoRoot, "scripts", "localfs-server.mjs")], false);
-launch("dev server", "npm run dev", [], true); // shell so npm resolves on Windows too
+// --built serves a production build rather than the dev server. Pinned to the
+// dev server's own port, so an existing bookmark, hotkey or TagFox button
+// reaches whichever flavour is running without knowing which.
+const built = process.argv.includes("--built");
+if (built) {
+  launch("preview server", "npm run preview -- --port 5173 --strictPort", [], true);
+} else {
+  launch("dev server", "npm run dev", [], true); // shell so npm resolves on Windows too
+}
 
 process.on("SIGINT", () => shutdown(0));
 process.on("SIGTERM", () => shutdown(0));

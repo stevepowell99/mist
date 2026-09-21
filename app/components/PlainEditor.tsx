@@ -800,6 +800,7 @@ export default function PlainEditor({
             />
           )}
           <PresentControls
+            speakerHref={`/slides/${fileId}`}
             notesOpen={railOpen}
             slidesOpen={outlineOpen}
             onToggleNotes={() => setRailOpen((v) => !v)}

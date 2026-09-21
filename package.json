@@ -15,6 +15,7 @@
 		"lint": "eslint .",
 		"postinstall": "npm run cf-typegen",
 		"preview": "npm run build && vite preview",
+		"preview:local": "node scripts/dev-local.mjs --built",
 		"test": "vitest run --coverage",
 		"test:watch": "vitest",
 		"typecheck": "npm run cf-typegen && react-router typegen && tsc -b"

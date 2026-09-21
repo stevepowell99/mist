@@ -15,12 +15,22 @@
 export default function PresentControls({
   notesOpen,
   slidesOpen,
+  speakerHref,
   onToggleNotes,
   onToggleSlides,
   onExit,
 }: {
   notesOpen: boolean;
   slidesOpen: boolean;
+  /**
+   * The deck's standalone page, for presenting on two screens. Notes here are
+   * a card on the SAME screen, which is right for rehearsing and wrong for a
+   * projector, where the audience would read them. reveal's own speaker view
+   * puts them in a second window, and it only works on a standalone page (a
+   * sandboxed srcDoc iframe has no URL for it to open), so that is where this
+   * sends you rather than trying to copy it.
+   */
+  speakerHref?: string;
   onToggleNotes: () => void;
   onToggleSlides: () => void;
   onExit: () => void;
@@ -49,6 +59,17 @@ export default function PresentControls({
       >
         Notes
       </button>
+      {speakerHref && (
+        <a
+          href={speakerHref}
+          target="_blank"
+          rel="noopener noreferrer"
+          title="Two screens: opens the deck's own page, where Notes gives reveal's speaker view in a second window"
+          className={cls(false)}
+        >
+          Speaker view
+        </a>
+      )}
       <button type="button" onClick={onExit} title="Exit present (Esc)" aria-label="Exit present" className={cls(false)}>
         Exit
       </button>
