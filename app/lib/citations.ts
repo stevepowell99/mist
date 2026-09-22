@@ -21,9 +21,14 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-/** Extract a BibTeX field, handling nested braces or quotes, stripping LaTeX braces. */
+/**
+ * Extract a BibTeX field, handling nested braces, quotes or a bare value, and
+ * stripping LaTeX braces. Zotero's export writes numbers bare (`year = 2005,`),
+ * so a reader that only knows braces and quotes turns every year into "n.d.".
+ * The lookbehind stops `date` matching inside `urldate`.
+ */
 function extractField(body: string, name: string): string | undefined {
-  const open = new RegExp(`${name}\\s*=\\s*\\{`, "i").exec(body);
+  const open = new RegExp(`(?<!\\w)${name}\\s*=\\s*\\{`, "i").exec(body);
   if (open) {
     let depth = 1;
     let i = open.index + open[0].length;
@@ -38,8 +43,10 @@ function extractField(body: string, name: string): string | undefined {
       return v.trim();
     }
   }
-  const q = new RegExp(`${name}\\s*=\\s*"([^"]*)"`, "i").exec(body);
-  return q ? q[1].trim() : undefined;
+  const q = new RegExp(`(?<!\\w)${name}\\s*=\\s*"([^"]*)"`, "i").exec(body);
+  if (q) return q[1].trim();
+  const bare = new RegExp(`(?<!\\w)${name}\\s*=\\s*([\\w.:-]+)`, "i").exec(body);
+  return bare ? bare[1] : undefined;
 }
 
 function familyNames(authorRaw: string): string[] {

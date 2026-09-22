@@ -31,6 +31,14 @@ describe("parseBib", () => {
     expect(lib.get("powell2025")?.journal).toBe("Evaluation");
     expect(lib.get("powell2025")?.doi).toBe("10.1177/example");
   });
+  it("reads a bare year, as Zotero exports it", () => {
+    const z = parseBib("@article{k,\n  title = {T},\n  year = 2005,\n  journal = {J}\n}");
+    expect(z.get("k")?.year).toBe("2005");
+  });
+  it("does not read urldate as date", () => {
+    const z = parseBib("@misc{k,\n  urldate = {2023-01-02},\n  date = {2019-05}\n}");
+    expect(z.get("k")?.year).toBe("2019");
+  });
 });
 
 describe("convertCitations", () => {

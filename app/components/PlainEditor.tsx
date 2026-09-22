@@ -210,9 +210,9 @@ export default function PlainEditor({
   }, [fileId, name, folderId]);
   const resolveSrc = useCallback((src: string) => resolveAssetSrc(src, assetCtx.current), []);
 
-  // Citations. The document names its library in `bibliography:`; the route
-  // resolves it, including an absolute or ~ path, which is the only way to reach
-  // a library that is not an ancestor of the file.
+  // Citations. The route resolves the document's `bibliography:` paths if it has
+  // them (including an absolute or ~ path, the only way to reach a library that
+  // is not an ancestor of the file), else walks up the folders for a `.bib`.
   const frontmatter = useMemo(() => rawFrontmatter(text), [text]);
   useEffect(() => {
     const m = /^\s*lang(?:uage)?:\s*(.+)$/m.exec(frontmatter);
@@ -223,12 +223,12 @@ export default function PlainEditor({
   useEffect(() => {
     let stopped = false;
     void (async () => {
-      if (!folderId || !bibPaths) {
+      if (!folderId) {
         setBibLib(null);
         return;
       }
       const q = new URLSearchParams({ folder: folderId });
-      for (const path of bibPaths.split("|")) q.append("path", path);
+      for (const path of bibPaths.split("|").filter(Boolean)) q.append("path", path);
       try {
         const res = await fetch(`/drive/bib?${q}`);
         if (!res.ok || stopped) return;
