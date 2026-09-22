@@ -72,8 +72,8 @@ function shutdown(code) {
   process.exitCode = code;
 }
 
-function launch(label, cmd, args, useShell) {
-  const child = spawn(cmd, args, { cwd: repoRoot, stdio: "inherit", shell: useShell });
+function launch(label, cmd, args, useShell, env = process.env) {
+  const child = spawn(cmd, args, { cwd: repoRoot, stdio: "inherit", shell: useShell, env });
   child.on("exit", (code) => {
     console.error(`dev:local: ${label} exited (${code ?? "signal"})`);
     shutdown(code ?? 1);
@@ -87,7 +87,13 @@ launch("localfs sidecar", process.execPath, [resolve(repoRoot, "scripts", "local
 // reaches whichever flavour is running without knowing which.
 const built = process.argv.includes("--built");
 if (built) {
-  launch("preview server", "npm run preview -- --port 5173 --strictPort", [], true);
+  // Its own build folder: `npm run deploy` rebuilds `build/`, which a running
+  // preview holds open on Windows (EBUSY), so sharing it meant stopping local
+  // gmist for every deploy.
+  launch("preview server", "npm run preview -- --port 5173 --strictPort", [], true, {
+    ...process.env,
+    GMIST_BUILD_DIR: "build-local",
+  });
 } else {
   launch("dev server", "npm run dev", [], true); // shell so npm resolves on Windows too
 }
