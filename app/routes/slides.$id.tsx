@@ -4,7 +4,10 @@ import { isLocalFileId } from "~/lib/localfs-ids";
 import { resolveDoc } from "~/lib/doc-resolve.server";
 import { getCloudflare } from "~/lib/cloudflare.server";
 import { getDriveAccessToken, driveRead, driveConfigured } from "~/lib/google.server";
-import { buildSlidesHtml } from "~/lib/slides-build";
+import { buildSlidesHtml, extractBibPaths } from "~/lib/slides-build";
+import { findBibText } from "~/lib/bib.server";
+import { parseBib, type BibLibrary } from "~/lib/citations";
+import { rawFrontmatter } from "~/lib/thread-serialization";
 import { stripMistBanner } from "~/shared/mist-banner";
 import type { DocRole, DriveMeta } from "~/shared/types";
 
@@ -32,13 +35,23 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
   if (!role) return new Response("forbidden", { status: 403 });
 
   try {
-    let source: string;
-    if (drive) {
-      if (!driveConfigured(env)) return new Response("Drive not configured", { status: 501 });
-      const t = await getDriveAccessToken(env);
-      source = (await driveRead(t, drive.fileId)).text;
-    } else {
-      return new Response("document is not a deck", { status: 400 });
+    if (!drive) return new Response("document is not a deck", { status: 400 });
+    if (!driveConfigured(env)) return new Response("Drive not configured", { status: 501 });
+    const t = await getDriveAccessToken(env);
+    const source = (await driveRead(t, drive.fileId)).text;
+
+    // The deck's citations resolve here, server-side, because a public viewer has
+    // no session to fetch /drive/bib with. A failed lookup renders the deck with
+    // its citation keys unresolved rather than failing the page.
+    let bibLib: BibLibrary | null = null;
+    try {
+      const bib = drive.folderId
+        ? await findBibText(env, t, drive.folderId, extractBibPaths(rawFrontmatter(source)))
+        : "";
+      if (bib.trim()) bibLib = parseBib(bib);
+      else console.log(`[slides] ${id}: no bibliography found (folder ${drive.folderId ?? "unknown"})`);
+    } catch (err) {
+      console.error(`[slides] ${id}: bibliography lookup failed: ${err instanceof Error ? err.message : err}`);
     }
 
     const html = buildSlidesHtml(stripMistBanner(source), {
@@ -48,6 +61,7 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
       bust: "print",
       docFrontmatter: "",
       pdfSeparateFragments: separateFragments,
+      bibLib,
     });
     return new Response(html, {
       headers: { "Content-Type": "text/html; charset=utf-8" },

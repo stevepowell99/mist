@@ -48,6 +48,7 @@ export function deckPdfLink(docId: string, key: string | null, assetToken: strin
 export default function ShareButton() {
   const { docId, markdown, threads, frontmatter, role, docKey, suggestKey, assetToken, drive } = useDocument();
   const [copied, setCopied] = useState<"edit" | "suggest" | null>(null);
+  const [copiedView, setCopiedView] = useState(false);
   const [asPreview, setAsPreview] = useState(false);
   const [combineFragments, setCombineFragments] = useState(true);
   const deck = isSlideDeck(markdown, frontmatter);
@@ -55,22 +56,24 @@ export default function ShareButton() {
 
   const handleCopy = useCallback(
     async (kind: "edit" | "suggest", key: string | null) => {
-      // A deck's preview link goes straight to the standalone viewer page
-      // (no Google sign-in) rather than /docs/:id?view=preview (which always
-      // needs one, since that route also has to check Drive's per-user ACL
-      // for the editor it can drop into). A share meant only for viewing
-      // should not ask a reader who is not signing in to edit anything to
-      // sign in at all.
-      const url =
-        deck && asPreview
-          ? deckViewLink(window.location.origin, docId, key, assetToken)
-          : shareLink(window.location.href, key, asPreview);
-      await navigator.clipboard.writeText(url);
+      await navigator.clipboard.writeText(shareLink(window.location.href, key, asPreview));
       setCopied(kind);
       setTimeout(() => setCopied(null), 2000);
     },
-    [asPreview, deck, docId, assetToken],
+    [asPreview],
   );
+
+  // A deck's public link goes to the standalone viewer page, which needs no
+  // Google sign-in and cannot edit, unlike /docs/:id (which always checks the
+  // file's Drive sharing, since it can drop into the editor). It carries the
+  // suggest key, never the edit key, so a link passed around in public cannot
+  // be turned back into an edit link.
+  const handleCopyView = useCallback(async () => {
+    const key = role === "edit" ? suggestKey : docKey;
+    await navigator.clipboard.writeText(deckViewLink(window.location.origin, docId, key, assetToken));
+    setCopiedView(true);
+    setTimeout(() => setCopiedView(false), 2000);
+  }, [role, suggestKey, docKey, docId, assetToken]);
 
   const handleDownload = useCallback(() => {
     const content = serializeThreads(markdown, threads, frontmatter);
@@ -102,23 +105,34 @@ export default function ShareButton() {
           align="end"
           sideOffset={4}
         >
-          <DropdownMenu.CheckboxItem
-            checked={asPreview}
-            onCheckedChange={setAsPreview}
-            onSelect={(e) => e.preventDefault()}
-            title={
-              deck
-                ? "For a deck this is the standalone viewer link: no Google sign-in, matching a Drive share of anyone with the link"
-                : "Opens read-only in the app's own preview, which still needs Google sign-in for a Drive-bound document"
-            }
-            className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-sm outline-none data-[highlighted]:bg-border"
-          >
-            <span className="inline-flex h-3.5 w-3.5 items-center justify-center border border-ink">
-              {asPreview ? "✓" : ""}
-            </span>
-            {deck ? "Open link as preview (no sign-in)" : "Open link as preview"}
-          </DropdownMenu.CheckboxItem>
-          <div className="my-1 border-t border-border" />
+          {deck ? (
+            <>
+              <DropdownMenu.Item
+                onSelect={handleCopyView}
+                title="The deck as a slideshow, for anyone with the link: no Google sign-in, and no way to edit"
+                className="block w-full cursor-pointer px-3 py-1.5 text-left text-sm outline-none data-[highlighted]:bg-border"
+              >
+                {copiedView ? "✓ Copied" : "Copy public view link"}
+              </DropdownMenu.Item>
+              <div className="my-1 border-t border-border" />
+            </>
+          ) : (
+            <>
+              <DropdownMenu.CheckboxItem
+                checked={asPreview}
+                onCheckedChange={setAsPreview}
+                onSelect={(e) => e.preventDefault()}
+                title="The links below open in the app's own preview rather than the editor. Readers still sign in with Google to pass the file's Drive sharing"
+                className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-sm outline-none data-[highlighted]:bg-border"
+              >
+                <span className="inline-flex h-3.5 w-3.5 items-center justify-center border border-ink">
+                  {asPreview ? "✓" : ""}
+                </span>
+                Links open in preview
+              </DropdownMenu.CheckboxItem>
+              <div className="my-1 border-t border-border" />
+            </>
+          )}
           {role === "edit" ? (
             <>
               <DropdownMenu.Item

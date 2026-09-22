@@ -666,7 +666,7 @@ export function buildSlideSections(md: string, opts: BuildSlidesOptions): string
   if (opts.bibLib && usedKeys && usedKeys.size) {
     const refs = formatReferenceList(usedKeys, opts.bibLib);
     if (refs) {
-      return `${sections}\n<section class="references-slide" style="text-align:left;font-size:0.5em"><h2 style="text-align:center">References</h2>${refs}</section>`;
+      return `${sections}\n<section class="references-slide" style="text-align:left;font-size:0.5em">${refs.replace("<h2>", `<h2 style="text-align:center">`)}</section>`;
     }
   }
   return sections;
