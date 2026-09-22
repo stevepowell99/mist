@@ -22,8 +22,12 @@ const READY_TIMEOUT_MS = 30_000;
  * What the new tab shows while the PDF is made. Rendering takes several seconds,
  * longer when the free plan makes us wait for a browser, and a tab left on its
  * opening blank page looks dead and does nothing on refresh. This page answers
- * at once and then navigates to the `render` URL; the browser keeps it on screen
- * until the PDF arrives.
+ * at once, then fetches the `render` URL itself and saves the result as a
+ * download. It must not navigate there: a PDF viewer (Chrome's, Electron's, or
+ * a PDF extension) fetches a navigated PDF a second time, which here means a
+ * second headless browser behind the free plan's one-per-20s launch limit, and
+ * the viewer showed an empty "0 of 0" document while it waited. A fallback
+ * redirect arrives as HTML, so the page follows it to the browser-print view.
  */
 function waitingPage(renderUrl: string): Response {
   const target = JSON.stringify(renderUrl).replace(/</g, "\\u003c");
@@ -33,7 +37,14 @@ main{text-align:center;max-width:28em;padding:16px}.s{width:28px;height:28px;mar
 @keyframes r{to{transform:rotate(360deg)}}small{color:#777}</style></head>
 <body><main><div class="s"></div><div>Making the PDF of this deck…</div>
 <small><span id="t">0</span> s. Usually under ten seconds, up to thirty when another PDF was made just before. If nothing appears, look in your downloads.</small></main>
-<script>var n=0;setInterval(function(){document.getElementById('t').textContent=++n},1000);location.replace(${target});</script>
+<script>var n=0,tick=setInterval(function(){document.getElementById('t').textContent=++n},1000);
+fetch(${target},{credentials:'same-origin'}).then(function(r){
+if(!/application\\/pdf/.test(r.headers.get('Content-Type')||'')){location.replace(r.url);return;}
+var m=/filename="([^"]+)"/.exec(r.headers.get('Content-Disposition')||'');
+return r.blob().then(function(b){clearInterval(tick);var u=URL.createObjectURL(b),a=document.createElement('a');
+a.href=u;a.download=m?m[1]:'deck.pdf';document.body.appendChild(a);a.click();
+document.querySelector('main').innerHTML='<div>Saved to your downloads as '+a.download.replace(/</g,'&lt;')+'.</div><small><a href="'+u+'" target="_blank">Open it here</a></small>';});
+}).catch(function(e){clearInterval(tick);document.querySelector('main').textContent='Could not make the PDF: '+e;});</script>
 </body></html>`;
   return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
 }
@@ -87,10 +98,8 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
     return new Response(new Uint8Array(pdf), {
       headers: {
         "Content-Type": "application/pdf",
-        // A download, never inline: Chrome's PDF viewer (and Electron's) fetches an
-        // inline PDF's URL a second time itself, which here means a second headless
-        // browser behind the free plan's one-per-20s limit, and it showed an empty
-        // "0 of 0" document while that one waited.
+        // The waiting page fetches this and saves it (see waitingPage); attachment
+        // keeps a direct visit a download too.
         "Content-Disposition": `attachment; filename="${title.replace(/[^\w.-]+/g, "-")}.pdf"`,
         "Cache-Control": "no-store",
       },
