@@ -87,7 +87,11 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
     return new Response(new Uint8Array(pdf), {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `inline; filename="${title.replace(/[^\w.-]+/g, "-")}.pdf"`,
+        // A download, never inline: Chrome's PDF viewer (and Electron's) fetches an
+        // inline PDF's URL a second time itself, which here means a second headless
+        // browser behind the free plan's one-per-20s limit, and it showed an empty
+        // "0 of 0" document while that one waited.
+        "Content-Disposition": `attachment; filename="${title.replace(/[^\w.-]+/g, "-")}.pdf"`,
         "Cache-Control": "no-store",
       },
     });
