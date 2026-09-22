@@ -10,6 +10,8 @@
  * brand layer (the `.brand` logo) is prepended to every theme.
  *
  * To add a theme: drop `app/styles/themes/<name>.css` and add it to THEME_RAW.
+ * Name a Google web font first in its font stack and `@import` it at the top of
+ * the file, since a font installed only on Windows is missing from the PDF.
  */
 import BRAND from "~/styles/themes/brand.css?raw";
 import CAUSAL_MAP from "~/styles/themes/causal-map.css?raw";
@@ -53,5 +55,12 @@ export function resolveThemeName(frontmatter: string): string {
 /** The CSS to inject for a deck or doc: the shared brand layer plus the resolved
  *  theme. Safe to drop into a `<style>` in either the iframe or the Preview. */
 export function themeCss(frontmatter: string): string {
-  return `${BRAND}\n${THEME_RAW[resolveThemeName(frontmatter)] ?? THEME_RAW[DEFAULT_THEME]}`;
+  const theme = THEME_RAW[resolveThemeName(frontmatter)] ?? THEME_RAW[DEFAULT_THEME];
+  // Each theme loads its own web font with an `@import` at the top of its file,
+  // so a deck sets in the same typeface on every machine and in the server-side
+  // PDF (whose Linux browser has none of the Windows fonts). CSS ignores an
+  // `@import` that is not first in the sheet, so hoist it above the brand layer.
+  const importRe = /^@import\b.*$/gm; // one per line; a font URL itself contains `;`
+  const imports = theme.match(importRe) ?? [];
+  return `${imports.join("\n")}\n${BRAND}\n${theme.replace(importRe, "")}`;
 }

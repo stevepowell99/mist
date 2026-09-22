@@ -1,8 +1,9 @@
+@import url("https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,400;0,600;0,700;1,400;1,700&display=swap");
 /* Theme: moonshot. Deep space navy with bright cyan accents and a soft glow.
  * A bold, futuristic deck. */
 :is(.reveal,.preview) {
   --slide-bg: #0a0e1a; --ink: #e7ecff; --accent: #76f7ff; --accent-2: #ff8fb8; --rule: #2a3550; --muted: #9aa6c9;
-  --divider-bg: #060912; font-family: "Segoe UI", system-ui, "Helvetica Neue", sans-serif;
+  --divider-bg: #060912; font-family: "Open Sans", "Segoe UI", system-ui, "Helvetica Neue", sans-serif;
 }
 /* Deck canvas (background/text) comes from the shared shell; a document preview
    opts into the theme's colours here. */

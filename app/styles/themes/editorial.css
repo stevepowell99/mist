@@ -1,3 +1,4 @@
+@import url("https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,700;1,8..60,400;1,8..60,700&display=swap");
 /* Theme: editorial. Cream paper, serif body, generous measure, magazine voice.
  * Adapts the 19c-slides editorial demo onto the gmist grammar: quiet 1px rules,
  * small-caps italic headings, a rust accent. The composable components are
@@ -8,10 +9,10 @@
 /* Deck canvas (background/text) comes from the shared shell; a document preview
    opts into the theme's colours here. */
 .preview { background: var(--slide-bg); color: var(--ink); }
-.reveal, .preview { font-family: "Source Serif Pro", "Source Serif", "Cambria", "Georgia", serif; }
+.reveal, .preview { font-family: "Source Serif 4", "Source Serif Pro", "Source Serif", "Cambria", "Georgia", serif; }
 
 :is(.reveal,.preview) h1, :is(.reveal,.preview) h2, :is(.reveal,.preview) h3 {
-  font-family: "Source Serif Pro", "Cambria", "Georgia", serif; color: var(--ink); font-weight: 700; text-transform: none; letter-spacing: 0;
+  font-family: "Source Serif 4", "Source Serif Pro", "Cambria", "Georgia", serif; color: var(--ink); font-weight: 700; text-transform: none; letter-spacing: 0;
 }
 .reveal h1 { font-style: italic; border-bottom: 1px solid var(--rule); padding-bottom: 0.3em; }
 .reveal h2 { font-variant: small-caps; letter-spacing: 0.04em; color: var(--accent); border-bottom: 1px solid var(--rule); }

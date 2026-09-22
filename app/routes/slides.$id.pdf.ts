@@ -18,9 +18,35 @@ import { getCloudflare } from "~/lib/cloudflare.server";
  */
 const READY_TIMEOUT_MS = 30_000;
 
+/**
+ * What the new tab shows while the PDF is made. Rendering takes several seconds,
+ * longer when the free plan makes us wait for a browser, and a tab left on its
+ * opening blank page looks dead and does nothing on refresh. This page answers
+ * at once and then navigates to the `render` URL; the browser keeps it on screen
+ * until the PDF arrives.
+ */
+function waitingPage(renderUrl: string): Response {
+  const target = JSON.stringify(renderUrl).replace(/</g, "\\u003c");
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Making PDF…</title>
+<style>body{margin:0;height:100vh;display:flex;align-items:center;justify-content:center;font:16px/1.5 system-ui,sans-serif;color:#1F1F36;background:#fafafa}
+main{text-align:center;max-width:28em;padding:16px}.s{width:28px;height:28px;margin:0 auto 16px;border:3px solid #ddd;border-top-color:#2a8a86;border-radius:50%;animation:r 1s linear infinite}
+@keyframes r{to{transform:rotate(360deg)}}small{color:#777}</style></head>
+<body><main><div class="s"></div><div>Making the PDF of this deck…</div>
+<small><span id="t">0</span> s. Usually under ten seconds, up to thirty when another PDF was made just before. If nothing appears, look in your downloads.</small></main>
+<script>var n=0;setInterval(function(){document.getElementById('t').textContent=++n},1000);location.replace(${target});</script>
+</body></html>`;
+  return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
+}
+
 export async function loader({ params, request, context }: Route.LoaderArgs) {
   const { env } = getCloudflare(context);
   const url = new URL(request.url);
+  if (!url.searchParams.has("render")) {
+    const render = new URL(url);
+    render.searchParams.set("render", "1");
+    return waitingPage(render.pathname + render.search);
+  }
+  url.searchParams.delete("render");
   const deck = new URL(`/slides/${params.id}`, url.origin);
   for (const [k, v] of url.searchParams) deck.searchParams.set(k, v);
   deck.searchParams.set("print-pdf", "");

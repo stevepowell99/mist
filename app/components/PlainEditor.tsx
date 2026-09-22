@@ -683,7 +683,7 @@ export default function PlainEditor({
           {deck && (
             <ToolbarButton
               href={`/slides/${fileId}?print-pdf&combine-fragments`}
-              title="Print to PDF: opens the deck's print view, then Ctrl/Cmd+P to save"
+              title="Print to PDF: opens the deck's print view, then Ctrl/Cmd+P to save. For a better PDF, print from the online gmist, which makes the file on the server"
             >
               <IconPrint />
             </ToolbarButton>

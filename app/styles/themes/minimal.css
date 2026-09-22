@@ -1,8 +1,9 @@
+@import url("https://fonts.googleapis.com/css2?family=Arimo:ital,wght@0,400;0,700;1,400;1,700&display=swap");
 /* Theme: minimal. White, near-black, lots of space, no shadows, one thin accent.
  * Quiet by default; let the content carry the slide. */
 :is(.reveal,.preview) {
   --slide-bg: #ffffff; --ink: #141414; --accent: #141414; --accent-2: #8a8a8a; --rule: #e6e6e6; --muted: #8a8a8a;
-  font-family: "Helvetica Neue", "Segoe UI", Arial, system-ui, sans-serif;
+  font-family: "Arimo", "Helvetica Neue", "Segoe UI", Arial, system-ui, sans-serif;
 }
 /* Deck canvas (background/text) comes from the shared shell; a document preview
    opts into the theme's colours here. */

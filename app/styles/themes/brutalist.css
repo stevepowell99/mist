@@ -1,3 +1,4 @@
+@import url("https://fonts.googleapis.com/css2?family=Archivo+Black&display=swap");
 /* Theme: brutalist. Blocks of colour, no curves, no apologies. Adapts the
  * 19c-slides brutalist demo onto the gmist grammar: heavy sans, ALL CAPS, square
  * everything, hard offset shadows, black / yellow / red. The composable
@@ -9,7 +10,7 @@
 /* Deck canvas (background/text) comes from the shared shell; a document preview
    opts into the theme's colours here. */
 .preview { background: var(--slide-bg); color: var(--ink); }
-.reveal, .preview { font-family: "Helvetica Neue", "Arial Black", Arial, sans-serif; }
+.reveal, .preview { font-family: "Archivo Black", "Helvetica Neue", "Arial Black", Arial, sans-serif; }
 
 :is(.reveal,.preview) h1, :is(.reveal,.preview) h2, :is(.reveal,.preview) h3 {
   font-weight: 900; text-transform: uppercase; letter-spacing: 0.01em; color: #000;

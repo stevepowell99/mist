@@ -1,8 +1,9 @@
+@import url("https://fonts.googleapis.com/css2?family=Comic+Neue:ital,wght@0,400;0,700;1,400;1,700&display=swap");
 /* Theme: blackboard. Dark chalkboard green with chalk-white text and a yellow
  * chalk accent. Boxes read as chalk outlines; a quiet classroom feel. */
 :is(.reveal,.preview) {
   --slide-bg: #20322b; --ink: #f3f1e7; --accent: #f2d65c; --accent-2: #8fd0c2; --rule: #6f8a7e; --muted: #b9c7bf;
-  --divider-bg: #18241f; font-family: "Chalkduster", "Comic Sans MS", "Segoe Print", "Bradley Hand", cursive;
+  --divider-bg: #18241f; font-family: "Comic Neue", "Chalkduster", "Comic Sans MS", "Segoe Print", "Bradley Hand", cursive;
 }
 /* Deck canvas (background/text) comes from the shared shell; a document preview
    opts into the theme's colours here. */
