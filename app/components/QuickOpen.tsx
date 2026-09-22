@@ -108,6 +108,11 @@ export function QuickOpen({
   // the home page first). `reload` re-runs the search after signing in.
   const [needAuth, setNeedAuth] = useState(false);
   const [reload, setReload] = useState(0);
+  // A prefilled query is a handoff (local gmist's Online button sends the file's
+  // name): when its search finds exactly one gmist file, open it rather than make
+  // the user pick the only row. Armed for the prefill only, never for typing.
+  const autoOpen = useRef(Boolean(initialQuery.trim()));
+  const openRef = useRef<(row: Row) => void>(() => {});
 
   // Recents are the top-level empty-query list and the instant first paint
   // (localStorage, read after mount so SSR stays stable).
@@ -183,6 +188,10 @@ export function QuickOpen({
         setRows(next);
         setSel(0);
         setError(null);
+        if (autoOpen.current && q === initialQuery.trim() && !context) {
+          autoOpen.current = false;
+          if (next.length === 1 && next[0].openInMist) openRef.current(next[0]);
+        }
       } catch (e) {
         if (mine === reqId.current) {
           setError(e instanceof Error ? e.message : "search failed");
@@ -215,6 +224,7 @@ export function QuickOpen({
     },
     [navigate, onClose],
   );
+  openRef.current = (row) => void open(row);
 
   /** Scope into a folder: push it onto the context and clear the query, so it
    *  lists the folder's contents (filterable by typing again). */
@@ -331,7 +341,10 @@ export function QuickOpen({
           <input
             ref={inputRef}
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              autoOpen.current = false;
+              setQuery(e.target.value);
+            }}
             onKeyDown={onKeyDown}
             placeholder={context ? `Filter in ${context.name}…` : "Open a Drive markdown file…"}
             spellCheck={false}
