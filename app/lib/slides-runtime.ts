@@ -339,5 +339,21 @@ Reveal.initialize(REVEAL_CONFIG).then(async function(){
   mountDeckControls();
   await runMermaid();
   drainRender(); // apply any render that arrived before reveal finished booting
-});`;
+  markPrintReady();
+});
+// The server-side PDF (slides.$id.pdf) waits for html[data-mist-ready] before
+// printing, so it never captures a deck mid-layout: reveal's print pages built,
+// mermaid drawn, fonts and images loaded. Print view only.
+async function markPrintReady(){
+  if (!/[?&]print-pdf/.test(window.location.search)) return;
+  for (var i = 0; i < 100 && !document.querySelector('.reveal .pdf-page'); i++) {
+    await new Promise(function(r){ setTimeout(r, 50); });
+  }
+  try { await document.fonts.ready; } catch (e) {}
+  await Promise.all(Array.prototype.map.call(document.images, function(img){
+    return img.complete ? null : new Promise(function(r){ img.addEventListener('load', r); img.addEventListener('error', r); });
+  }));
+  await new Promise(requestAnimationFrame);
+  document.documentElement.setAttribute('data-mist-ready', document.querySelector('.reveal .pdf-page') ? '1' : 'no-pages');
+}`;
 }

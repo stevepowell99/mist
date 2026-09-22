@@ -12,6 +12,7 @@ export default [
   route("docs/:id", "routes/docs.$id.tsx"),
   route("docs/:id/folder", "routes/docs.$id.folder.ts"),
   route("slides/:id", "routes/slides.$id.tsx"),
+  route("slides/:id/pdf", "routes/slides.$id.pdf.ts"),
   route("drive/import", "routes/drive.import.ts"),
   route("drive/asset", "routes/drive.asset.ts"),
   route("drive/upload", "routes/drive.upload.ts"),

@@ -15,6 +15,10 @@
 	"vars": {
 		"LIBRARY_FOLDER_ID": ""
 	},
+	// Headless Chrome (Cloudflare Browser Rendering) for deck PDFs: the
+	// slides.$id.pdf route prints the /slides page server-side. Workers Free
+	// allows 10 browser-minutes a day and 3 browsers at once.
+	"browser": { "binding": "BROWSER" },
 	"durable_objects": {
 		"bindings": [
 			{ "name": "DocumentAgent", "class_name": "DocumentAgent" }

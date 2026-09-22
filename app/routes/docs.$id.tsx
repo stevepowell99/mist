@@ -24,7 +24,7 @@ import Preview from "~/components/Preview";
 import ConnectionStatus from "~/components/ConnectionStatus";
 import UserName from "~/components/UserName";
 import SaveStatus from "~/components/SaveStatus";
-import ShareButton from "~/components/ShareButton";
+import ShareButton, { deckPdfLink } from "~/components/ShareButton";
 import CleanViewToggle from "~/components/CleanViewToggle";
 import SuggestionList from "~/components/SuggestionList";
 import CommentInput from "~/components/CommentInput";
@@ -554,16 +554,14 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
     document.addEventListener("fullscreenchange", onFs);
     return () => document.removeEventListener("fullscreenchange", onFs);
   }, []);
-  // Print a deck via the standalone print-pdf page (the same route the navbar
-  // "Print to PDF" uses), NEVER the live editing-preview: the browser crashes
+  // Print a deck as a server-rendered PDF (the same link as the Share menu's
+  // "Print to PDF"), NEVER the live editing-preview: the browser crashes
   // printing the sandboxed reveal iframe. Open a new tab when there is a user
   // gesture (the parent key path); fall back to same-tab navigation when a popup
   // is refused (the iframe forwards via postMessage, which carries no gesture).
   const printDeck = useCallback(() => {
     if (!deck) return;
-    const url =
-      `/slides/${id}?k=${encodeURIComponent(docKey ?? "")}` +
-      `&token=${encodeURIComponent(assetToken ?? "")}&print-pdf&combine-fragments`;
+    const url = deckPdfLink(id, docKey, assetToken);
     const w = window.open(url, "_blank", "noopener");
     if (!w) window.location.assign(url);
   }, [deck, id, docKey, assetToken]);

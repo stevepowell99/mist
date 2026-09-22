@@ -33,15 +33,25 @@ export function deckViewLink(origin: string, docId: string, key: string | null, 
   return url.toString();
 }
 
+/**
+ * A deck's PDF: `/slides/:id/pdf`, printed server-side by headless Chrome and
+ * returned as a file, falling back to the browser-print page when it cannot.
+ * `combineFragments` puts each slide on one page rather than one per step.
+ */
+export function deckPdfLink(docId: string, key: string | null, assetToken: string | null, combineFragments = true): string {
+  return (
+    `/slides/${docId}/pdf?k=${encodeURIComponent(key ?? "")}&token=${encodeURIComponent(assetToken ?? "")}` +
+    (combineFragments ? "&combine-fragments" : "")
+  );
+}
+
 export default function ShareButton() {
   const { docId, markdown, threads, frontmatter, role, docKey, suggestKey, assetToken, drive } = useDocument();
   const [copied, setCopied] = useState<"edit" | "suggest" | null>(null);
   const [asPreview, setAsPreview] = useState(false);
   const [combineFragments, setCombineFragments] = useState(true);
   const deck = isSlideDeck(markdown, frontmatter);
-  const pdfHref =
-    `/slides/${docId}?k=${encodeURIComponent(docKey ?? "")}&token=${encodeURIComponent(assetToken ?? "")}&print-pdf` +
-    (combineFragments ? "&combine-fragments" : "");
+  const pdfHref = deckPdfLink(docId, docKey, assetToken, combineFragments);
 
   const handleCopy = useCallback(
     async (kind: "edit" | "suggest", key: string | null) => {
@@ -180,7 +190,7 @@ export default function ShareButton() {
                   href={pdfHref}
                   target="_blank"
                   rel="noopener noreferrer"
-                  title="Open a print view of the deck, then Ctrl/Cmd+P to Save as PDF"
+                  title="Download the deck as a PDF"
                   className="block w-full cursor-pointer px-3 py-1.5 text-left text-sm outline-none data-[highlighted]:bg-border"
                 >
                   Print to PDF
