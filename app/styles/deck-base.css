@@ -384,6 +384,11 @@
 .reveal { font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif; font-size: 34px; }
 .reveal .slides { text-align: left; }
 .reveal .slides section:not(.stack) { padding: 1.2em 1.8em !important; text-align: left; box-sizing: border-box; }
+/* Reveal's print sheet zeroes slide padding with `html.reveal-print .reveal .slides
+   section { padding: 0 !important }`, which outranks the rule above, so a printed
+   slide set its text 122px wider than the screen and a line that wraps on screen
+   fitted on one line in the PDF. Same padding, more specific selector. */
+html.reveal-print .reveal .slides section:not(.stack) { padding: 1.2em 1.8em !important; }
 .reveal section.center, .reveal section.center > * { text-align: center; }
 /* On a centred slide, a list centred as text leaves its bullets stranded to the
    left. Centre the list as a block (inline-block) but keep its items left-aligned
