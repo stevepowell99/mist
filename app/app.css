@@ -805,32 +805,6 @@ body {
   }
 }
 
-/* Printing a document. The primary path paginates the preview with Paged.js in a
-   separate throwaway tab (see app/lib/print-paged.client.ts), so the rules here
-   only matter for the popup-blocked fallback: a plain window.print() of the live
-   preview. They hide the app shell and lift the preview out of the app's
-   fixed-height, overflow-hidden flex cages so it flows across pages. Decks print
-   via /slides. */
-@media print {
-  header,
-  aside { display: none !important; }
-  body * {
-    overflow: visible !important;
-    visibility: hidden !important;
-  }
-  .preview,
-  .preview * { visibility: visible !important; }
-  .preview {
-    position: absolute;
-    inset: 0 auto auto 0;
-    width: 100%;
-    max-width: none;
-    margin: 0;
-    padding: 0;
-    color: #000;
-  }
-}
-
 /* The upstream-changed prompt.
  *
  * It appears when the file has been rewritten by something else while you were

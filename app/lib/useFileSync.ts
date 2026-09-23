@@ -205,14 +205,16 @@ export function useFileSync(fileId: string, buffer: FileSyncBuffer, events: File
 
   /** Write now. Without `content` the buffer is asked what it holds, which is
    *  what an editor whose buffer is the file wants; the other one is pushed its
-   *  serialisation from above and passes it in. */
+   *  serialisation from above and passes it in. Settles once every write queued
+   *  so far has landed or failed, for a caller that is about to read the file. */
   const save = useCallback(
-    (content?: string) => {
-      if (conflicted.current || lockedOut.current) return;
+    (content?: string): Promise<void> => {
+      if (conflicted.current || lockedOut.current) return chain.current;
       const next = content ?? buf.current.serialise();
-      if (next === null) return;
+      if (next === null) return chain.current;
       pending.current = next;
       chain.current = chain.current.then(write);
+      return chain.current;
     },
     [write],
   );

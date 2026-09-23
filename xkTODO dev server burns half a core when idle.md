@@ -12,7 +12,7 @@ Worth checking, in this order:
   like a plain Vite dev server.
 - Whether chokidar has fallen back to polling. `usePolling` on a local NTFS path would
   explain a steady burn exactly like this one.
-- Whether anything under `node_modules` or the vendored pagedjs output is being watched.
+- Whether anything under `node_modules` is being watched.
 
 `devstop` (pwsh) lists local dev servers with their age and CPU burn, and a SessionStart
 hook in the hub reports any that have been running more than eight hours, so a repeat will

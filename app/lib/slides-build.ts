@@ -20,14 +20,23 @@ import { themeCss, resolveThemeName } from "~/lib/themes";
 import { deckRuntimeScript } from "~/lib/slides-runtime";
 import { APP_NAME } from "~/shared/constants";
 
-/** A filesystem-friendly slug for the deck's PDF filename: the browser's "Save as
- *  PDF" uses the page <title>, so a deck prints as
- *  `<file>-<theme>-gmist-<YYYY-MM-DD>.pdf` instead of the room URL. */
-function pdfTitle(name: string | undefined, frontmatter: string): string {
+/** A filesystem-friendly slug for a print page's <title>, which names the PDF
+ *  (the browser's "Save as PDF" and the server PDF both take it), so a deck
+ *  prints as `<file>-<theme>-gmist-<YYYY-MM-DD>.pdf` and a document, which has
+ *  no theme in its name, as `<file>-gmist-<YYYY-MM-DD>.pdf`. */
+export function pdfTitle(name: string | undefined, theme = ""): string {
   const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-  const file = slug((name ?? "deck").replace(/\.[^./\\]+$/, "")) || "deck";
+  const file = slug((name ?? "untitled").replace(/\.[^./\\]+$/, "")) || "untitled";
   const date = new Date().toISOString().slice(0, 10); // YYYY-MM-DD, unambiguous
-  return [file, slug(resolveThemeName(frontmatter)), APP_NAME, date].filter(Boolean).join("-");
+  return [file, slug(theme), APP_NAME, date].filter(Boolean).join("-");
+}
+
+/** A document's name as a reader sees it: the file name without its extension. */
+export function fileTitle(drive: { name?: string } | null, fallback: string): string {
+  const raw = drive?.name;
+  if (!raw) return fallback;
+  const name = raw.replace(/\.(md|qmd)$/i, "");
+  return name || fallback;
 }
 
 export function stripFrontmatter(md: string): { frontmatter: string; body: string } {
@@ -693,7 +702,7 @@ export function buildSlidesHtml(md: string, opts: BuildSlidesOptions): string {
     .join("\n");
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${pdfTitle(drive?.name, frontmatter)}</title>
+<title>${pdfTitle(drive?.name, resolveThemeName(frontmatter))}</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
 <style>${PREVIEW_CSS}</style>

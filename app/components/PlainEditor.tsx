@@ -434,15 +434,46 @@ export default function PlainEditor({
     return () => document.removeEventListener("fullscreenchange", onFs);
   }, []);
 
-  // The deck runtime intercepts plain F inside its iframe and posts this, so
-  // reveal's own fullscreen never fires and the presenter card stays visible.
+  /**
+   * Print: a deck's slides or a document's A4 pages, in a print page of their
+   * own, where the browser's Save as PDF makes the file. Local gmist has no
+   * headless browser to make it on the server (its BROWSER binding answers "Not
+   * implemented"). The page reads the file, not this buffer, so anything unsaved
+   * is written first; the tab is opened inside the click and pointed at the page
+   * once the write has landed, so a popup blocker still sees the gesture.
+   */
+  const print = useCallback(async () => {
+    const url = deck ? `/slides/${fileId}?print-pdf&combine-fragments` : `/print/${fileId}?autoprint`;
+    const tab = window.open("", "_blank");
+    if (status === "dirty") await sync.save();
+    if (tab) tab.location.href = url;
+    else window.location.assign(url);
+  }, [deck, fileId, status, sync]);
+
+  // The deck runtime intercepts plain F and Ctrl/Cmd+P inside its iframe and
+  // posts these, so reveal's own fullscreen never fires and the presenter card
+  // stays visible, and the sandboxed iframe is never printed.
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {
-      if (e.data === "mist-present" || e.data?.type === "mist-present") enterPresent();
+      const type = e.data === "mist-present" ? e.data : e.data?.type;
+      if (type === "mist-present") enterPresent();
+      else if (type === "mist-print") void print();
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [enterPresent]);
+  }, [enterPresent, print]);
+
+  // Ctrl/Cmd+P prints through the print page, not the editor around it.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.key === "p" || e.key === "P") && (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey) {
+        e.preventDefault();
+        void print();
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [print]);
 
   /**
    * The same chords as the Drive editor, through the same hook, because the two
@@ -680,14 +711,12 @@ export default function PlainEditor({
               <IconPresent />
             </ToolbarButton>
           )}
-          {deck && (
-            <ToolbarButton
-              href={`/slides/${fileId}?print-pdf&combine-fragments`}
-              title="Print to PDF: opens the deck's print view, then Ctrl/Cmd+P to save. For a better PDF, print from the online gmist, which makes the file on the server"
-            >
-              <IconPrint />
-            </ToolbarButton>
-          )}
+          <ToolbarButton
+            onClick={() => void print()}
+            title="Print to PDF (Ctrl/Cmd+P): opens a print view, where Save as PDF makes the file. The online gmist makes the PDF file itself"
+          >
+            <IconPrint />
+          </ToolbarButton>
           <ToolbarButton
             href={`${DEPLOYED_ORIGIN}/go?q=${encodeURIComponent(name)}`}
             title="Find this file in the online gmist, where it can be shared or presented to others"

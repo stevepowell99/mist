@@ -24,7 +24,7 @@ import Preview from "~/components/Preview";
 import ConnectionStatus from "~/components/ConnectionStatus";
 import UserName from "~/components/UserName";
 import SaveStatus from "~/components/SaveStatus";
-import ShareButton, { deckPdfLink } from "~/components/ShareButton";
+import ShareButton, { deckPdfLink, docPdfLink } from "~/components/ShareButton";
 import CleanViewToggle from "~/components/CleanViewToggle";
 import SuggestionList from "~/components/SuggestionList";
 import CommentInput from "~/components/CommentInput";
@@ -46,19 +46,12 @@ import {
   ToolbarToggle, ToolbarGroup, VIEW_BUTTONS, IconEditing, IconSuggesting,
   type DocView,
 } from "~/components/Toolbar";
-import { fillPrintTab } from "~/lib/print-paged.client";
+import { fileTitle } from "~/lib/slides-build";
 
 // useLayoutEffect on the client (so scroll is restored before paint, no flash),
 // useEffect on the server (avoids the SSR warning).
 const useIsomorphicLayoutEffect =
   typeof window !== "undefined" ? useLayoutEffect : useEffect;
-
-function fileTitle(drive: DriveMeta | null, fallback: string): string {
-  const raw = drive?.name;
-  if (!raw) return fallback;
-  const name = raw.replace(/\.(md|qmd)$/i, "");
-  return name || fallback;
-}
 
 export function meta({ data }: Route.MetaArgs) {
   const drive = data && "drive" in data ? data.drive : null;
@@ -215,6 +208,7 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
     uploadImage,
     cssClasses,
     saveNow,
+    unsaved,
     backed,
     autoSave,
     setAutoSave,
@@ -288,9 +282,6 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
   // cursor, so it sits between Editor and Split.
   const [livePreview, setLivePreview] = useState(initialLive);
   const view: DocView = splitOpen ? "split" : showPreview ? "preview" : livePreview ? "live" : "editor";
-  // Read inside printDoc to restore the view after grabbing the preview HTML.
-  const viewRef = useRef(view);
-  viewRef.current = view;
   const setView = useCallback(
     (v: DocView) => {
       setLivePreview(v === "live");
@@ -554,53 +545,23 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
     document.addEventListener("fullscreenchange", onFs);
     return () => document.removeEventListener("fullscreenchange", onFs);
   }, []);
-  // Print a deck as a server-rendered PDF (the same link as the Share menu's
-  // "Print to PDF"), NEVER the live editing-preview: the browser crashes
-  // printing the sandboxed reveal iframe. Open a new tab when there is a user
-  // gesture (the parent key path); fall back to same-tab navigation when a popup
-  // is refused (the iframe forwards via postMessage, which carries no gesture).
-  const printDeck = useCallback(() => {
-    if (!deck) return;
-    const url = deckPdfLink(id, docKey, assetToken);
-    const w = window.open(url, "_blank", "noopener");
-    if (!w) window.location.assign(url);
-  }, [deck, id, docKey, assetToken]);
-
-  // Print a document. Open a throwaway tab synchronously (to survive popup
-  // blockers), switch the editor to Preview so the rendered HTML is in the DOM,
-  // grab it, restore the previous view, then hand the HTML to that tab where
-  // Paged.js paginates and prints it. The gmist window is never mutated, so a
-  // print or a cancel leaves nothing behind. If the popup is blocked, fall back
-  // to a plain window.print() of the live preview. Decks use printDeck instead.
-  const printDoc = useCallback(() => {
-    if (deck) return;
-    const win = window.open("", "_blank");
-    if (win) {
-      win.document.write(
-        '<!doctype html><meta charset="utf-8"><title>Preparing PDF…</title>' +
-          '<body style="font:14px system-ui,sans-serif;margin:0;display:grid;place-items:center;height:100vh;color:#555">Preparing PDF…</body>',
-      );
-    }
-    const prevView = viewRef.current;
-    setView("preview");
-    let tries = 0;
-    const tick = () => {
-      const el = document.querySelector(".preview");
-      if (el && el.textContent && el.textContent.trim()) {
-        const html = el.innerHTML;
-        if (prevView !== "preview") setView(prevView);
-        if (win) fillPrintTab(win, html, title, frontmatter);
-        else window.print(); // popup blocked: plain in-window fallback
-      } else if (tries > 60) {
-        if (prevView !== "preview") setView(prevView);
-        win?.close();
-      } else {
-        tries++;
-        requestAnimationFrame(tick);
-      }
-    };
-    requestAnimationFrame(tick);
-  }, [deck, setView, title, frontmatter]);
+  // Print as a PDF made on the server (the same link as the Share menu's "Print
+  // to PDF"): a deck from its /slides print page, a document from its /print
+  // page. NEVER the live editing preview: the browser crashes printing the
+  // sandboxed reveal iframe, and the app around a document is not a page. Unsaved
+  // edits are sent first, so the file the server reads is the one on screen.
+  // Opens a new tab when there is a user gesture (the parent key path) and falls
+  // back to same-tab navigation when a popup is refused (the iframe forwards via
+  // postMessage, which carries no gesture). Not "noopener": that makes
+  // window.open return null even when the tab opened, which read as refused and
+  // navigated this tab away as well.
+  const printPdf = useCallback(() => {
+    if (unsaved) saveNow();
+    const url = deck ? deckPdfLink(id, docKey, assetToken) : docPdfLink(id, docKey);
+    const w = window.open(url, "_blank");
+    if (w) w.opener = null;
+    else window.location.assign(url);
+  }, [unsaved, saveNow, deck, id, docKey, assetToken]);
 
   // The deck iframe forwards F (plain) as a present request and Ctrl/Cmd+P as a
   // print request, since the sandboxed iframe can neither fullscreen the app nor
@@ -609,36 +570,24 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
     const onMsg = (e: MessageEvent) => {
       const t = (e.data as { type?: string })?.type;
       if (t === "mist-present") enterPresent();
-      else if (t === "mist-print") printDeck();
+      else if (t === "mist-print") printPdf();
     };
     window.addEventListener("message", onMsg);
     return () => window.removeEventListener("message", onMsg);
-  }, [enterPresent, printDeck]);
+  }, [enterPresent, printPdf]);
 
-  // The Share menu's "Print to PDF" (a document) fires this; a deck uses its own
-  // /slides print link in that menu instead.
-  useEffect(() => {
-    const onPrint = () => {
-      if (!deck) printDoc();
-    };
-    window.addEventListener("mist-print-doc", onPrint);
-    return () => window.removeEventListener("mist-print-doc", onPrint);
-  }, [deck, printDoc]);
-
-  // Ctrl/Cmd+P prints through gmist, not the raw app: a deck prints its slides,
-  // a document switches to Preview and prints that. For a deck, focus inside the
-  // iframe instead forwards mist-print (the runtime cannot open the print page).
+  // Ctrl/Cmd+P prints through gmist, not the raw app. For a deck, focus inside
+  // the iframe instead forwards mist-print (the runtime cannot open the page).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.key === "p" || e.key === "P") && (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey) {
         e.preventDefault();
-        if (deck) printDeck();
-        else printDoc();
+        printPdf();
       }
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [deck, printDeck, printDoc]);
+  }, [printPdf]);
 
   const runChord = useCallback(
     (c: string): boolean => {
@@ -975,21 +924,19 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
             </svg>
           </button>
         )}
-        {/* Print to PDF (documents only; a deck prints via Present/Ctrl+P).
-            Paginates the preview with Paged.js into real A4 pages, then prints. */}
-        {!deck && (
-          <button
-            type="button"
-            onClick={printDoc}
-            title="Print to PDF (Ctrl/Cmd+P)"
-            aria-label="Print to PDF"
-            className="hidden shrink-0 cursor-pointer items-center border-r border-border px-3 transition-colors hover:bg-border hover:text-ink lg:flex"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M6 9V2h12v7" /><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /><rect x="6" y="14" width="12" height="8" rx="1" />
-            </svg>
-          </button>
-        )}
+        {/* Print to PDF: a deck's slides or a document's A4 pages, made into a
+            PDF file on the server and downloaded. */}
+        <button
+          type="button"
+          onClick={printPdf}
+          title="Print to PDF (Ctrl/Cmd+P)"
+          aria-label="Print to PDF"
+          className="hidden shrink-0 cursor-pointer items-center border-r border-border px-3 transition-colors hover:bg-border hover:text-ink lg:flex"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M6 9V2h12v7" /><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /><rect x="6" y="14" width="12" height="8" rx="1" />
+          </svg>
+        </button>
         <div className="flex min-w-0 grow items-center gap-2 px-4">
           <span
             className="hidden shrink-0 rounded border border-border px-1.5 py-0.5 text-xs uppercase tracking-wider text-muted sm:inline-block"

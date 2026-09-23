@@ -4,12 +4,10 @@ import { isLocalFileId } from "~/lib/localfs-ids";
 import { resolveDoc } from "~/lib/doc-resolve.server";
 import { getCloudflare } from "~/lib/cloudflare.server";
 import { getDriveAccessToken, driveRead, driveConfigured } from "~/lib/google.server";
-import { buildSlidesHtml, extractBibPaths } from "~/lib/slides-build";
-import { findBibText } from "~/lib/bib.server";
-import { parseBib, type BibLibrary } from "~/lib/citations";
-import { rawFrontmatter } from "~/lib/thread-serialization";
+import { buildSlidesHtml } from "~/lib/slides-build";
+import { bibForSource } from "~/lib/bib.server";
+import { parseBib } from "~/lib/citations";
 import { stripMistBanner } from "~/shared/mist-banner";
-import type { DocRole, DriveMeta } from "~/shared/types";
 
 /**
  * Standalone deck page, built server-side from the backend source, for printing
@@ -40,19 +38,8 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
     const t = await getDriveAccessToken(env);
     const source = (await driveRead(t, drive.fileId)).text;
 
-    // The deck's citations resolve here, server-side, because a public viewer has
-    // no session to fetch /drive/bib with. A failed lookup renders the deck with
-    // its citation keys unresolved rather than failing the page.
-    let bibLib: BibLibrary | null = null;
-    try {
-      const bib = drive.folderId
-        ? await findBibText(env, t, drive.folderId, extractBibPaths(rawFrontmatter(source)))
-        : "";
-      if (bib.trim()) bibLib = parseBib(bib);
-      else console.log(`[slides] ${id}: no bibliography found (folder ${drive.folderId ?? "unknown"})`);
-    } catch (err) {
-      console.error(`[slides] ${id}: bibliography lookup failed: ${err instanceof Error ? err.message : err}`);
-    }
+    const bib = await bibForSource(env, t, drive, source, id);
+    const bibLib = bib.trim() ? parseBib(bib) : null;
 
     const html = buildSlidesHtml(stripMistBanner(source), {
       drive,

@@ -6,6 +6,9 @@ import {
   isLocalMode,
 } from "~/lib/google.server";
 import { pathToId } from "~/lib/localfs-ids";
+import { extractBibPaths } from "~/lib/slides-build";
+import { rawFrontmatter } from "~/lib/thread-serialization";
+import type { DriveMeta } from "~/shared/types";
 
 const isBib = (n: string) => /\.bib$/i.test(n);
 
@@ -64,4 +67,30 @@ export async function findBibText(
 
   const parts = await Promise.all(bibIds.map((id) => driveDownload(token, id)));
   return parts.map((b) => new TextDecoder().decode(b)).join("\n");
+}
+
+/**
+ * The library for a page built on the server from a document's source (the deck
+ * page, the document print page), as raw BibTeX. It is looked up here because a
+ * public viewer, and the headless browser that prints a PDF, has no session to
+ * fetch /drive/bib with. A failed lookup is logged and gives "", so the page
+ * renders with its citation keys unresolved rather than failing.
+ */
+export async function bibForSource(
+  env: Env,
+  token: string,
+  drive: DriveMeta,
+  source: string,
+  label: string,
+): Promise<string> {
+  try {
+    const bib = drive.folderId
+      ? await findBibText(env, token, drive.folderId, extractBibPaths(rawFrontmatter(source)))
+      : "";
+    if (!bib.trim()) console.log(`[bib] ${label}: no bibliography found (folder ${drive.folderId ?? "unknown"})`);
+    return bib;
+  } catch (err) {
+    console.error(`[bib] ${label}: bibliography lookup failed: ${err instanceof Error ? err.message : err}`);
+    return "";
+  }
 }

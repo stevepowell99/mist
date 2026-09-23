@@ -45,6 +45,16 @@ export function deckPdfLink(docId: string, key: string | null, assetToken: strin
   );
 }
 
+/**
+ * A document's PDF: `/print/:id/pdf`, printed server-side by headless Chrome from
+ * the document print page, falling back to that page's browser print. It carries
+ * no asset token: the route admits only a viewer the file's Drive sharing admits,
+ * and mints the headless browser a token of its own.
+ */
+export function docPdfLink(docId: string, key: string | null): string {
+  return `/print/${docId}/pdf?k=${encodeURIComponent(key ?? "")}`;
+}
+
 export default function ShareButton() {
   const { docId, markdown, threads, frontmatter, role, docKey, suggestKey, assetToken, drive } = useDocument();
   const [copied, setCopied] = useState<"edit" | "suggest" | null>(null);
@@ -52,7 +62,7 @@ export default function ShareButton() {
   const [asPreview, setAsPreview] = useState(false);
   const [combineFragments, setCombineFragments] = useState(true);
   const deck = isSlideDeck(markdown, frontmatter);
-  const pdfHref = deckPdfLink(docId, docKey, assetToken, combineFragments);
+  const pdfHref = deck ? deckPdfLink(docId, docKey, assetToken, combineFragments) : docPdfLink(docId, docKey);
 
   const handleCopy = useCallback(
     async (kind: "edit" | "suggest", key: string | null) => {
@@ -175,43 +185,32 @@ export default function ShareButton() {
           >
             Download
           </DropdownMenu.Item>
-          {!deck && (
-            <DropdownMenu.Item
-              onSelect={() => window.dispatchEvent(new CustomEvent("mist-print-doc"))}
-              title="Paginate the document into A4 pages and Save as PDF"
+          <div className="my-1 border-t border-border" />
+          {deck && (
+            <DropdownMenu.CheckboxItem
+              checked={combineFragments}
+              onCheckedChange={setCombineFragments}
+              onSelect={(e) => e.preventDefault()}
+              title="Print one page per slide, with all animation steps revealed, instead of one page per step"
+              className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-sm outline-none data-[highlighted]:bg-border"
+            >
+              <span className="inline-flex h-3.5 w-3.5 items-center justify-center border border-ink">
+                {combineFragments ? "✓" : ""}
+              </span>
+              One page per slide
+            </DropdownMenu.CheckboxItem>
+          )}
+          <DropdownMenu.Item asChild>
+            <a
+              href={pdfHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={deck ? "Download the deck as a PDF" : "Download the document as a PDF, in A4 pages"}
               className="block w-full cursor-pointer px-3 py-1.5 text-left text-sm outline-none data-[highlighted]:bg-border"
             >
               Print to PDF
-            </DropdownMenu.Item>
-          )}
-          {deck && (
-            <>
-              <div className="my-1 border-t border-border" />
-              <DropdownMenu.CheckboxItem
-                checked={combineFragments}
-                onCheckedChange={setCombineFragments}
-                onSelect={(e) => e.preventDefault()}
-                title="Print one page per slide, with all animation steps revealed, instead of one page per step"
-                className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-sm outline-none data-[highlighted]:bg-border"
-              >
-                <span className="inline-flex h-3.5 w-3.5 items-center justify-center border border-ink">
-                  {combineFragments ? "✓" : ""}
-                </span>
-                One page per slide
-              </DropdownMenu.CheckboxItem>
-              <DropdownMenu.Item asChild>
-                <a
-                  href={pdfHref}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  title="Download the deck as a PDF"
-                  className="block w-full cursor-pointer px-3 py-1.5 text-left text-sm outline-none data-[highlighted]:bg-border"
-                >
-                  Print to PDF
-                </a>
-              </DropdownMenu.Item>
-            </>
-          )}
+            </a>
+          </DropdownMenu.Item>
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
     </DropdownMenu.Root>

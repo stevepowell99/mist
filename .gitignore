@@ -24,9 +24,6 @@ worker-configuration.d.ts
 # Coverage
 /coverage/
 
-# Vendored at build by scripts/vendor-pagedjs.mjs
-public/vendor/
-
 # gmist headless client session cookie (a credential)
 scripts/.gmist-session
 _tmp/

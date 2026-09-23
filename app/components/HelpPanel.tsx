@@ -111,7 +111,7 @@ const SHARE_MENU: { name: string; desc: string }[] = [
   { name: "Copy suggest link", desc: "Locked to Suggest: the holder proposes CriticMarkup changes, never edits directly." },
   { name: "Open link as preview", desc: "Tick first and the link opens in the read-only preview view." },
   { name: "Download", desc: "Save the current text, with its comments, as a .md file." },
-  { name: "Print to PDF", desc: "Decks only: opens a print view, then Ctrl/Cmd+P to save as PDF." },
+  { name: "Print to PDF", desc: "A deck's slides or a document's A4 pages as a PDF file (also Ctrl/Cmd+P). Local gmist opens a print view instead, where Save as PDF makes the file." },
 ];
 
 const REVIEW: Shortcut[] = [
