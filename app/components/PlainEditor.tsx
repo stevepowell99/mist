@@ -439,15 +439,17 @@ export default function PlainEditor({
    * own, where the browser's Save as PDF makes the file. Local gmist has no
    * headless browser to make it on the server (its BROWSER binding answers "Not
    * implemented"). The page reads the file, not this buffer, so anything unsaved
-   * is written first; the tab is opened inside the click and pointed at the page
-   * once the write has landed, so a popup blocker still sees the gesture.
+   * is written first, a local write short enough to stay inside the click's
+   * popup allowance. The tab must open straight onto the print URL: TagFox's
+   * gmist window recognises a deck print by the URL a new window opens with,
+   * refuses the window and saves the PDF beside the file itself. A refused window
+   * is indistinguishable from a blocked popup here, so there is no same-tab
+   * fallback, which would send the editor to the print view behind TagFox's back.
    */
   const print = useCallback(async () => {
     const url = deck ? `/slides/${fileId}?print-pdf&combine-fragments` : `/print/${fileId}?autoprint`;
-    const tab = window.open("", "_blank");
     if (status === "dirty") await sync.save();
-    if (tab) tab.location.href = url;
-    else window.location.assign(url);
+    window.open(url, "_blank");
   }, [deck, fileId, status, sync]);
 
   // The deck runtime intercepts plain F and Ctrl/Cmd+P inside its iframe and
