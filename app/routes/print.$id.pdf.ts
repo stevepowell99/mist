@@ -5,6 +5,7 @@ import { resolveDoc } from "~/lib/doc-resolve.server";
 import { getCloudflare } from "~/lib/cloudflare.server";
 import { authorizeDoc, mintAssetTokenForDoc, type DriveSessionEnv } from "~/lib/drive-access.server";
 import { printPdf } from "~/lib/pdf.server";
+import { fileTitle } from "~/lib/slides-build";
 
 /**
  * A document as a PDF file, printed by headless Chrome from its `/print/:id`
@@ -32,6 +33,7 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
   const page = new URL(fallback);
   page.searchParams.set("token", (await mintAssetTokenForDoc(sessionEnv, true)) ?? "");
   fallback.searchParams.set("autoprint", "");
+  const name = fileTitle(drive, "").replace(/&/g, "&amp;").replace(/</g, "&lt;");
   return printPdf({
     env,
     request,
@@ -41,5 +43,9 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
     label: id,
     // A4 at 96 dpi, so diagrams are drawn at the width they print at.
     viewport: { width: 794, height: 1123 },
+    // The same foot as the page's own margin boxes draw in a viewer's print.
+    footer:
+      `<div style="box-sizing:border-box;width:100%;padding:0 18mm;display:flex;justify-content:space-between;font:9pt Georgia,serif;color:#9aa0a6">` +
+      `<span>${name}</span><span><span class="pageNumber"></span> / <span class="totalPages"></span></span></div>`,
   });
 }

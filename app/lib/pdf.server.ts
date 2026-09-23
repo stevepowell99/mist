@@ -59,6 +59,10 @@ export interface PrintPdfOptions {
   /** For the log. */
   label: string;
   viewport: { width: number; height: number };
+  /** Puppeteer footer template (its `pageNumber` / `totalPages` classes), drawn
+   *  in the bottom page margin. The server's Chrome does not draw CSS margin
+   *  boxes, so this is the only way a page number gets onto its PDF. */
+  footer?: string;
 }
 
 export async function printPdf(o: PrintPdfOptions): Promise<Response> {
@@ -100,7 +104,12 @@ export async function printPdf(o: PrintPdfOptions): Promise<Response> {
     const ready = await page.$eval("html", (el) => el.getAttribute("data-mist-ready"));
     if (ready !== "1") return fallback(`page laid out nothing to print (${ready})`);
     const title = (await page.title()) || o.noun;
-    const pdf = await page.pdf({ preferCSSPageSize: true, printBackground: true });
+    const pdf = await page.pdf({
+      preferCSSPageSize: true,
+      printBackground: true,
+      // An empty header, or Chrome prints its own date and title there.
+      ...(o.footer ? { displayHeaderFooter: true, headerTemplate: "<span></span>", footerTemplate: o.footer } : {}),
+    });
     return new Response(new Uint8Array(pdf), {
       headers: {
         "Content-Type": "application/pdf",

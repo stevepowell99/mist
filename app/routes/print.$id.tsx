@@ -21,10 +21,9 @@ import { fileTitle, pdfTitle } from "~/lib/slides-build";
  * A document as A4 pages, for printing: the deck's `/slides/:id?print-pdf`,
  * for a document. It renders through the same chain as the preview, so a printed
  * document reads as the preview does, and Chrome paginates it from the `@page`
- * rules below, the running title and page numbers included. The server's
- * `/print/:id/pdf` prints it with headless Chrome; `?autoprint` has the viewer's
- * own browser open its print dialog instead, which is what local gmist does and
- * where the server falls back to.
+ * rules below. The server's `/print/:id/pdf` prints it with headless Chrome;
+ * `?autoprint` has the viewer's own browser open its print dialog instead, which
+ * is what local gmist does and where the server falls back to.
  *
  * It sets `html[data-mist-ready="1"]` once diagrams, images and fonts are in,
  * the same signal the deck page gives, which is what the PDF route waits for.
@@ -61,6 +60,7 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
     assetToken: (await mintAssetTokenForDoc(sessionEnv, true)) ?? "",
     heading: fileTitle(drive, ""),
     pdfName: pdfTitle(drive.name),
+    browserPrint: url.searchParams.has("autoprint"),
   };
 }
 
@@ -70,24 +70,27 @@ export function meta({ data: d }: Route.MetaArgs) {
 }
 
 /**
- * The page: A4, the document's name at the head of every page but the first,
- * and "n / m" at the foot. Chrome draws these margin boxes itself, in a viewer's
- * print and in the headless one alike, so nothing has to paginate by script.
- * Georgia is not on the Linux the server prints on, so Gelasio, drawn to
- * Georgia's metrics, stands in for it there and is never reached on Windows.
- * A themed document still prints dark ink on white paper.
+ * The page: A4, with the document's name and "n / m" at the foot. In a viewer's
+ * own print these are Chrome's margin boxes, so nothing paginates by script. The
+ * server's headless Chrome does not draw margin boxes, so there the PDF route
+ * draws the same foot with a footer template, and the boxes are left out so the
+ * two can never both appear. Georgia is not on the Linux the server prints on,
+ * so Gelasio, drawn to Georgia's metrics, stands in for it there and is never
+ * reached on Windows. A themed document still prints dark ink on white paper.
  */
-function printCss(heading: string): string {
+function printCss(heading: string, marginBoxes: boolean): string {
   const safe = heading.replace(/["\\\r\n]/g, "");
-  const running = "font: 9pt Georgia, Gelasio, serif; color: #9aa0a6;";
+  const foot = "font: 9pt Georgia, Gelasio, serif; color: #9aa0a6;";
+  const boxes = marginBoxes
+    ? `@bottom-left { content: "${safe}"; ${foot} }
+  @bottom-right { content: counter(page) " / " counter(pages); ${foot} }`
+    : "";
   return `@import url("https://fonts.googleapis.com/css2?family=Gelasio:ital,wght@0,400;0,700;1,400;1,700&display=swap");
 @page {
   size: A4;
   margin: 20mm 18mm 18mm;
-  @top-left { content: "${safe}"; ${running} }
-  @bottom-right { content: counter(page) " / " counter(pages); ${running} }
+  ${boxes}
 }
-@page :first { @top-left { content: none; } }
 :root { --font-serif: "Georgia", "Gelasio", "Times New Roman", ui-serif, serif; }
 html, body { background: #fff; }
 .preview.print-doc { max-width: none; margin: 0; padding: 0; font-size: 11.5pt; line-height: 1.5; color: #111; background: #fff; }
@@ -115,7 +118,7 @@ function imagesSettled(root: HTMLElement | null): Promise<unknown> {
 }
 
 export default function PrintPage({ loaderData }: Route.ComponentProps) {
-  const { markdown, drive, bib, assetToken, heading } = loaderData;
+  const { markdown, drive, bib, assetToken, heading, browserPrint } = loaderData;
   const container = useRef<HTMLDivElement>(null);
 
   // DOMPurify needs a DOM, which the Worker has none of, so the render waits for
@@ -149,18 +152,18 @@ export default function PrintPage({ loaderData }: Route.ComponentProps) {
       await document.fonts.ready;
       if (stale) return;
       document.documentElement.setAttribute("data-mist-ready", "1");
-      if (new URLSearchParams(window.location.search).has("autoprint")) window.print();
+      if (browserPrint) window.print();
     })();
     return () => {
       stale = true;
     };
-  }, [mounted, html]);
+  }, [mounted, html, browserPrint]);
 
   // Each sheet is its own <style>, because an @import only counts at the top of one.
   return (
     <>
       <style>{theme}</style>
-      <style>{printCss(heading)}</style>
+      <style>{printCss(heading, browserPrint)}</style>
       <style>{POS_ANCHOR_CSS}</style>
       <div ref={container} className="preview print-doc font-serif" dangerouslySetInnerHTML={inner} />
     </>
