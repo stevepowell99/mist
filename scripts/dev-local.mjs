@@ -6,8 +6,10 @@
  * Two flavours, same address (5173), so nothing that opens gmist has to care:
  *
  *   npm run dev:local      the Vite dev server, for working ON gmist.
- *   npm run preview:local  a production build, for working IN gmist. Slower to
- *                          start, and the right one for TagFox to launch.
+ *   npm run preview:local  a production build, for working IN gmist, and the
+ *                          right one for TagFox to launch. It builds only when
+ *                          a source file is newer than the last build; a start
+ *                          with nothing changed takes seconds, not minutes.
  *
  * The difference is not just speed. React's dev build logs every commit, and
  * that logging deep-walks component props: React Router hangs the real `window`
@@ -20,9 +22,9 @@
  * build, which is why this flavour is here.
  */
 import { spawn } from "node:child_process";
-import { appendFileSync, readFileSync } from "node:fs";
+import { appendFileSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { readDevVars, repoRoot } from "./dev-vars.mjs";
 
 let vars = readDevVars();
@@ -81,6 +83,41 @@ function launch(label, cmd, args, useShell, env = process.env) {
   children.push(child);
 }
 
+// True when the last local build finished after every file that feeds it was
+// last written, and `.wrangler/deploy/config.json` still points at it (`npm run
+// deploy` repoints that at `build/`, and a preview would then serve the wrong
+// folder). Anything missing or unreadable reads as stale: the cost of a wrong
+// "stale" is a rebuild, the cost of a wrong "current" is old code in the editor.
+function buildIsCurrent(stamp) {
+  const newest = (path) => {
+    let s;
+    try {
+      s = statSync(path);
+    } catch {
+      return 0;
+    }
+    if (!s.isDirectory()) return s.mtimeMs;
+    let latest = 0;
+    for (const e of readdirSync(path, { withFileTypes: true })) {
+      latest = Math.max(latest, newest(join(path, e.name)));
+    }
+    return latest;
+  };
+  try {
+    const builtAt = statSync(stamp).mtimeMs;
+    const redirect = readFileSync(resolve(repoRoot, ".wrangler", "deploy", "config.json"), "utf8");
+    if (!redirect.includes("build-local")) return false;
+    const inputs = [
+      "agents", "app", "workers", "public",
+      "package.json", "package-lock.json", "vite.config.ts", "react-router.config.ts",
+      "wrangler.jsonc", "tsconfig.json", "tsconfig.cloudflare.json", "tsconfig.node.json",
+    ];
+    return inputs.every((p) => newest(resolve(repoRoot, p)) <= builtAt);
+  } catch {
+    return false;
+  }
+}
+
 launch("localfs sidecar", process.execPath, [resolve(repoRoot, "scripts", "localfs-server.mjs")], false);
 // --built serves a production build rather than the dev server. Pinned to the
 // dev server's own port, so an existing bookmark, hotkey or TagFox button
@@ -90,10 +127,29 @@ if (built) {
   // Its own build folder: `npm run deploy` rebuilds `build/`, which a running
   // preview holds open on Windows (EBUSY), so sharing it meant stopping local
   // gmist for every deploy.
-  launch("preview server", "npm run preview -- --port 5173 --strictPort", [], true, {
-    ...process.env,
-    GMIST_BUILD_DIR: "build-local",
-  });
+  const env = { ...process.env, GMIST_BUILD_DIR: "build-local" };
+  const stamp = resolve(repoRoot, "build-local", ".built");
+  if (buildIsCurrent(stamp)) {
+    console.log("dev:local: build-local is newer than every source file; not rebuilding.");
+  } else {
+    // A build takes 40 seconds on a quiet machine and over 3 minutes on a busy
+    // one, and TagFox gives up on the port after 5, so rebuilding on every start
+    // meant a text editor that sometimes did not open at all.
+    const code = await new Promise((done) => {
+      const build = spawn("npm run build", [], { cwd: repoRoot, stdio: "inherit", shell: true, env });
+      children.push(build);
+      build.on("exit", (c) => done(c ?? 1));
+    });
+    if (code !== 0) {
+      console.error(`dev:local: build failed (${code})`);
+      shutdown(code);
+      process.exit(code);
+    }
+    writeFileSync(stamp, new Date().toISOString());
+  }
+  // The vite binary directly: `npm run preview` would build again first.
+  const viteBin = resolve(repoRoot, "node_modules", "vite", "bin", "vite.js");
+  launch("preview server", process.execPath, [viteBin, "preview", "--port", "5173", "--strictPort"], false, env);
 } else {
   launch("dev server", "npm run dev", [], true); // shell so npm resolves on Windows too
 }
