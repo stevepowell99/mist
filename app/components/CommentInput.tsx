@@ -12,10 +12,11 @@ export default function CommentInput() {
   const [comment, setComment] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Keyboard shortcut: Cmd+Shift+M
+  // Keyboard shortcut: Ctrl/Cmd+Alt+M (as in the local editor), or Ctrl/Cmd+Shift+M.
+  // Match e.code: Shift makes e.key "M", and Alt on a Mac makes it "µ".
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "m") {
+      if ((e.metaKey || e.ctrlKey) && (e.altKey || e.shiftKey) && e.code === "KeyM") {
         e.preventDefault();
         onActiveChange(true);
       }

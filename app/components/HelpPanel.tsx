@@ -9,9 +9,12 @@ import { ICON_NAMES } from "~/lib/icons";
  * handlers in docs.$id.tsx and FolderSidebar; the editor ones come from the
  * CodeMirror keymaps (cm-shortcuts, search, fold).
  *
- * Once per browser session it auto-shows on load, then flies down to the ? button
- * and pulses it a few times, so a first-time viewer learns where help lives. The
- * session flag keeps it from re-firing on every doc the owner opens.
+ * On the first ten page loads in a browser it auto-shows, then flies down to the
+ * ? button and pulses it, so a first-time viewer learns where help lives.
+ *
+ * gmist has two kinds of document, and every line here must hold for both or say
+ * which it is for: Drive files (sign-in, saved to the file) and shared rooms
+ * (secret link only, live editing, text kept in the room).
  */
 
 const MOD = "Ctrl/⌘";
@@ -30,12 +33,14 @@ const LAYOUT: Shortcut[] = [
   { keys: [MOD, "Alt", "4"], label: "Live preview (editor, syntax hidden)" },
   { keys: [MOD, "Alt", "P"], label: "Present (deck: fullscreen)" },
   { keys: [MOD, "Alt", "N"], label: "Present: presenter card (next slide, notes, timer)" },
-  { keys: [MOD, "Alt", "-"], label: "Shrink editor pane" },
-  { keys: [MOD, "Alt", "="], label: "Grow editor pane" },
+  { keys: [MOD, "Alt", "-"], label: "Shrink editor pane (split view)" },
+  { keys: [MOD, "Alt", "="], label: "Grow editor pane (split view)" },
+  { keys: [MOD, "P"], label: "Print to PDF (Drive files)" },
 ];
 
 const PANELS: Shortcut[] = [
-  { keys: [MOD, "Alt", "F"], label: "Drive / files sidebar" },
+  { keys: [MOD, "Alt", "F"], label: "Drive folder sidebar (Drive files)" },
+  { keys: [MOD, "Alt", "J"], label: "Quick open: search Drive" },
   { keys: [MOD, "Alt", "D"], label: "Outline / slide list" },
   { keys: [MOD, "Alt", "C"], label: "Comments panel" },
   { keys: [MOD, "Alt", "G"], label: "Editor to the shown slide (or the divider arrow)" },
@@ -46,25 +51,25 @@ const EDITOR: Shortcut[] = [
   { keys: [MOD, "B"], label: "Bold (wrap **)" },
   { keys: [MOD, "I"], label: "Italic (wrap *)" },
   { keys: ["select", "* _ ` = \" ( ["], label: "Wrap selection in the pair" },
-  { keys: ["Alt", "click"], label: "Add another cursor" },
+  { keys: [MOD, "click"], label: "Add another cursor" },
   { keys: [MOD, "D"], label: "Select next occurrence" },
   { keys: ["Alt", "drag"], label: "Rectangular (column) select" },
   { keys: [MOD, "F"], label: "Find in document" },
-  { keys: ["@"], label: "Insert citation (if a .bib is found)" },
+  { keys: ["@"], label: "Insert citation (Drive files with a .bib)" },
   { keys: ["/"], label: "Slash menu: insert a structure" },
   { keys: ["Tab"], label: "Indent" },
   { keys: [MOD, "Z"], label: "Undo (collaborative-safe)" },
+  { keys: [MOD, "Shift", "Z"], label: "Redo" },
   { keys: [MOD, "Shift", "[ / ]"], label: "Fold / unfold block" },
   { keys: [MOD, "Alt", "[ / ]"], label: "Fold / unfold all" },
 ];
 
 const SLIDES: Shortcut[] = [
-  { keys: [MOD, "S"], label: "Rebuild preview now (or Ctrl/⌘ Enter)" },
-  { keys: ["F"], label: "Fullscreen the deck" },
-  { keys: ["Esc"], label: "Exit fullscreen" },
+  { keys: [MOD, "S"], label: "Save now (Drive files) and rebuild the preview" },
+  { keys: ["F"], label: "Present, with focus in the preview" },
+  { keys: ["Esc"], label: "Leave Present" },
   { keys: ["O"], label: "Overview of all slides" },
   { keys: ["wheel"], label: "Scroll through the overview" },
-  { keys: ["S"], label: "Speaker notes" },
   { keys: ["←", "→"], label: "Previous / next slide" },
 ];
 
@@ -76,8 +81,9 @@ const DECK_SETTINGS: { key: string; val: string }[] = [
   { key: "footer:", val: "text shown on every slide" },
   { key: "slide-number:", val: "true, or a reveal format like c/t" },
   { key: "navigation-mode:", val: "the default is best; grid is 2D but confusing" },
-  { key: "css:", val: "a Drive stylesheet, layered last (overrides the theme)" },
-  { key: "bibliography:", val: "a .bib for @-citations and the reference list" },
+  { key: "css:", val: "a Drive stylesheet, layered last (overrides the theme); Drive files only" },
+  { key: "bibliography:", val: "a .bib for @-citations and the reference list; Drive files only" },
+  { key: "lang:", val: "spellcheck language, e.g. en-GB (the default)" },
 ];
 
 // Composable Pandoc class system (the slides app's "style map"): pick a
@@ -108,26 +114,29 @@ const CLASS_EXAMPLES: { code: string; note: string }[] = [
 // work. Mirrors ShareButton, CommentInput (Ctrl/Cmd+Shift+M) and SuggestionActions.
 const SHARE_MENU: { name: string; desc: string }[] = [
   { name: "Copy edit link", desc: "Full edit access; the holder can also switch to Suggest." },
-  { name: "Copy suggest link", desc: "Locked to Suggest: the holder proposes CriticMarkup changes, never edits directly." },
-  { name: "Open link as preview", desc: "Tick first and the link opens in the read-only preview view." },
-  { name: "Download", desc: "Save the current text, with its comments, as a .md file." },
-  { name: "Print to PDF", desc: "A deck's slides or a document's A4 pages as a PDF file (also Ctrl/Cmd+P). Local gmist opens a print view instead, where Save as PDF makes the file." },
+  { name: "Copy suggest link", desc: "Locked to Suggest: the holder proposes CriticMarkup changes, never edits directly. Someone who opened a suggest link sees a single Copy link." },
+  { name: "Links open in preview", desc: "A tick-box (documents only): links copied while it is ticked open in the read-only preview view." },
+  { name: "Copy public view link", desc: "Decks from Drive: a view-only slide show that needs no sign-in." },
+  { name: "Open in Google Drive", desc: "Drive files: the file itself in Drive." },
+  { name: "Download", desc: "Save the current text, with its comments, as a .md file. In a shared room this is the only way to keep a copy." },
+  { name: "Print to PDF", desc: "Drive files: a deck's slides or a document's A4 pages as a PDF (also Ctrl/Cmd+P)." },
 ];
 
 const REVIEW: Shortcut[] = [
-  { keys: [MOD, "Shift", "M"], label: "Comment on the selection (or a point note)" },
-  { keys: [MOD, "Alt", "S"], label: "Turn Suggest mode on or off" },
+  { keys: [MOD, "Alt", "M"], label: "Comment on the selection (or a point note)" },
+  { keys: [MOD, "Alt", "S"], label: "Turn Suggest mode on or off, for everyone in the document" },
   { keys: [MOD, "Alt", "C"], label: "Open the comments panel" },
 ];
 
 // Drive / files behaviour. Mirrors the Drive sidebar, autosave toggle, the
 // conflict-safe round-trip (CLAUDE.md 16 June note) and the @-citation picker.
 const FILES: { name: string; desc: string }[] = [
-  { name: "Open from Drive", desc: "Ctrl/Cmd+Alt+F opens the Drive sidebar; click a .md or .qmd to open it here." },
-  { name: "Autosave to Drive", desc: "On by default; edits save on a short pause. Turn it off (right-hand settings) for manual save with Ctrl/Cmd+S." },
-  { name: "Same file elsewhere", desc: "Edit it in Obsidian or Drive too; on reload gmist shows the latest (Drive wins if both changed). Avoid editing in two places while Drive for Desktop is syncing." },
-  { name: "Citations", desc: "With a bibliography: .bib in the frontmatter, type @ to pick a reference; a reference list renders at the end." },
-  { name: "Library", desc: "The header gallery button (or /library) inserts reusable slides and images from the shared library folder." },
+  { name: "Open from Drive", desc: "Browse on the home page, Ctrl/Cmd+Alt+J to search, or Ctrl/Cmd+Alt+F for the current folder's sidebar; click a .md or .qmd to open it." },
+  { name: "Autosave to Drive", desc: "On by default; edits save on a short pause. The toggle sits at the foot of the comments panel; with it off, Ctrl/Cmd+S or a click on the save badge saves." },
+  { name: "Same file elsewhere", desc: "Edit it in Obsidian or Drive too. With no unsaved edits here, gmist loads the newer file; if both changed, your text here is kept and the Drive version is saved beside it as a \"(drive copy)\" file." },
+  { name: "Citations", desc: "Type @ to pick a reference from a .bib named in the frontmatter or found in a folder above the file; a reference list renders at the end." },
+  { name: "Library", desc: "The header gallery button (or /library) inserts reusable slides and images from the shared library folder. Needs a Google sign-in." },
+  { name: "Images", desc: "Paste an image and it is uploaded to Drive and linked in the text." },
 ];
 
 // The Overview tab: everything gmist does, grouped. A newcomer's first page.
@@ -137,7 +146,7 @@ const FEATURES: { title: string; items: string[] }[] = [
     items: [
       "Edit any Markdown file from Google Drive, like Google Docs for .md / .qmd",
       "Add format: revealjs to the frontmatter and the same file is a slide deck",
-      "Editor, split (editor + live preview) and preview-only views",
+      "Editor, live preview (formatting shown as you type), split and preview-only views",
     ],
   },
   {
@@ -145,7 +154,7 @@ const FEATURES: { title: string; items: string[] }[] = [
     items: [
       "A / menu inserts structures; a . menu autocompletes the styling classes",
       "@ picks a citation from a .bib, rendered to APA with a reference list",
-      "Tables, math, mermaid, images, and :name: icons",
+      "Tables, mermaid diagrams, images, [[wikilinks]] and :name: icons",
     ],
   },
   {
@@ -161,7 +170,7 @@ const FEATURES: { title: string; items: string[] }[] = [
       "A composable framework: components, colour / fill / border / theme colours, shade, scale, opacity, placement",
       "Eight themes (causal-map, qualia, brutalist, editorial, blackboard, moonshot, handwritten, minimal)",
       "A shared library of reusable slides and images",
-      "One Present mode (Ctrl/Cmd+Alt+P or F): fullscreen, with a presenter card (timer, next slide, notes)",
+      "Present (Ctrl/Cmd+Alt+P): fullscreen, with a presenter card (timer, next slide, notes)",
     ],
   },
   {
@@ -169,15 +178,17 @@ const FEATURES: { title: string; items: string[] }[] = [
     items: [
       "Sign in with Google, then open and browse Drive in a sidebar; edits autosave back to the file, conflict-safe",
       "Share by a secret link with an edit or a suggest role; whoever opens it must also sign in and be shared on the file in Drive",
+      "Print to PDF, citations from a .bib, and the shared slide library",
       "The same file round-trips with Obsidian and a local editor",
     ],
   },
   {
     title: "Shared rooms",
     items: [
-      "New blank document, or drop a .md on the home page, makes a room with no Drive file behind it",
-      "The secret edit or suggest link is the only key: nobody signs in, and everyone with the link edits live together",
+      "New blank document, New slide deck, or a .md dropped on the home page makes a room with no Drive file behind it",
+      "The secret edit or suggest link is the only key: nobody signs in, and everyone with the link edits live, with cursors and avatars",
       "The text is kept in gmist, not in any file; Download saves a copy as .md",
+      "The home page lists the rooms this browser has opened",
     ],
   },
 ];
@@ -185,8 +196,7 @@ const FEATURES: { title: string; items: string[] }[] = [
 const TIPS = [
   "Set theme: causal-map | qualia | brutalist | editorial | blackboard | moonshot | handwritten | minimal in the YAML to restyle the whole deck or doc; ::: {.brand} drops the theme's logo in the corner.",
   "In a Drive file, edits save to Drive automatically, on a short pause after you stop typing.",
-  "Edit a Drive file in Obsidian or Drive and it appears here on reload (Drive wins if both changed).",
-  "Set navigation-mode: grid in a deck's YAML for 2D arrow transitions.",
+  "Edit a Drive file in Obsidian or Drive and gmist loads the newer version when you have no unsaved edits here.",
   "Move the cursor in the editor and the slide preview follows.",
 ];
 
@@ -509,9 +519,11 @@ export default function HelpPanel() {
               <div className="flex flex-col gap-4 px-5 py-4">
                 <Group title="Who can open it">
                   <p className="text-base text-ink/75">
-                    The secret link is not enough on its own: a reader must be signed in with a Google account the file
-                    is shared with in Drive. Drive sharing is the source of truth, and the effective role is the more
-                    restrictive of the link and the file&apos;s own sharing. Collaborators need no gmist account.
+                    <span className="text-ink">Drive files:</span> the secret link is not enough on its own. A reader
+                    must be signed in with a Google account the file is shared with in Drive; the effective role is the
+                    more restrictive of the link and the file&apos;s own sharing.{" "}
+                    <span className="text-ink">Shared rooms:</span> the link is the only key, so anyone holding it can
+                    open the room without signing in. Nobody needs a gmist account.
                   </p>
                 </Group>
 
@@ -528,7 +540,8 @@ export default function HelpPanel() {
 
                 <Group title="Comments &amp; suggestions">
                   <p className="mb-3 text-base text-ink/75">
-                    Select text and press <Kbd>{MOD}</Kbd> <Kbd>Shift</Kbd> <Kbd>M</Kbd> to comment: it wraps the
+                    Select text and press <Kbd>{MOD}</Kbd> <Kbd>Alt</Kbd> <Kbd>M</Kbd>, or Comment on the selection
+                    toolbar, to comment: it wraps the
                     selection as <span className="font-mono text-ink">{"{==text==}{>>note<<}"}</span>, or drops a point
                     note <span className="font-mono text-ink">{"{>>note<<}"}</span> at the cursor. In{" "}
                     <span className="text-ink">Suggest mode</span> your edits become CriticMarkup{" "}
@@ -549,8 +562,8 @@ export default function HelpPanel() {
               <div className="flex flex-col gap-4 px-5 py-4">
                 <Group title="Drive files">
                   <p className="mb-3 text-base text-ink/75">
-                    Every gmist document is a real Markdown file in Google Drive. It is the same file whether you open
-                    it here, in Obsidian or on disk.
+                    A document opened from Drive is a real Markdown file there. It is the same file whether you open it
+                    here, in Obsidian or on disk.
                   </p>
                   <div className="grid gap-x-10 sm:grid-cols-2">
                     {FILES.map((f) => (
@@ -560,8 +573,9 @@ export default function HelpPanel() {
                 </Group>
                 <Group>
                   <p className="text-base text-ink/75">
-                    Live editing by several people at once is not a goal; gmist is for one writer at a time plus async
-                    review. See the Sharing &amp; review tab for comments and suggestions.
+                    <span className="text-ink">Shared rooms</span> have no file: the text lives in the room, and anyone
+                    with the link edits it live. Download (in the Share menu) saves a copy as .md. Drive features (the
+                    folder sidebar, autosave, citations, print to PDF) do not apply in a room.
                   </p>
                 </Group>
               </div>
