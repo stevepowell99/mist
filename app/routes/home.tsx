@@ -46,10 +46,7 @@ export default function Home(_props: Route.ComponentProps) {
 
   async function handleNewDocument() {
     // A visible starting shape, so a newcomer sees a heading and body to overwrite.
-    await createRoom({ content: "# Title here
-
-Text here
-" });
+    await createRoom({ content: "# Title here\n\nText here\n" });
   }
 
   const handleUpload = useCallback(
