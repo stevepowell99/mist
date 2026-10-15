@@ -25,35 +25,37 @@ export default function Home(_props: Route.ComponentProps) {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Create an unbound room (no Drive file) and open it by its edit link.
+  // A failed create must say so rather than leave the button doing nothing.
+  const createRoom = useCallback(
+    async (seed: Record<string, unknown>) => {
+      const id = generateDocumentId();
+      const res = await fetch(`/agents/document-agent/${id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(seed),
+      });
+      const editKey = res.ok ? ((await res.json()) as { editKey?: string }).editKey : undefined;
+      if (!editKey) {
+        window.alert(`Could not create the document (${res.status} ${await res.text().catch(() => "")})`.trim());
+        return;
+      }
+      navigate(`/docs/${id}?k=${editKey}`);
+    },
+    [navigate],
+  );
+
   async function handleNewDocument() {
     const { body, threads, onboarding, frontmatter } = deserializeThreads(demoDocument);
-    const id = generateDocumentId();
-    const res = await fetch(`/agents/document-agent/${id}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: body, threads, onboarding, frontmatter }),
-    });
-    const { editKey } = (await res.json()) as { editKey: string };
-    navigate(`/docs/${id}?k=${editKey}`);
+    await createRoom({ content: body, threads, onboarding, frontmatter });
   }
 
   const handleUpload = useCallback(
     async (file: File) => {
-      const text = await file.text();
-      const { body, threads, frontmatter } = deserializeThreads(text);
-      const id = generateDocumentId();
-
-      // Create the document with initial content + threads via POST body
-      const res = await fetch(`/agents/document-agent/${id}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: body, threads, frontmatter }),
-      });
-      const { editKey } = (await res.json()) as { editKey: string };
-
-      navigate(`/docs/${id}?k=${editKey}`);
+      const { body, threads, frontmatter } = deserializeThreads(await file.text());
+      await createRoom({ content: body, threads, frontmatter });
     },
-    [navigate],
+    [createRoom],
   );
 
   const handleFileChange = useCallback(

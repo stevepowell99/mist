@@ -41,7 +41,10 @@ export default {
     // Drive ACL must be enforced here, not only on the page loader.
     const url = new URL(request.url);
     const agentMatch = url.pathname.match(/^\/agents\/[^/]+\/([^/?]+)/);
-    if (agentMatch) {
+    // A POST creates the room, which cannot exist yet, so the gate would always
+    // 404 it. Creation is one-shot in the agent (409 on an existing id, keys never
+    // re-issued), and /new already creates rooms ungated, so this grants nothing.
+    if (agentMatch && request.method !== "POST") {
       const denied = await gateAgentRequest(request, env, decodeURIComponent(agentMatch[1]), url.searchParams.get("k"));
       if (denied) return denied;
     }
