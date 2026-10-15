@@ -31,7 +31,6 @@ import CommentInput from "~/components/CommentInput";
 import ThreadList from "~/components/ThreadList";
 import ThemeSelector from "~/components/ThemeSelector";
 import MobilePanel from "~/components/MobilePanel";
-import OnboardingBanner from "~/components/OnboardingBanner";
 import NamePrompt from "~/components/NamePrompt";
 import FolderSidebar from "~/components/FolderSidebar";
 import OutlinePanel from "~/components/OutlinePanel";
@@ -1246,7 +1245,6 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
               </span>
             </div>
             <div ref={asideScrollRef} className="flex-1 overflow-y-auto">
-              <OnboardingBanner />
               <SuggestionList />
               {mode === "suggest" && <CleanViewToggle />}
               <div className="border-t border-border" />

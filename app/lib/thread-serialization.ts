@@ -123,7 +123,6 @@ export function serializeThreads(
 export function deserializeThreads(markdown: string): {
   body: string;
   threads: ThreadData[];
-  onboarding: boolean;
   /** The file's own frontmatter as YAML (the `mist` key removed), "" if none.
    *  Carried into the doc so theme/css/format round-trip on commit-back. */
   frontmatter: string;
@@ -136,9 +135,8 @@ export function deserializeThreads(markdown: string): {
   const frontmatter = stripMistKey(rawFrontmatter(markdown));
 
   const mist = fm.mist as Record<string, unknown> | undefined;
-  const onboarding = mist?.onboarding === true;
   if (!mist || !Array.isArray(mist.threads)) {
-    return { body, threads: [], onboarding, frontmatter };
+    return { body, threads: [], frontmatter };
   }
 
   const threads: ThreadData[] = mist.threads.map(
@@ -168,5 +166,5 @@ export function deserializeThreads(markdown: string): {
     }),
   );
 
-  return { body, threads, onboarding, frontmatter };
+  return { body, threads, frontmatter };
 }

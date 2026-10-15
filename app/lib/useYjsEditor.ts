@@ -27,7 +27,6 @@ export function useYjsEditor(docId: string, docKey: string | null = null) {
   // Edit is the default for an edit-link user; suggest-link users are forced to
   // suggest in DocumentContext regardless. Either can switch deliberately.
   const [mode, setModeState] = useState<DocMode>("edit");
-  const [isOnboarding, setIsOnboarding] = useState(false);
 
   const socket = useAgent({
     agent: "document-agent",
@@ -35,14 +34,13 @@ export function useYjsEditor(docId: string, docKey: string | null = null) {
     query: docKey ? { k: docKey } : undefined,
   });
 
-  // Observe docState Y.Map for mode and onboarding changes from other clients
+  // Observe docState Y.Map for mode changes from other clients
   useEffect(() => {
     const observer = () => {
       const m = docState.get("mode");
       if (m === "edit" || m === "suggest") {
         setModeState(m);
       }
-      setIsOnboarding(docState.get("onboarding") === "true");
     };
     docState.observe(observer);
     // Read initial value
@@ -148,5 +146,5 @@ export function useYjsEditor(docId: string, docKey: string | null = null) {
   // socket, so the same code drives a local file, which has no socket at all.
   const transport = useMemo(() => agentTransport(socket), [socket]);
 
-  return { doc, awareness, socket, transport, synced, paused, resume, user, setUserName, needsName, dismissNamePrompt, mode, setMode, docState, isOnboarding };
+  return { doc, awareness, socket, transport, synced, paused, resume, user, setUserName, needsName, dismissNamePrompt, mode, setMode, docState };
 }

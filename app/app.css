@@ -759,20 +759,6 @@ body {
   [data-theme="auto"] .sh-jsxliterals { color: #22d3ee; }
 }
 
-/* Onboarding marquee button */
-.marquee-btn {
-  width: 8em;
-}
-
-@keyframes marquee {
-  from {
-    transform: translateX(0);
-  }
-  to {
-    transform: translateX(var(--marquee-offset));
-  }
-}
-
 /* Side panels slide in gently rather than popping. The Drive panel is
    class-toggled (it also slides out, via a transform transition in the markup);
    the outline and comments panels mount/unmount, so they animate on entry. */

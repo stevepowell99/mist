@@ -116,10 +116,6 @@ export interface DocumentContextValue {
   resolveThread: (threadId: string) => void;
   deleteThread: (threadId: string) => void;
 
-  // Onboarding
-  isOnboarding: boolean;
-  clearDocument: () => void;
-
   // Editor lifecycle
   handleViewReady: (view: EditorView | null) => void;
   setEditorText: (text: string) => void;
@@ -684,22 +680,6 @@ export function DocumentProvider({
     [openCommentInput],
   );
 
-  const clearDocument = useCallback(() => {
-    // One Yjs transaction so it is atomic: clear threads before the body so the
-    // thread reconcile does not re-create entries from still-present markup.
-    yjs.doc.transact(() => {
-      const threadsMap = yjs.doc.getMap<string>("threads");
-      for (const key of Array.from(threadsMap.keys())) threadsMap.delete(key);
-      const body = yjs.doc.getText("body");
-      if (body.length > 0) body.delete(0, body.length);
-      yjs.docState.delete("onboarding");
-      yjs.docState.set("mode", "edit");
-    });
-    setCommentActive(false);
-    setCommentSelection(null);
-    setCommentHighlight(null);
-  }, [yjs]);
-
   const handleResolveAtCursor = useCallback(() => { markUserEdited(); resolveAtCursor(); }, [resolveAtCursor, markUserEdited]);
   const handleDeleteAtCursor = useCallback(() => { markUserEdited(); deleteAtCursor(); }, [deleteAtCursor, markUserEdited]);
 
@@ -763,8 +743,6 @@ export function DocumentProvider({
     addReply: addReplyEdited,
     resolveThread: resolveThreadEdited,
     deleteThread: deleteThreadEdited,
-    isOnboarding: yjs.isOnboarding,
-    clearDocument,
     handleViewReady,
     setEditorText,
     markUserEdited,

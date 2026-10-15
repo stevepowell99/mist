@@ -7,7 +7,6 @@ import ThemeSelector from "~/components/ThemeSelector";
 import DriveBrowser from "~/components/DriveBrowser";
 import { QuickOpenTrigger } from "~/components/QuickOpen";
 import GoogleSignIn from "~/components/GoogleSignIn";
-import demoDocument from "./demo.md?raw";
 
 export function loader({ request }: Route.LoaderArgs) {
   const url = new URL(request.url);
@@ -46,8 +45,7 @@ export default function Home(_props: Route.ComponentProps) {
   );
 
   async function handleNewDocument() {
-    const { body, threads, onboarding, frontmatter } = deserializeThreads(demoDocument);
-    await createRoom({ content: body, threads, onboarding, frontmatter });
+    await createRoom({});
   }
 
   const handleUpload = useCallback(

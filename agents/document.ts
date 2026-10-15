@@ -51,7 +51,6 @@ function generateSecretKey(): string {
 interface SeedBody {
   content?: string;
   threads?: unknown[];
-  onboarding?: boolean;
   drive?: DriveMeta;
   frontmatter?: string;
   driveVersion?: string | null;
@@ -726,10 +725,6 @@ class DocumentAgent extends Agent {
                 threadsMap.set(t.id, JSON.stringify(thread));
               }
             }
-          }
-          if (body.onboarding) {
-            const docState = doc.getMap<string>("docState");
-            docState.set("onboarding", "true");
           }
         } catch (err) {
           // If it's an unsupported CriticMarkup error, return it
