@@ -165,19 +165,27 @@ const FEATURES: { title: string; items: string[] }[] = [
     ],
   },
   {
-    title: "Drive & sharing",
+    title: "Drive files",
     items: [
-      "Open and browse Drive in a sidebar; edits autosave back, conflict-safe",
-      "Share by a secret link with an edit or a suggest role; readers sign in to pass the file's Drive sharing",
+      "Sign in with Google, then open and browse Drive in a sidebar; edits autosave back to the file, conflict-safe",
+      "Share by a secret link with an edit or a suggest role; whoever opens it must also sign in and be shared on the file in Drive",
       "The same file round-trips with Obsidian and a local editor",
+    ],
+  },
+  {
+    title: "Shared rooms",
+    items: [
+      "New blank document, or drop a .md on the home page, makes a room with no Drive file behind it",
+      "The secret edit or suggest link is the only key: nobody signs in, and everyone with the link edits live together",
+      "The text is kept in gmist, not in any file; Download saves a copy as .md",
     ],
   },
 ];
 
 const TIPS = [
   "Set theme: causal-map | qualia | brutalist | editorial | blackboard | moonshot | handwritten | minimal in the YAML to restyle the whole deck or doc; ::: {.brand} drops the theme's logo in the corner.",
-  "Edits save to Drive automatically, on a short pause after you stop typing.",
-  "Edit the file in Obsidian or Drive and it appears here on reload (Drive wins if both changed).",
+  "In a Drive file, edits save to Drive automatically, on a short pause after you stop typing.",
+  "Edit a Drive file in Obsidian or Drive and it appears here on reload (Drive wins if both changed).",
   "Set navigation-mode: grid in a deck's YAML for 2D arrow transitions.",
   "Move the cursor in the editor and the slide preview follows.",
 ];
