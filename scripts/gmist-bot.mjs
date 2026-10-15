@@ -8,14 +8,23 @@
  *
  * Usage:
  *   node scripts/gmist-bot.mjs "<doc URL>" [--suggest "a note"] [--edits <file.json>]
+ *   node scripts/gmist-bot.mjs "<doc URL>" --get <file.md>
+ *   node scripts/gmist-bot.mjs "<doc URL>" --put <file.md>
  *
  * - <doc URL> is the share link, e.g.
  *   https://mist.broad-smoke-cc64.workers.dev/docs/<id>?k=<key>
- * - The `mist_session` cookie (a credential, never committed) comes from
- *   $GMIST_SESSION, or failing that scripts/.gmist-session (gitignored). Take it
- *   from a browser signed into gmist with a Google account the file is shared
- *   with (DevTools > Application > Cookies). The WebSocket gate (workers/app.ts)
+ * - A shared room (no Drive file) needs only the link. A Drive document also
+ *   needs the `mist_session` cookie (a credential, never committed), from
+ *   $GMIST_SESSION or else scripts/.gmist-session (gitignored). Take it from a
+ *   browser signed into gmist with a Google account the file is shared with
+ *   (DevTools > Application > Cookies). The WebSocket gate (workers/app.ts)
  *   requires it plus the file's Drive ACL. It expires, so refresh when a run 401s.
+ * - --get <file.md> saves the body to <file.md> and a copy to <file.md>.base,
+ *   then leaves. --put <file.md> makes the body equal to <file.md> as a direct
+ *   (untracked) edit, applied as a minimal diff so live editors keep their
+ *   cursors. It refuses, writing the newer body to <file.md>.theirs, if the body
+ *   no longer matches <file.md>.base, so a write never undoes someone's edit made
+ *   since the read; after writing it reads the body back over HTTP to confirm.
  * - With no edit flag the client is read-only (connect, sync, print, observe and
  *   reprint on every remote change).
  * - --suggest "<text>" appends a CriticMarkup comment {>>text<<} to the body.
@@ -30,7 +39,7 @@
  *   This is the real tracked-changes review path; --suggest is the quick note.
  */
 
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import WebSocket from "ws";
 import * as Y from "yjs";
 import * as awarenessProtocol from "y-protocols/awareness";
@@ -52,6 +61,8 @@ function parseArgs(argv) {
     url: args.find((a) => /^https?:\/\//.test(a)),
     suggest: flag("--suggest"),
     editsPath: flag("--edits"),
+    getPath: flag("--get"),
+    putPath: flag("--put"),
   };
 }
 
@@ -65,11 +76,17 @@ function resolveSession() {
   }
 }
 
-const { url: docUrl, suggest, editsPath } = parseArgs(process.argv);
+const { url: docUrl, suggest, editsPath, getPath, putPath } = parseArgs(process.argv);
 const session = resolveSession();
-if (!docUrl || !session) {
-  console.error('Usage: node scripts/gmist-bot.mjs <docUrl> [--suggest "text"] [--edits file.json]');
-  console.error("(needs $GMIST_SESSION or scripts/.gmist-session)");
+if (!docUrl) {
+  console.error('Usage: node scripts/gmist-bot.mjs <docUrl> [--suggest "text"] [--edits file.json] [--get file.md] [--put file.md]');
+  console.error("(a Drive document also needs $GMIST_SESSION or scripts/.gmist-session)");
+  process.exit(1);
+}
+const cookieHeaders = session ? { Cookie: `mist_session=${session}` } : {};
+const lf = (s) => s.replace(/\r\n?/g, "\n");
+if (putPath && !existsSync(`${putPath}.base`)) {
+  console.error(`error: no ${putPath}.base; run --get first so the write can be checked against it`);
   process.exit(1);
 }
 
@@ -84,7 +101,7 @@ const body = doc.getText("body"); // the raw-markdown CRDT the editor binds to
 const awareness = new awarenessProtocol.Awareness(doc);
 awareness.setLocalStateField("user", { name: "Claude (bot)", color: "#00FFAF" });
 
-const ws = new WebSocket(wsUrl, { headers: { Cookie: `mist_session=${session}` } });
+const ws = new WebSocket(wsUrl, { headers: cookieHeaders });
 let synced = false;
 
 function send(bytes) {
@@ -141,8 +158,68 @@ function applyOp(op) {
   }
 }
 
+/** Make the body equal `text` by one minimal diff (common prefix and suffix
+ *  kept), the same way the agent applies a Drive pull. */
+function replaceBody(text) {
+  const old = body.toString();
+  if (old === text) return;
+  let p = 0;
+  const max = Math.min(old.length, text.length);
+  while (p < max && old[p] === text[p]) p++;
+  let s = 0;
+  while (s < max - p && old[old.length - 1 - s] === text[text.length - 1 - s]) s++;
+  doc.transact(() => {
+    if (old.length - p - s > 0) body.delete(p, old.length - p - s);
+    const insert = text.slice(p, text.length - s);
+    if (insert) body.insert(p, insert);
+  });
+}
+
+/** The body as the server holds it, read over HTTP: proof a write landed. */
+async function serverBody() {
+  const res = await fetch(`${u.protocol}//${u.host}/agents/document-agent/${encodeURIComponent(docId)}?source&k=${encodeURIComponent(key)}`, {
+    headers: { ...cookieHeaders, "User-Agent": "gmist-bot/1" },
+  });
+  if (!res.ok) throw new Error(`read-back failed (${res.status})`);
+  return (await res.json()).markdown;
+}
+
 function onSynced() {
   console.error("synced");
+
+  if (getPath) {
+    const text = body.toString();
+    writeFileSync(getPath, text);
+    writeFileSync(`${getPath}.base`, text);
+    console.error(`got ${text.length} chars into ${getPath}`);
+    ws.close();
+    return;
+  }
+  if (putPath) {
+    const current = body.toString();
+    if (lf(readFileSync(`${putPath}.base`, "utf8")) !== current) {
+      writeFileSync(`${putPath}.theirs`, current);
+      console.error(`refused: the document changed since the read. Its text is in ${putPath}.theirs; merge into ${putPath}, copy .theirs over .base, then put again.`);
+      process.exitCode = 1;
+      ws.close();
+      return;
+    }
+    const text = lf(readFileSync(putPath, "utf8"));
+    replaceBody(text);
+    setTimeout(async () => {
+      try {
+        if ((await serverBody()) !== text) throw new Error("the server does not hold what was sent; --get again and compare");
+        writeFileSync(`${putPath}.base`, text);
+        console.error(`put ${text.length} chars; read back and matched`);
+      } catch (e) {
+        console.error(`error: ${e.message}`);
+        process.exitCode = 1;
+      }
+      ws.close();
+    }, 1500);
+    return;
+  }
+
   printBody("initial");
   body.observe(() => printBody("updated"));
 
@@ -198,5 +275,5 @@ doc.on("update", (update, origin) => {
   send(encoding.toUint8Array(enc));
 });
 
-ws.on("close", () => { console.error("closed"); process.exit(0); });
+ws.on("close", () => { console.error("closed"); process.exit(process.exitCode ?? 0); });
 ws.on("error", (e) => { console.error("error:", e.message); process.exit(1); });

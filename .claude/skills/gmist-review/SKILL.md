@@ -1,6 +1,6 @@
 ---
 name: gmist-review
-description: Review or edit a live gmist document as a participant. Use when Steve gives a gmist doc URL (mist.broad-smoke-cc64.workers.dev/docs/...) and asks to read it, review it, comment on it, suggest changes, or make tracked edits. Joins the document's live Yjs session over the agent WebSocket and posts CriticMarkup, rather than overwriting the Drive file.
+description: Read, review or edit a live gmist document or shared room as a participant. Use when Steve gives a gmist doc or room URL (mist.broad-smoke-cc64.workers.dev/docs/...) and asks to read it, review it, comment on it, suggest changes, make tracked edits, or work on / write / rewrite / edit the markdown directly. Joins the document's live Yjs session over the agent WebSocket, posting CriticMarkup or a direct edit that merges with whoever is typing, rather than overwriting the Drive file.
 ---
 
 # gmist-review
@@ -9,13 +9,16 @@ description: Review or edit a live gmist document as a participant. Use when Ste
 
 Read and contribute to a live gmist document as a real session peer, via
 `scripts/gmist-bot.mjs` (the canonical client; do not reimplement its protocol).
-Steve gives a doc URL; you fetch the body, decide on changes, and post them as
-CriticMarkup that he accepts or rejects in the editor.
+Run it from `C:\dev\mist`. Steve gives a doc URL; you fetch the body, decide on
+changes, and post them either as CriticMarkup that he accepts or rejects in the
+editor (the Procedure below, the default for review) or as a direct edit (the
+Direct edits section, when he asks you to write or rework the text itself).
 
 ## Auth (once)
 
-The client needs the `mist_session` cookie. It reads `scripts/.gmist-session`
-(gitignored) automatically, so normally you need nothing. If a run prints
+A shared room (a document without a Drive file, made from the gmist home page)
+needs only its link, without any cookie. A Drive document needs the `mist_session`
+cookie. The client reads `scripts/.gmist-session` (gitignored) automatically, so normally you need nothing. If a run prints
 `error: Unexpected server response: 401`, the cookie has expired: ask Steve to
 copy a fresh `mist_session` value from a signed-in browser (DevTools > Application
 > Cookies) into `scripts/.gmist-session`. Never print or commit the cookie.
@@ -54,6 +57,22 @@ copy a fresh `mist_session` value from a signed-in browser (DevTools > Applicati
 
 4. **Tell Steve** what you posted and that he can accept/reject each change in the
    editor. Re-running the read-only fetch confirms what landed.
+
+## Direct edits
+
+When Steve wants the text itself changed rather than suggested (needs an edit
+link; a suggest link is locked to suggest mode in the editor, so use the
+Procedure above with it):
+
+1. `timeout 20 node scripts/gmist-bot.mjs "<doc URL>" --get _tmp/doc.md` saves
+   the body to `_tmp/doc.md` and a copy to `_tmp/doc.md.base`.
+2. Edit `_tmp/doc.md` with the Edit tool.
+3. `timeout 20 node scripts/gmist-bot.mjs "<doc URL>" --put _tmp/doc.md` applies
+   it as one minimal diff, so anyone typing keeps their edits and cursor, then
+   reads the body back over HTTP and confirms it matches.
+   - A `refused` means someone edited since the get: their text is in
+     `_tmp/doc.md.theirs`. Merge it into `_tmp/doc.md`, copy `.theirs` over
+     `.base`, and put again. Never delete the `.base` to force a write.
 
 ## Quick note
 
