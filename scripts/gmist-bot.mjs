@@ -25,6 +25,11 @@
  *   cursors. It refuses, writing the newer body to <file.md>.theirs, if the body
  *   no longer matches <file.md>.base, so a write never undoes someone's edit made
  *   since the read; after writing it reads the body back over HTTP to confirm.
+ * - --watch <state.json> stays connected and prints one MENTION line to stdout
+ *   for each new comment or reply containing @claude (not the bot's own), for a
+ *   Monitor to wake on; reported keys persist in <state.json>.
+ * - --edits also takes { "op": "reply", "find": <part of a thread's comment>,
+ *   "text": ... }, which appends a reply as the editor's Reply box does.
  * - With no edit flag the client is read-only (connect, sync, print, observe and
  *   reprint on every remote change).
  * - --suggest "<text>" appends a CriticMarkup comment {>>text<<} to the body.
@@ -63,6 +68,7 @@ function parseArgs(argv) {
     editsPath: flag("--edits"),
     getPath: flag("--get"),
     putPath: flag("--put"),
+    watchPath: flag("--watch"),
   };
 }
 
@@ -76,7 +82,7 @@ function resolveSession() {
   }
 }
 
-const { url: docUrl, suggest, editsPath, getPath, putPath } = parseArgs(process.argv);
+const { url: docUrl, suggest, editsPath, getPath, putPath, watchPath } = parseArgs(process.argv);
 const session = resolveSession();
 if (!docUrl) {
   console.error('Usage: node scripts/gmist-bot.mjs <docUrl> [--suggest "text"] [--edits file.json] [--get file.md] [--put file.md]');
@@ -99,6 +105,7 @@ const wsUrl = `${wsScheme}://${u.host}/agents/document-agent/${encodeURIComponen
 const doc = new Y.Doc();
 const body = doc.getText("body"); // the raw-markdown CRDT the editor binds to
 const awareness = new awarenessProtocol.Awareness(doc);
+const BOT_USER = { name: "Claude", color: "#00A86B", colorLight: "#00A86B" };
 awareness.setLocalStateField("user", { name: "Claude (bot)", color: "#00FFAF" });
 
 const ws = new WebSocket(wsUrl, { headers: cookieHeaders });
@@ -127,11 +134,54 @@ function printBody(tag) {
   console.log("----- end -----\n");
 }
 
+const threadsMap = doc.getMap("threads");
+
+function readThreads() {
+  const out = [];
+  threadsMap.forEach((v) => {
+    try { out.push(JSON.parse(v)); } catch { /* skip a malformed entry */ }
+  });
+  return out.sort((a, b) => a.createdAt - b.createdAt);
+}
+
+/** Create the thread entry for a comment the bot just wrote. Editors match
+ *  threads to `{>>note<<}` by the note's text and create any that are missing
+ *  under their OWN user, so without this a bot comment shows as written by
+ *  whoever opened the doc next. */
+function claimThread(note) {
+  const id = Math.random().toString(36).slice(2, 10);
+  threadsMap.set(id, JSON.stringify({ id, commentText: note, author: BOT_USER, createdAt: Date.now(), resolved: false, replies: [] }));
+}
+
+/** Every comment or reply that mentions @claude and was not written by the bot,
+ *  each with a stable key so a watcher reports it once. */
+function mentions() {
+  const out = [];
+  for (const t of readThreads()) {
+    if (/@claude\b/i.test(t.commentText) && t.author?.name !== BOT_USER.name)
+      out.push({ key: `${t.id}:c`, thread: t.id, text: t.commentText, on: t.highlightText ?? "" });
+    for (const r of t.replies ?? [])
+      if (/@claude\b/i.test(r.text) && r.author?.name !== BOT_USER.name)
+        out.push({ key: `${t.id}:${r.id}`, thread: t.id, text: r.text, on: t.commentText.slice(0, 80) });
+  }
+  return out;
+}
+
 /** Apply one anchored edit, located by a literal `find` substring of the current
- *  body. Each is its own transaction so it becomes one CRDT update. */
+ *  body. Each is its own transaction so it becomes one CRDT update. A `reply`
+ *  finds its thread by a substring of the thread's comment and appends to its
+ *  replies, as the editor's Reply box does. */
 function applyOp(op) {
+  if (op.op === "reply") {
+    const t = readThreads().find((x) => x.commentText.includes(op.find));
+    if (!t) return `SKIP (no thread whose comment contains): ${JSON.stringify(op.find)}`;
+    t.replies.push({ id: Math.random().toString(36).slice(2, 10), author: BOT_USER, text: op.text, createdAt: Date.now() });
+    threadsMap.set(t.id, JSON.stringify(t));
+    return `reply on ${JSON.stringify(t.commentText.slice(0, 40))}`;
+  }
   if (op.op === "comment" && !op.find) {
     body.insert(body.length, `\n\n{>>${op.text}<<}`);
+    claimThread(op.text);
     return "comment appended";
   }
   const text = body.toString();
@@ -141,6 +191,7 @@ function applyOp(op) {
   switch (op.op) {
     case "comment":
       body.insert(end, `{>>${op.text}<<}`);
+      claimThread(op.text);
       return `comment at ${JSON.stringify(op.find)}`;
     case "insertAfter":
       body.insert(end, `{++${op.text}++}`);
@@ -191,7 +242,10 @@ function onSynced() {
     const text = body.toString();
     writeFileSync(getPath, text);
     writeFileSync(`${getPath}.base`, text);
-    console.error(`got ${text.length} chars into ${getPath}`);
+    // The comment threads (author, replies, resolved) live beside the text in the
+    // Yjs `threads` map, keyed by thread id; the markup holds only the note.
+    writeFileSync(`${getPath}.threads.json`, JSON.stringify(readThreads(), null, 2));
+    console.error(`got ${text.length} chars into ${getPath}, threads into ${getPath}.threads.json`);
     ws.close();
     return;
   }
@@ -217,6 +271,28 @@ function onSynced() {
       }
       ws.close();
     }, 1500);
+    return;
+  }
+
+  if (watchPath) {
+    // One line per new @claude mention, on stdout, for a Monitor to wake on.
+    // Keys already reported are kept in the state file, so a restart is quiet.
+    let seen = new Set();
+    try { seen = new Set(JSON.parse(readFileSync(watchPath, "utf8"))); } catch { /* first run */ }
+    let timer = null;
+    const check = () => {
+      for (const m of mentions()) {
+        if (seen.has(m.key)) continue;
+        seen.add(m.key);
+        console.log(`MENTION thread=${m.thread} on=${JSON.stringify(m.on)} text=${JSON.stringify(m.text)}`);
+      }
+      writeFileSync(watchPath, JSON.stringify([...seen]));
+    };
+    const soon = () => { clearTimeout(timer); timer = setTimeout(check, 3000); };
+    threadsMap.observe(soon);
+    body.observe(soon);
+    check();
+    console.error(`watching for @claude; state in ${watchPath}`);
     return;
   }
 
