@@ -143,7 +143,7 @@ export default function ThreadPanel({
       <div className="mt-2 flex border border-border" onClick={(e) => e.stopPropagation()}>
         <button
           onClick={() => setShowReplyInput(true)}
-          className="flex-1 cursor-pointer px-2.5 py-1.5 text-sm uppercase tracking-wider text-muted transition-colors hover:bg-border"
+          className="flex-1 cursor-pointer px-2.5 py-1.5 text-sm font-medium uppercase tracking-wider text-ink transition-colors hover:bg-border"
         >
           Reply
         </button>
