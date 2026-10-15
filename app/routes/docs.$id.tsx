@@ -39,6 +39,7 @@ import HelpPanel from "~/components/HelpPanel";
 import LibraryGallery from "~/components/LibraryGallery";
 import DocGate from "~/components/DocGate";
 import ShareOnOpen from "~/components/ShareOnOpen";
+import RememberRoom from "~/components/RememberRoom";
 import SlidesView, { isSlideDeck } from "~/components/SlidesView";
 import PresentControls from "~/components/PresentControls";
 import {
@@ -177,6 +178,7 @@ function DocumentShell({
     >
       <DocumentLayout id={id} local={local} initialLive={initialLive} />
       <ShareOnOpen />
+      <RememberRoom />
     </DocumentProvider>
   );
 }

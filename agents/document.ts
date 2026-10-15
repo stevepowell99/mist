@@ -52,7 +52,6 @@ interface SeedBody {
   content?: string;
   threads?: unknown[];
   drive?: DriveMeta;
-  frontmatter?: string;
   driveVersion?: string | null;
 }
 

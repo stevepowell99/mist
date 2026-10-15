@@ -1,8 +1,9 @@
-import { useRef, useCallback } from "react";
+import { useRef, useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import type { Route } from "./+types/home";
 import { APP_NAME, generateDocumentId } from "~/shared/constants";
-import { deserializeThreads } from "~/lib/thread-serialization";
+import { deserializeThreads, serializeThreads } from "~/lib/thread-serialization";
+import { getRecentRooms, removeRecentRoom, type RecentRoom } from "~/lib/room-recent";
 import ThemeSelector from "~/components/ThemeSelector";
 import DriveBrowser from "~/components/DriveBrowser";
 import { QuickOpenTrigger } from "~/components/QuickOpen";
@@ -23,6 +24,9 @@ export function meta(_args: Route.MetaArgs) {
 export default function Home(_props: Route.ComponentProps) {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Read after mount: localStorage does not exist during server render.
+  const [rooms, setRooms] = useState<RecentRoom[]>([]);
+  useEffect(() => setRooms(getRecentRooms()), []);
 
   // Create an unbound room (no Drive file) and open it by its edit link.
   // A failed create must say so rather than leave the button doing nothing.
@@ -44,6 +48,14 @@ export default function Home(_props: Route.ComponentProps) {
     [navigate],
   );
 
+  // A minimal deck: the frontmatter makes it slides, and a level-1 or level-2
+  // heading starts each slide.
+  async function handleNewDeck() {
+    await createRoom({
+      content: "---\nformat: revealjs\n---\n\n# Deck title here\n\nSubtitle here\n\n## First slide\n\n- Point one\n- Point two\n",
+    });
+  }
+
   async function handleNewDocument() {
     // A visible starting shape, so a newcomer sees a heading and body to overwrite.
     await createRoom({ content: "# Title here\n\nText here\n" });
@@ -51,8 +63,10 @@ export default function Home(_props: Route.ComponentProps) {
 
   const handleUpload = useCallback(
     async (file: File) => {
+      // The agent seeds content verbatim, so the file's own frontmatter goes
+      // back into it (threads travel separately, as in /new).
       const { body, threads, frontmatter } = deserializeThreads(await file.text());
-      await createRoom({ content: body, threads, frontmatter });
+      await createRoom({ content: serializeThreads(body, [], frontmatter), threads });
     },
     [createRoom],
   );
@@ -105,8 +119,42 @@ export default function Home(_props: Route.ComponentProps) {
           >
             New blank document
           </button>
+          <button
+            onClick={handleNewDeck}
+            className="cursor-pointer underline-offset-2 hover:text-ink hover:underline"
+          >
+            New slide deck
+          </button>
           <span>or drag a .md file onto the page</span>
         </div>
+        {rooms.length > 0 && (
+          <div className="mt-4 mb-16 w-full max-w-2xl text-left text-sm">
+            <h2 className="mb-1 text-muted">Shared rooms opened in this browser</h2>
+            <ul className="max-h-48 overflow-y-auto border border-border">
+              {rooms.map((r) => (
+                <li key={r.id} className="flex items-center justify-between gap-3 border-b border-border px-3 py-1.5 last:border-b-0">
+                  <a href={`/docs/${r.id}?k=${encodeURIComponent(r.key)}`} className="truncate text-ink hover:underline">
+                    {r.title}
+                  </a>
+                  <span className="flex shrink-0 items-center gap-3 text-muted">
+                    {new Date(r.openedAt).toISOString().slice(0, 10)}
+                    <button
+                      onClick={() => {
+                        removeRecentRoom(r.id);
+                        setRooms(getRecentRooms());
+                      }}
+                      className="cursor-pointer hover:text-ink"
+                      title="Remove from this list (the room itself is kept)"
+                      aria-label={`Remove ${r.title} from this list`}
+                    >
+                      ×
+                    </button>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         <input
           ref={fileInputRef}
           type="file"
