@@ -74,6 +74,15 @@ Procedure above with it):
      `_tmp/doc.md.theirs`. Merge it into `_tmp/doc.md`, copy `.theirs` over
      `.base`, and put again. Never delete the `.base` to force a write.
 
+## Replies and watching for @claude
+
+- `--get` also saves the comment threads (author, replies) to `<file>.threads.json`.
+- Reply in a thread with `{ "op": "reply", "find": "<part of the thread's comment>", "text": "..." }` in `--edits`, as the editor's Reply box does.
+- To answer mentions while the session is open, run a Monitor on
+  `node scripts/gmist-bot.mjs "<doc URL>" --watch _tmp/<id>_watch.json 2>&1 | grep --line-buffered -E "MENTION|error|closed"`.
+  Each new `@claude` comment or reply prints one `MENTION` line; handle it with
+  `--get`, then edit, `--put` or reply. A Monitor lasts 30 minutes, so re-arm it.
+
 ## Quick note
 
 For a single appended comment with no review pass:
