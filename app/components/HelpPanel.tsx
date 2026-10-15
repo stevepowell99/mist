@@ -35,7 +35,7 @@ const LAYOUT: Shortcut[] = [
   { keys: [MOD, "Alt", "N"], label: "Present: presenter card (next slide, notes, timer)" },
   { keys: [MOD, "Alt", "-"], label: "Shrink editor pane (split view)" },
   { keys: [MOD, "Alt", "="], label: "Grow editor pane (split view)" },
-  { keys: [MOD, "P"], label: "Print to PDF (Drive files)" },
+  { keys: [MOD, "P"], label: "Print to PDF" },
 ];
 
 const PANELS: Shortcut[] = [
@@ -116,10 +116,10 @@ const SHARE_MENU: { name: string; desc: string }[] = [
   { name: "Copy edit link", desc: "Full edit access; the holder can also switch to Suggest." },
   { name: "Copy suggest link", desc: "Locked to Suggest: the holder proposes CriticMarkup changes, never edits directly. Someone who opened a suggest link sees a single Copy link." },
   { name: "Links open in preview", desc: "A tick-box (documents only): links copied while it is ticked open in the read-only preview view." },
-  { name: "Copy public view link", desc: "Decks from Drive: a view-only slide show that needs no sign-in." },
+  { name: "Copy public view link", desc: "Decks: a view-only slide show that needs no sign-in." },
   { name: "Open in Google Drive", desc: "Drive files: the file itself in Drive." },
   { name: "Download", desc: "Save the current text, with its comments, as a .md file. In a shared room this is the only way to keep a copy." },
-  { name: "Print to PDF", desc: "Drive files: a deck's slides or a document's A4 pages as a PDF (also Ctrl/Cmd+P)." },
+  { name: "Print to PDF", desc: "A deck's slides or a document's A4 pages as a PDF (also Ctrl/Cmd+P)." },
 ];
 
 const REVIEW: Shortcut[] = [
@@ -178,7 +178,7 @@ const FEATURES: { title: string; items: string[] }[] = [
     items: [
       "Sign in with Google, then open and browse Drive in a sidebar; edits autosave back to the file, conflict-safe",
       "Share by a secret link with an edit or a suggest role; whoever opens it must also sign in and be shared on the file in Drive",
-      "Print to PDF, citations from a .bib, and the shared slide library",
+      "Citations from a .bib, and the shared slide library",
       "The same file round-trips with Obsidian and a local editor",
     ],
   },
@@ -575,7 +575,7 @@ export default function HelpPanel() {
                   <p className="text-base text-ink/75">
                     <span className="text-ink">Shared rooms</span> have no file: the text lives in the room, and anyone
                     with the link edits it live. Download (in the Share menu) saves a copy as .md. Drive features (the
-                    folder sidebar, autosave, citations, print to PDF) do not apply in a room.
+                    folder sidebar, autosave, citations, the slide library) do not apply in a room.
                   </p>
                 </Group>
               </div>

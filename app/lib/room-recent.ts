@@ -41,10 +41,3 @@ export function removeRecentRoom(id: string): void {
     // As above.
   }
 }
-
-/** The first heading in the text (frontmatter skipped), else "Untitled". */
-export function roomTitle(text: string): string {
-  const body = text.replace(/^---\n[\s\S]*?\n---\n?/, "");
-  const m = body.match(/^#{1,6}\s+(.+?)\s*#*\s*$/m);
-  return m ? m[1].slice(0, 80) : "Untitled";
-}

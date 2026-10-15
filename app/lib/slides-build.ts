@@ -31,6 +31,19 @@ export function pdfTitle(name: string | undefined, theme = ""): string {
   return [file, slug(theme), APP_NAME, date].filter(Boolean).join("-");
 }
 
+/** The first heading in the text (frontmatter skipped), else "Untitled": the
+ *  name of a shared room, which has no file name. */
+export function firstHeading(text: string): string {
+  const body = stripFrontmatter(text).body;
+  const m = body.match(/^#{1,6}\s+(.+?)\s*#*\s*$/m);
+  return m ? m[1].slice(0, 80) : "Untitled";
+}
+
+/** A document's title: a Drive file's name, else a room's first heading. */
+export function docTitle(drive: { name?: string } | null, markdown: string): string {
+  return fileTitle(drive, firstHeading(markdown));
+}
+
 /** A document's name as a reader sees it: the file name without its extension. */
 export function fileTitle(drive: { name?: string } | null, fallback: string): string {
   const raw = drive?.name;
@@ -702,7 +715,7 @@ export function buildSlidesHtml(md: string, opts: BuildSlidesOptions): string {
     .join("\n");
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${pdfTitle(drive?.name, resolveThemeName(frontmatter))}</title>
+<title>${pdfTitle(docTitle(drive, md), resolveThemeName(frontmatter))}</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
 <style>${PREVIEW_CSS}</style>

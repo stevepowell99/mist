@@ -3,6 +3,7 @@ import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { serializeThreads } from "~/lib/thread-serialization";
 import { useDocument } from "~/lib/DocumentContext";
 import { isSlideDeck } from "~/components/SlidesView";
+import { docTitle } from "~/lib/slides-build";
 
 /** Build a share URL on the current document, optionally opening in Preview. */
 export function shareLink(href: string, key: string | null, asPreview: boolean): string {
@@ -91,10 +92,11 @@ export default function ShareButton() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${docId}.md`;
+    // Named for the document (Drive file name, or a room's first heading), not its id.
+    a.download = `${docTitle(drive, markdown).replace(/[\\/:*?"<>|]+/g, "-").trim() || docId}.md`;
     a.click();
     URL.revokeObjectURL(url);
-  }, [docId, markdown, threads, frontmatter]);
+  }, [docId, drive, markdown, threads, frontmatter]);
 
   return (
     <DropdownMenu.Root>

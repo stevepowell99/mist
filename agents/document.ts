@@ -757,6 +757,15 @@ class DocumentAgent extends Agent {
         );
       }
 
+      // A shared room's current text, for the print and slide pages: a room has
+      // no file, so the room itself is the source. Key-authorised like the rest.
+      if (url.searchParams.has("source")) {
+        if (!this.roleForKey(url.searchParams.get("k"))) return new Response("Not found", { status: 404 });
+        return new Response(JSON.stringify({ markdown: this.ensureInitialised().doc.getText("body").toString() }), {
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
       // Check whether this document exists
       const rows = this.sql<{ value: ArrayBuffer }>`
         SELECT value FROM doc_state WHERE key = 'exists'

@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useDocument } from "~/lib/DocumentContext";
-import { addRecentRoom, roomTitle } from "~/lib/room-recent";
+import { addRecentRoom } from "~/lib/room-recent";
+import { firstHeading } from "~/lib/slides-build";
 
 /**
  * Add an unbound room to this browser's recent-rooms list once it has synced,
@@ -15,7 +16,7 @@ export default function RememberRoom() {
     if (drive || !docKey || !synced) return;
     const text = doc.getText("body");
     let timer = 0;
-    const record = () => addRecentRoom({ id, key: docKey, title: roomTitle(text.toString()), openedAt: Date.now() });
+    const record = () => addRecentRoom({ id, key: docKey, title: firstHeading(text.toString()), openedAt: Date.now() });
     record();
     const onChange = () => {
       clearTimeout(timer);

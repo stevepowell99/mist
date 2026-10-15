@@ -1,11 +1,11 @@
 import type { Route } from "./+types/print.$id.pdf";
 import { isValidDocumentId } from "~/shared/constants";
 import { isLocalFileId } from "~/lib/localfs-ids";
-import { resolveDoc } from "~/lib/doc-resolve.server";
+import { resolveDoc, readRoomSource } from "~/lib/doc-resolve.server";
 import { getCloudflare } from "~/lib/cloudflare.server";
 import { authorizeDoc, mintAssetTokenForDoc, type DriveSessionEnv } from "~/lib/drive-access.server";
 import { printPdf } from "~/lib/pdf.server";
-import { fileTitle } from "~/lib/slides-build";
+import { docTitle } from "~/lib/slides-build";
 
 /**
  * A document as a PDF file, printed by headless Chrome from its `/print/:id`
@@ -33,7 +33,8 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
   const page = new URL(fallback);
   page.searchParams.set("token", (await mintAssetTokenForDoc(sessionEnv, true)) ?? "");
   fallback.searchParams.set("autoprint", "");
-  const name = fileTitle(drive, "").replace(/&/g, "&amp;").replace(/</g, "&lt;");
+  const title = docTitle(drive, drive ? "" : await readRoomSource(env, id, key));
+  const name = title.replace(/&/g, "&amp;").replace(/</g, "&lt;");
   return printPdf({
     env,
     request,

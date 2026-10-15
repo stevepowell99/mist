@@ -49,3 +49,12 @@ export async function resolveDoc(
   );
   return (await res.json()) as ResolvedDoc;
 }
+
+/** A shared room's current text (a room has no Drive file to read). Throws
+ *  rather than returning "", so a failed read never prints as a blank page. */
+export async function readRoomSource(env: Env, id: string, docKey: string | null): Promise<string> {
+  const stub = await getAgentByName(env.DocumentAgent, id);
+  const res = await stub.fetch(new Request(`https://do/?source&k=${encodeURIComponent(docKey ?? "")}`));
+  if (!res.ok) throw new Error(`could not read the room (${res.status})`);
+  return ((await res.json()) as { markdown: string }).markdown;
+}

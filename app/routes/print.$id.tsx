@@ -3,7 +3,7 @@ import { data, isRouteErrorResponse } from "react-router";
 import type { Route } from "./+types/print.$id";
 import { isValidDocumentId } from "~/shared/constants";
 import { isLocalFileId } from "~/lib/localfs-ids";
-import { resolveDoc } from "~/lib/doc-resolve.server";
+import { resolveDoc, readRoomSource } from "~/lib/doc-resolve.server";
 import { getCloudflare } from "~/lib/cloudflare.server";
 import { getDriveAccessToken, driveRead, driveConfigured } from "~/lib/google.server";
 import { authorizeDoc, mintAssetTokenForDoc, type DriveSessionEnv } from "~/lib/drive-access.server";
@@ -15,7 +15,7 @@ import { runMermaid } from "~/lib/mermaid";
 import { POS_ANCHOR_CSS } from "~/lib/source-anchors";
 import { themeCss } from "~/lib/themes";
 import { rawFrontmatter } from "~/lib/thread-serialization";
-import { fileTitle, pdfTitle } from "~/lib/slides-build";
+import { docTitle, pdfTitle } from "~/lib/slides-build";
 
 /**
  * A document as A4 pages, for printing: the deck's `/slides/:id?print-pdf`,
@@ -40,26 +40,34 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
   const { env } = getCloudflare(context);
   const sessionEnv = env as unknown as DriveSessionEnv;
 
-  const { role, drive } = await resolveDoc(env, id, url.searchParams.get("k") ?? "");
+  const key = url.searchParams.get("k") ?? "";
+  const { role, drive } = await resolveDoc(env, id, key);
   if (!role) throw data("Not found.", { status: 404 });
-  if (!drive) throw data("This document has no file to print.", { status: 400 });
   if (!(await verifyAssetToken(url.searchParams.get("token"), sessionEnv.SESSION_SECRET ?? ""))) {
     const auth = await authorizeDoc(sessionEnv, request, drive, role);
     if (auth.status === "needsAuth") throw data("Sign in to gmist to print this document.", { status: 401 });
     if (auth.status !== "ok") throw data("You do not have access to this file.", { status: 403 });
   }
-  if (!driveConfigured(env)) throw data("Drive is not configured.", { status: 501 });
-
-  const t = await getDriveAccessToken(env);
-  const markdown = (await driveRead(t, drive.fileId)).text;
+  // A shared room has no file: its text comes from the room, with no .bib.
+  let markdown: string;
+  let bib = "";
+  if (drive) {
+    if (!driveConfigured(env)) throw data("Drive is not configured.", { status: 501 });
+    const t = await getDriveAccessToken(env);
+    markdown = (await driveRead(t, drive.fileId)).text;
+    bib = await bibForSource(env, t, drive, markdown, id);
+  } else {
+    markdown = await readRoomSource(env, id, key);
+  }
+  const heading = docTitle(drive, markdown);
   return {
     markdown,
     drive,
-    bib: await bibForSource(env, t, drive, markdown, id),
+    bib,
     // For the images: headless Chrome fetches them with this, having no session.
     assetToken: (await mintAssetTokenForDoc(sessionEnv, true)) ?? "",
-    heading: fileTitle(drive, ""),
-    pdfName: pdfTitle(drive.name),
+    heading,
+    pdfName: pdfTitle(heading),
     browserPrint: url.searchParams.has("autoprint"),
   };
 }

@@ -1,7 +1,7 @@
 import type { Route } from "./+types/slides.$id";
 import { isValidDocumentId } from "~/shared/constants";
 import { isLocalFileId } from "~/lib/localfs-ids";
-import { resolveDoc } from "~/lib/doc-resolve.server";
+import { resolveDoc, readRoomSource } from "~/lib/doc-resolve.server";
 import { getCloudflare } from "~/lib/cloudflare.server";
 import { getDriveAccessToken, driveRead, driveConfigured } from "~/lib/google.server";
 import { buildSlidesHtml } from "~/lib/slides-build";
@@ -33,12 +33,17 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
   if (!role) return new Response("forbidden", { status: 403 });
 
   try {
-    if (!drive) return new Response("document is not a deck", { status: 400 });
-    if (!driveConfigured(env)) return new Response("Drive not configured", { status: 501 });
-    const t = await getDriveAccessToken(env);
-    const source = (await driveRead(t, drive.fileId)).text;
-
-    const bib = await bibForSource(env, t, drive, source, id);
+    // A shared room has no file: its text comes from the room, with no .bib.
+    let source: string;
+    let bib = "";
+    if (drive) {
+      if (!driveConfigured(env)) return new Response("Drive not configured", { status: 501 });
+      const t = await getDriveAccessToken(env);
+      source = (await driveRead(t, drive.fileId)).text;
+      bib = await bibForSource(env, t, drive, source, id);
+    } else {
+      source = await readRoomSource(env, id, docKey);
+    }
     const bibLib = bib.trim() ? parseBib(bib) : null;
 
     const html = buildSlidesHtml(stripMistBanner(source), {
