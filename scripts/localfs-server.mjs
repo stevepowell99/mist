@@ -444,6 +444,64 @@ async function statOf(abs) {
   }
 }
 
+/**
+ * Find a Drive file's mirror copy from Drive for Desktop's own databases, read
+ * only. Per account folder under %LOCALAPPDATA%\Google\DriveFS:
+ * `mirror_metadata_sqlite.db` maps the cloud id to a stable id,
+ * `mirror_sqlite.db` holds each mirrored item's name and parent, walked up to
+ * the mirror root, and `root_preference_sqlite.db` says where that root sits on
+ * disk. These are Google's undocumented schemas, so any failure is a miss (the
+ * image does not load) rather than an error, and the result must exist on disk.
+ * Mirror mode only: a streamed (G:/H:) file has no row here.
+ */
+async function driveIdToPath(cloudId) {
+  const base = path.join(process.env.LOCALAPPDATA ?? "", "Google", "DriveFS");
+  let DatabaseSync;
+  try {
+    ({ DatabaseSync } = await import("node:sqlite"));
+  } catch {
+    return null; // a Node without built-in SQLite
+  }
+  const open = (file) => new DatabaseSync(path.join(base, file), { readOnly: true });
+  let roots;
+  try {
+    const db = open("root_preference_sqlite.db");
+    roots = db.prepare("select root_id, account_token, last_seen_absolute_path as abs from roots").all();
+    db.close();
+  } catch {
+    return null; // no Drive for Desktop here
+  }
+  for (const account of new Set(roots.map((r) => r.account_token))) {
+    let meta, mirror;
+    try {
+      meta = open(path.join(account, "mirror_metadata_sqlite.db"));
+      mirror = open(path.join(account, "mirror_sqlite.db"));
+      const stable = meta.prepare("select stable_id from stable_ids where cloud_id = ?").get(cloudId);
+      if (!stable) continue;
+      const byStable = mirror.prepare("select local_stable_id, parent_local_stable_id, local_filename, is_root from mirror_item where stable_id = ?");
+      const byLocal = mirror.prepare("select local_stable_id, parent_local_stable_id, local_filename, is_root from mirror_item where local_stable_id = ?");
+      const names = [];
+      let item = byStable.get(stable.stable_id);
+      for (let guard = 0; item && !item.is_root && guard < 64; guard++) {
+        names.unshift(item.local_filename);
+        item = byLocal.get(item.parent_local_stable_id);
+      }
+      if (!item?.is_root) continue;
+      const rc = mirror.prepare("select root_id from root_config where local_stable_id = ?").get(item.local_stable_id);
+      const root = roots.find((r) => r.account_token === account && r.root_id === rc?.root_id);
+      if (!root?.abs) continue;
+      const abs = path.join(root.abs, ...names);
+      if (fsSync.existsSync(abs)) return abs;
+    } catch {
+      // schema drift or a locked file in one account; try the next
+    } finally {
+      meta?.close();
+      mirror?.close();
+    }
+  }
+  return null;
+}
+
 function skippable(name) {
   return name.startsWith(".") || SLUDGE.has(name) || /_files$/.test(name) || name === "desktop.ini";
 }
@@ -492,6 +550,16 @@ const handlers = {
     const abs = path.resolve(base, rel);
     const st = await fs.stat(abs).catch(() => null);
     if (!st) throw new HttpError(404, `not found: ${rel}`);
+    return { path: abs };
+  },
+
+  /** A Drive file id -> its copy in this machine's Drive for Desktop mirror.
+   *  How a deck's `drive:<id>` library image loads in local mode. */
+  "GET /drive-id": async (params) => {
+    const id = params.get("id") ?? "";
+    if (!/^[A-Za-z0-9_-]{10,}$/.test(id)) throw new HttpError(400, "not a Drive file id");
+    const abs = await driveIdToPath(id);
+    if (!abs) throw new HttpError(404, `Drive file ${id} is not in a Drive for Desktop mirror on this machine`);
     return { path: abs };
   },
 

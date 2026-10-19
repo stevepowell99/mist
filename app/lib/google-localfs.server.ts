@@ -61,6 +61,19 @@ function pathOf(id: string): string {
   return p;
 }
 
+/**
+ * The path behind an id for a READ, where a Drive file id is also accepted and
+ * resolved to its Drive for Desktop mirror copy (the sidecar's /drive-id). That
+ * is how a deck's `drive:<id>` library image loads in local mode. Only meta and
+ * download take this route: a write, or a listing whose ids would end up in a
+ * document, stays on local ids alone.
+ */
+async function readPathOf(token: string, id: string): Promise<string> {
+  const p = idToPath(id);
+  if (p !== null) return p;
+  return (await call<{ path: string }>(token, "/drive-id" + q({ id }))).path;
+}
+
 async function call<T>(token: string, pathAndQuery: string, init?: RequestInit): Promise<T> {
   const { base, secret } = unpack(token);
   const res = await fetch(base + pathAndQuery, {
@@ -112,10 +125,11 @@ export async function resolveLocalPath(
 }
 
 export async function driveGetMeta(token: string, fileId: string): Promise<DriveFileMeta> {
-  const stat = await call<Stat>(token, "/stat" + q({ path: pathOf(fileId) }));
+  const abs = await readPathOf(token, fileId);
+  const stat = await call<Stat>(token, "/stat" + q({ path: abs }));
   if (!stat.exists) throw new Error("local file not found");
   return {
-    id: fileId,
+    id: pathToId(abs),
     name: stat.name,
     parents: stat.parent ? [pathToId(stat.parent)] : undefined,
     version: stat.version,
@@ -269,7 +283,7 @@ export async function driveTrash(token: string, fileId: string): Promise<void> {
 
 export async function driveDownload(token: string, fileId: string): Promise<ArrayBuffer> {
   const { base, secret } = unpack(token);
-  const res = await fetch(base + "/raw" + q({ path: pathOf(fileId) }), {
+  const res = await fetch(base + "/raw" + q({ path: await readPathOf(token, fileId) }), {
     headers: { "X-Localfs-Token": secret },
   });
   if (!res.ok) throw new Error(`local read failed (${res.status})`);

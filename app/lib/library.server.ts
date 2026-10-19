@@ -55,9 +55,16 @@ export async function getLibraryFolders(token: string, env: LibraryEnv): Promise
  *  it). The mandatory gate for id-mode asset / fragment reads, so those endpoints
  *  never become a read-any-Drive-file hole. Walks parents a few hops. */
 export async function isInLibrary(token: string, env: LibraryEnv, fileId: string): Promise<boolean> {
-  const root = libraryRoot(env);
+  let root = libraryRoot(env);
   if (!root) return false;
   if (fileId === root) return true;
+  // The root as the backend names it: the same id on Drive, the mirror folder's
+  // own id in local mode, where the parents walked below are local ids too.
+  try {
+    root = (await driveGetMeta(token, root)).id;
+  } catch {
+    return false;
+  }
   let id: string | undefined = fileId;
   let guard = 0;
   while (id && guard++ < 6) {
