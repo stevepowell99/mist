@@ -433,6 +433,12 @@ class ImageWidget extends WidgetType {
     return other.src === this.src && other.alt === this.alt;
   }
   toDOM() {
+    // The root is a wrapper so a broken image can be swapped INSIDE it.
+    // CodeMirror ignores mutations within a widget's own DOM, but replacing the
+    // root itself changes the line around it, which it reads back as typed text:
+    // the fallback below was being saved into the file in place of the image.
+    const wrap = document.createElement("span");
+    wrap.className = "cm-lp-imgwrap";
     const img = document.createElement("img");
     img.className = "cm-lp-img";
     img.src = this.src;
@@ -445,7 +451,8 @@ class ImageWidget extends WidgetType {
         textContent: `[image not found: ${this.src}]`,
       }));
     });
-    return img;
+    wrap.append(img);
+    return wrap;
   }
   get estimatedHeight() {
     return 120;

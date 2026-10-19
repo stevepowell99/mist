@@ -356,8 +356,11 @@ body {
 /* Block, not inline: an inline image drags a full line's leading above and
    below it, which leaves a hole in the page. Markdown images sit on their own
    line in practice. */
+.cm-lp-imgwrap,
 .cm-lp-img {
   display: block;
+}
+.cm-lp-img {
   max-width: 100%;
   max-height: 24rem;
   margin: 0.35em 0;
@@ -465,6 +468,7 @@ body {
   height: 0;
 }
 .cm-lp-img-missing {
+  line-height: 1.4; /* the image line sets 0 */
   font-family: var(--font-mono);
   font-size: 0.8em;
   color: var(--color-muted);
