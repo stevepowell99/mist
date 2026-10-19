@@ -17,10 +17,12 @@ import type { DriveMeta } from "~/shared/types";
 export default function PlainPreview({
   markdown,
   drive,
+  assetToken,
   bibLib,
 }: {
   markdown: string;
   drive: DriveMeta | null;
+  assetToken: string | null;
   bibLib: BibLibrary | null;
 }) {
   const container = useRef<HTMLDivElement>(null);
@@ -41,10 +43,10 @@ export default function PlainPreview({
         : renderDocumentHtml(markdown, {
         drive,
         origin: typeof window !== "undefined" ? window.location.origin : "",
-        driveToken: "",
+        driveToken: drive ? assetToken ?? "" : "",
         bibLib,
           }),
-    [mounted, markdown, drive, bibLib],
+    [mounted, markdown, drive, assetToken, bibLib],
   );
 
   useEffect(() => {

@@ -130,10 +130,12 @@ export default function PlainEditor({
   fileId,
   name,
   folderId,
+  assetToken,
 }: {
   fileId: string;
   name: string;
   folderId?: string;
+  assetToken: string | null;
 }) {
   const host = useRef<HTMLDivElement | null>(null);
   const view = useRef<EditorView | null>(null);
@@ -205,9 +207,9 @@ export default function PlainEditor({
     assetCtx.current = {
       drive: folderId ? ({ fileId, name, folderId } as DriveMeta) : null,
       origin: typeof window === "undefined" ? "" : window.location.origin,
-      driveToken: "",
+      driveToken: folderId ? assetToken ?? "" : "",
     };
-  }, [fileId, name, folderId]);
+  }, [fileId, name, folderId, assetToken]);
   const resolveSrc = useCallback((src: string) => resolveAssetSrc(src, assetCtx.current), []);
 
   // Citations. The route resolves the document's `bibliography:` paths if it has
@@ -396,6 +398,7 @@ export default function PlainEditor({
   const slideProps = {
     markdown: text,
     drive: folderId ? ({ fileId, name, folderId } as DriveMeta) : null,
+    assetToken,
     frontmatter,
     cursorOffset,
     followCursor: true,
@@ -872,6 +875,7 @@ export default function PlainEditor({
               <PlainPreview
                 markdown={text}
                 drive={folderId ? ({ fileId, name, folderId } as DriveMeta) : null}
+                assetToken={assetToken}
                 bibLib={bibLib}
               />
             )}
