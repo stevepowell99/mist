@@ -210,6 +210,15 @@ window.addEventListener("message", function(e){
 // own window, so its key events never reach the app otherwise. Reveal's own keys
 // carry no modifier, so they are untouched.
 window.addEventListener("keydown", function(e){
+  // Enter in the overview opens the selected slide. Reveal 5 has no Enter
+  // binding there (only a click does it), and binding 13 in its keyboard config
+  // would swallow Enter on every slide, so it is handled here, overview only.
+  if (e.key === "Enter" && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && Reveal.isOverview && Reveal.isOverview()) {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    Reveal.toggleOverview(false);
+    return;
+  }
   // In the embedded preview, plain F enters the app's single Present mode instead
   // of reveal's own iframe fullscreen, so there is one present path. The
   // standalone /slides page (not in an iframe) keeps reveal's native F.
