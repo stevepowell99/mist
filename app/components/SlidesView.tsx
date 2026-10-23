@@ -71,6 +71,19 @@ export default function SlidesView({
   }, []);
 
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  // Reveal's arrow keys only reach the deck once keyboard focus is inside its
+  // iframe, and on open it sits in the app page, so the first arrow did nothing
+  // until the slide was clicked. Hand focus to the deck as it loads, unless
+  // someone is typing in a visible field (the editor in split view keeps it).
+  const focusDeckIfIdle = () => {
+    const a = document.activeElement as HTMLElement | null;
+    const typing =
+      !!a &&
+      a !== document.body &&
+      (a.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) &&
+      a.getClientRects().length > 0;
+    if (!typing) iframeRef.current?.focus();
+  };
   /**
    * A callback ref, NOT `ref={iframeRef}`, and this is load-bearing.
    *
@@ -208,6 +221,7 @@ export default function SlidesView({
       // was booting (content syncing in after a reload), the srcDoc it loaded is
       // stale, and this is what refreshes it without needing manual reloads.
       if (d?.type === "mist-need-goto") {
+        focusDeckIfIdle();
         const stale = sectionsRef.current !== embeddedSectionsRef.current;
         if (stale) {
           iframeRef.current?.contentWindow?.postMessage(
@@ -231,7 +245,10 @@ export default function SlidesView({
 
   // Belt-and-braces: also push the slide on iframe load. The deck reveals on
   // whichever arrives first; both set the same target.
-  const onLoad = sendInitialGoto;
+  const onLoad = () => {
+    focusDeckIfIdle();
+    sendInitialGoto();
+  };
 
   // Jump the deck to a peer's slide when their avatar is clicked (PresenceBar
   // dispatches the slide index on the window).
