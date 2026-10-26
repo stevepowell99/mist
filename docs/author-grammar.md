@@ -93,6 +93,20 @@ The two column syntaxes are intentionally different and both stay supported:
 A document that needs to render well in both should prefer simple top-to-bottom
 flow; columns will not round-trip between the two.
 
+## Step-by-step reveal (decks only)
+
+- `.fragment` on a div, span or image reveals that one element on the next click.
+- `.incremental` reveals each child of the box it marks on its own click, a list
+  giving each top-level item its own click. On a fenced div it behaves as in
+  Quarto (`::: {.incremental}` around a list); on a slide heading
+  (`## Title {.incremental}`) the box is the whole slide except its title.
+- Inside an incremental box, a child marked `.nonincremental`, `.fragment` or
+  `.incremental` is left alone, as are speaker notes. Wrap anything that should
+  be there from the start, such as a `{.brand}` logo, in `::: {.nonincremental}`.
+- The rule is applied in the deck (`markIncremental` in `app/lib/slides-runtime.ts`)
+  and mirrored over the source for the editor's cursor follow
+  (`incrementalFragmentCount` in `app/lib/slide-cursor.ts`).
+
 ## Frontmatter settings (gmist decks and docs)
 
 gmist reads a small set of YAML keys, top-level **or** nested under

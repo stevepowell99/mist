@@ -160,7 +160,7 @@ function groupSlides(flat: string[]): string[][] {
   return groups;
 }
 
-function classesFrom(attr: string): string[] {
+export function classesFrom(attr: string): string[] {
   // Drop quoted values first so a path like "../img/a.png" inside
   // background-image="..." does not yield a bogus ".png" class.
   const noQuotes = attr.replace(/=\s*"[^"]*"/g, "");

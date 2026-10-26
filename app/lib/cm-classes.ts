@@ -114,8 +114,8 @@ const BUILTIN_CLASSES: Record<string, string> = {
   "highlight-current-blue": "Fragment: blue on its step",
   // quarto / reveal layout + text helpers
   columns: "Row of side-by-side columns (each child is a column; set width= for an uneven split)",
-  incremental: "Quarto: reveal items one by one",
-  nonincremental: "Quarto: reveal all at once",
+  incremental: "Reveal each child (each list item) on its own click; on a slide heading, the whole slide",
+  nonincremental: "Inside an incremental slide: show this block all at once",
   smaller: "Quarto: smaller slide text",
   center: "Centre slide content",
   "r-fit-text": "Reveal: scale text to fill",

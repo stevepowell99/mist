@@ -1,4 +1,27 @@
 /**
+ * `.incremental`: each child of the marked box arrives on its own click, a list
+ * giving each of its items a click rather than one for the whole list. On a
+ * slide heading the box is the whole slide, whose title stays put. Notes and any
+ * child already `.fragment`, `.incremental` or `.nonincremental` are left alone.
+ * `incrementalFragmentCount` in slide-cursor.ts applies the same rule to the
+ * source for the cursor follow; tests/unit/lib/slides-incremental.test.ts holds
+ * the two to agreement. The deck runs this function's own source text, so it
+ * must stay self-contained: no imports and no named inner functions (a bundler
+ * may wrap those in a helper the deck does not have).
+ */
+export function markIncremental(root: Element): void {
+  root.querySelectorAll(".incremental").forEach((box) => {
+    const kids = Array.from(box.children);
+    if (box.tagName === "SECTION" && kids[0] && /^H[1-6]$/.test(kids[0].tagName)) kids.shift();
+    for (const el of kids) {
+      if (el.matches("aside.notes, .fragment, .incremental, .nonincremental, br, script, style")) continue;
+      const items = /^(UL|OL)$/.test(el.tagName) ? Array.from(el.children) : [el];
+      for (const it of items) it.classList.add("fragment");
+    }
+  });
+}
+
+/**
  * The in-iframe runtime for the slides deck: reveal init, the cursor-driven
  * goto sync, in-place rerender (destroy + reinitialize), the overview wheel
  * scroll, the entrance-animation replay and the modifier-chord forwarding. Split
@@ -20,7 +43,11 @@ export function deckRuntimeScript(opts: {
 // Keep reveal's own controls, progress bar, overview (O) and keyboard
 // shortcuts (F fullscreen, S notes, arrows) on, and add the hamburger menu
 // plugin if it loaded (best-effort, like Quarto's decks).
-var revealPlugins=[RevealMarkdown,RevealNotes];
+// .incremental (markIncremental) runs as a plugin after the markdown one, so the
+// classes are in place before reveal counts fragments or lays out print pages.
+var markIncremental = ${markIncremental.toString()};
+function MistIncremental(){ return { id: 'mist-incremental', init: function(deck){ markIncremental(deck.getRevealElement()); } }; }
+var revealPlugins=[RevealMarkdown,RevealNotes,MistIncremental];
 // Cursor-driven sync: the editor posts {type:"mist-goto", h} as the cursor
 // moves and after each rebuild. Buffer the target so a message that arrives
 // before reveal is ready (e.g. right after the iframe reloads) still lands,
