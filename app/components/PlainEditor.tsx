@@ -11,7 +11,7 @@ import { mistFolds } from "~/lib/cm-folding";
 import { wrapKeymap } from "~/lib/cm-shortcuts";
 import { criticMarkup } from "~/lib/cm-criticmarkup";
 import { fencedDivStyle } from "~/lib/cm-fenced-divs";
-import { citationSource } from "~/lib/cm-citations";
+import { bibField, citationSource, setBib } from "~/lib/cm-citations";
 import { slashSource } from "~/lib/cm-slash";
 import { iconSource } from "~/lib/cm-icons";
 import { classSource } from "~/lib/cm-classes";
@@ -79,9 +79,9 @@ import type { DriveMeta } from "~/shared/types";
  * on any relative image path and left absolute ones working, so the whole live
  * layer collapsed on some documents and not others.
  */
-function liveLayer(resolveSrc: (src: string) => string, getBib: () => BibLibrary | null) {
+function liveLayer(resolveSrc: (src: string) => string) {
   return [
-    livePreview({ resolveSrc, getBib }),
+    livePreview({ resolveSrc }),
     // Both classes, because they do different halves of the job: live-preview
     // sets the typography, clean-view hides the delimiters. Only the first is
     // what shipped, which gave headings at heading size with their hashes still
@@ -245,10 +245,13 @@ export default function PlainEditor({
     };
   }, [folderId, bibPaths]);
 
-  // The live layer reads the library through a ref, so a new one does not rebuild
-  // the editor; keeping it current is an effect rather than a render-time write.
+  // The library lives in the editor state (`bibField`), so it arrives as a
+  // transaction and the live layer redraws its citations, inline and on slides,
+  // without a rebuild. The ref seeds the field if the editor is built later.
   useEffect(() => {
     bibRef.current = bibLib;
+    const v = view.current;
+    if (v && v.state.field(bibField, false) !== bibLib) v.dispatch({ effects: setBib.of(bibLib) });
   }, [bibLib]);
 
   useEffect(() => {
@@ -307,7 +310,7 @@ export default function PlainEditor({
     layoutRef.current = layout;
     view.current?.dispatch({
       effects: liveOn.current.reconfigure(
-        layout === "live" ? liveLayer(resolveSrc, () => bibRef.current) : [],
+        layout === "live" ? liveLayer(resolveSrc) : [],
       ),
     });
   }, [layout, resolveSrc]);
@@ -579,9 +582,8 @@ export default function PlainEditor({
             // is only on for the Live view: built unconditionally, a remembered
             // Editor view opened typeset anyway, because the effect that turns
             // it off had already run and found no editor to reconfigure.
-            liveOn.current.of(
-              layoutRef.current === "live" ? liveLayer(resolveSrc, () => bibRef.current) : [],
-            ),
+            bibField.init(() => bibRef.current),
+            liveOn.current.of(layoutRef.current === "live" ? liveLayer(resolveSrc) : []),
             bracketMatching(),
             closeBrackets(),
             codeFolding(),
@@ -592,7 +594,7 @@ export default function PlainEditor({
             autocompletion({
               override: [
                 slashSource(),
-                citationSource(() => bibRef.current),
+                citationSource(),
                 classSource(() => CSS_CLASSES),
                 iconSource(),
               ],

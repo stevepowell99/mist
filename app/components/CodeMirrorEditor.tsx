@@ -28,7 +28,7 @@ import { fencedDivStyle } from "~/lib/cm-fenced-divs";
 import { suggestMode } from "~/lib/cm-suggest";
 import { wrapKeymap, wrapOnSelection } from "~/lib/cm-shortcuts";
 import { activeCommentField, setActiveComment } from "~/lib/cm-active-comment";
-import { citationSource } from "~/lib/cm-citations";
+import { bibField, citationSource, setBib } from "~/lib/cm-citations";
 import { classSource } from "~/lib/cm-classes";
 import { slashSource, slashWrapSelection } from "~/lib/cm-slash";
 import { iconSource } from "~/lib/cm-icons";
@@ -169,8 +169,8 @@ export default function CodeMirrorEditor({
   // editor never rebuilds if the role were to change.
   const canEditRef = useRef(canEdit);
   canEditRef.current = canEdit;
-  // Live bib library for the @-picker, read at completion time so the editor
-  // never rebuilds when the library loads.
+  // The bib library, for seeding `bibField` when the editor is (re)built; after
+  // that a change reaches it as a `setBib` effect, never a rebuild.
   const bibRef = useRef<BibLibrary | null>(bibLibrary);
   bibRef.current = bibLibrary;
   // Live class list for the `.`-picker, read at completion time so the editor
@@ -191,11 +191,7 @@ export default function CodeMirrorEditor({
   // or the file's folder changes.
   const srcRef = useRef(resolveSrc);
   srcRef.current = resolveSrc;
-  const liveExt = () =>
-    livePreview({
-      resolveSrc: (s) => srcRef.current?.(s) ?? s,
-      getBib: () => bibRef.current,
-    });
+  const liveExt = () => livePreview({ resolveSrc: (s) => srcRef.current?.(s) ?? s });
   const spellcheckExt = (l: string) =>
     EditorView.contentAttributes.of({ spellcheck: "true", autocorrect: "off", autocapitalize: "off", lang: l });
   // The two view-wide classes (clean view's hidden delimiters, live preview's
@@ -280,12 +276,13 @@ export default function CodeMirrorEditor({
         markdown({ base: markdownLanguage }),
         EditorView.lineWrapping,
         langCompRef.current!.of(spellcheckExt(langRef.current)),
+        bibField.init(() => bibRef.current),
         liveCompRef.current!.of(liveRef.current ? liveExt() : []),
         attrsCompRef.current!.of(editorClasses(cleanRef.current, liveRef.current)),
         autocompletion({
           override: [
             slashSource(),
-            citationSource(() => bibRef.current),
+            citationSource(),
             classSource(() => classRef.current),
             iconSource(),
           ],
@@ -356,16 +353,20 @@ export default function CodeMirrorEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cleanView, live]);
 
-  // Live preview: swap the decoration extension in. Also re-run when the bib
-  // library arrives, which is a fetch that lands after the first build: the
-  // plugin only rebuilds on a doc, viewport or selection change, so without this
-  // the citations sit there as `[@key]` until the next keystroke.
+  // Live preview: swap the decoration extension in.
   useEffect(() => {
     const view = viewRef.current;
     if (!view || !liveCompRef.current) return;
     view.dispatch({ effects: liveCompRef.current.reconfigure(live ? liveExt() : []) });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [live, bibLibrary]);
+  }, [live]);
+
+  // The bib library is a fetch that lands after the first build. Handing it in
+  // as a transaction is what makes the live layer redraw its citations.
+  useEffect(() => {
+    const view = viewRef.current;
+    if (view && view.state.field(bibField, false) !== bibLibrary) view.dispatch({ effects: setBib.of(bibLibrary) });
+  }, [bibLibrary]);
 
   // Apply a language change (frontmatter `lang:`) without rebuilding the editor.
   useEffect(() => {

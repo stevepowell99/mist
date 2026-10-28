@@ -3,6 +3,7 @@ import DOMPurify from "dompurify";
 import { applyGrammar, stripFrontmatter } from "~/lib/slides-build";
 import { renderCriticHtml } from "~/lib/critic";
 import { insertPosAnchors } from "~/lib/source-anchors";
+import { convertCitations, type BibLibrary } from "~/lib/citations";
 
 /** Render a slide fragment's markdown to styled HTML for a thumbnail, the same
  *  way the document Preview does: the house grammar is global CSS, so a `.preview`
@@ -20,11 +21,14 @@ export function slideThumbHtml(md: string): string {
  *  as styled spans rather than left as literal `{++ ++}` braces, since a slide
  *  can carry a pending suggestion or comment while some other slide is the one
  *  being edited. `source` is already slide-relative (a `slideSpans` span's own
- *  text), so the anchors need no frontmatter offset. */
-export function slideLiveHtml(source: string): string {
+ *  text), so the anchors need no frontmatter offset. Citations become inline
+ *  APA from `bib`, at the same point in the pipeline as the document preview
+ *  (render-document.ts); the deck's References slide is reveal's alone. */
+export function slideLiveHtml(source: string, bib: BibLibrary | null = null): string {
   const anchored = insertPosAnchors(source);
   const converted = applyGrammar(anchored);
-  const withCritic = renderCriticHtml(converted);
+  const cited = bib ? convertCitations(converted, bib).text : converted;
+  const withCritic = renderCriticHtml(cited);
   return DOMPurify.sanitize(marked.parse(withCritic, { async: false }) as string);
 }
 

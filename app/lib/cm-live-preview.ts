@@ -19,6 +19,7 @@ import { criticSpans } from "./critic";
 import { CALLOUT_ALIAS, isSlideDeck, slideSpans, stripFrontmatter } from "./slides-build";
 import { slideLiveHtml } from "./slide-thumb";
 import { citationSpans, type BibLibrary } from "./citations";
+import { bibOf } from "./cm-citations";
 
 /**
  * Live preview (the fourth View): the markdown syntax marks recede while you
@@ -606,19 +607,20 @@ function build(view: EditorView, resolveSrc: (src: string) => string, bib: BibLi
  * keystroke or a click happened to trigger a rebuild. A large adopted change
  * does the same thing mid-session, which is why it looked intermittent.
  */
-const livePlugin = (resolveSrc: (src: string) => string, getBib: () => BibLibrary | null) =>
+const livePlugin = (resolveSrc: (src: string) => string) =>
   ViewPlugin.fromClass(
     class {
       built: Built;
       tree: Tree;
       constructor(view: EditorView) {
-        this.built = build(view, resolveSrc, getBib());
+        this.built = build(view, resolveSrc, bibOf(view.state));
         this.tree = syntaxTree(view.state);
       }
       update(u: ViewUpdate) {
         const tree = syntaxTree(u.state);
-        if (u.docChanged || u.viewportChanged || u.selectionSet || tree !== this.tree) {
-          this.built = build(u.view, resolveSrc, getBib());
+        const bib = bibOf(u.state);
+        if (u.docChanged || u.viewportChanged || u.selectionSet || tree !== this.tree || bib !== bibOf(u.startState)) {
+          this.built = build(u.view, resolveSrc, bib);
           this.tree = tree;
         }
       }
@@ -734,16 +736,17 @@ class SlideWidget extends WidgetType {
   constructor(
     readonly source: string,
     readonly from: number,
+    readonly bib: BibLibrary | null,
   ) {
     super();
   }
   eq(other: SlideWidget) {
-    return other.source === this.source;
+    return other.source === this.source && other.bib === this.bib;
   }
   toDOM(view: EditorView) {
     const wrap = document.createElement("div");
     wrap.className = "cm-lp-slide preview font-serif";
-    wrap.innerHTML = slideLiveHtml(this.source);
+    wrap.innerHTML = slideLiveHtml(this.source, this.bib);
     void runMermaid(wrap);
     wrap.addEventListener("mousedown", (e) => {
       e.preventDefault();
@@ -888,11 +891,13 @@ const blockField = StateField.define<DecorationSet>({
   update(value, tr) {
     // The tree comparison is what catches the background parse finishing; see
     // the note on livePlugin. Without it a table or a diagram below the first
-    // few thousand characters never became one.
+    // few thousand characters never became one. The library comparison redraws
+    // the slides when the bib lands, so their citations show as references.
     if (
       !tr.docChanged &&
       tr.selection === undefined &&
-      syntaxTree(tr.startState) === syntaxTree(tr.state)
+      syntaxTree(tr.startState) === syntaxTree(tr.state) &&
+      bibOf(tr.startState) === bibOf(tr.state)
     ) {
       return value;
     }
@@ -910,13 +915,14 @@ function hiddenSlides(state: EditorState, text: string): { from: number; to: num
   const { body } = stripFrontmatter(text);
   const bodyOffset = text.length - body.length;
   const sel = state.selection.ranges;
+  const bib = bibOf(state);
   const out: { from: number; to: number; widget: SlideWidget }[] = [];
   for (const span of slideSpans(body)) {
     if (!span.text.trim()) continue;
     const from = bodyOffset + span.from;
     const to = bodyOffset + span.to;
     if (sel.some((r) => r.from <= to && r.to >= from)) continue;
-    out.push({ from, to, widget: new SlideWidget(span.text, from) });
+    out.push({ from, to, widget: new SlideWidget(span.text, from, bib) });
   }
   return out;
 }
@@ -939,13 +945,12 @@ function buildBlocks(state: EditorState): DecorationSet {
 
 /** The live preview extension. `resolveSrc` turns an image's markdown src into a
  *  loadable URL (the document's asset proxy); without one, images stay literal
- *  markup rather than pointing at a path the browser cannot fetch. `getBib`
- *  gives the document's BibTeX library, so citations show as references. */
-export const livePreview = (opts: {
-  resolveSrc?: (src: string) => string;
-  getBib?: () => BibLibrary | null;
-} = {}) => [
-  livePlugin(opts.resolveSrc ?? ((s) => s), opts.getBib ?? (() => null)),
+ *  markup rather than pointing at a path the browser cannot fetch. Citations
+ *  show as references from the editor's `bibField` (cm-citations.ts), which the
+ *  editor must include outside this extension's compartment, so switching
+ *  views does not drop the library. */
+export const livePreview = (opts: { resolveSrc?: (src: string) => string } = {}) => [
+  livePlugin(opts.resolveSrc ?? ((s) => s)),
   blockField,
   blockKeys,
   syntaxHighlighting(liveHighlight),
