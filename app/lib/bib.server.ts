@@ -29,9 +29,13 @@ async function bibsInFolder(token: string, folderId: string): Promise<string[]> 
  * none). The document's own `bibliography:` paths are honoured first, resolved
  * relative to its folder like css: and images. Failing those, it walks UP from
  * the folder, checking each ancestor and its `assets/` subfolder, because a
- * library is rarely kept beside the document (an Obsidian vault keeps one at
- * `content/assets/MyLibrary.bib`). Every `.bib` at the level found is merged;
- * parseBib reads concatenated BibTeX fine.
+ * library is rarely kept beside the document. Every `.bib` on the way up is
+ * merged, not just the nearest level's: a small hand-kept bib near a document
+ * supplements the main library further up rather than replacing it (the garden
+ * keeps `content/assets/extra-refs.bib` and reads the Zotero export at the
+ * Causal Map root, four levels above its notes). The nearest copy of a key wins:
+ * parseBib keeps the last entry it reads for a key, so the text is joined
+ * farthest level first.
  */
 export async function findBibText(
   env: Env,
@@ -56,12 +60,13 @@ export async function findBibText(
   }
 
   if (!bibIds.length) {
+    const levels: string[][] = [];
     let current: string | undefined = folderId;
     for (let depth = 0; current && depth < 6; depth++) {
-      bibIds = await bibsInFolder(token, current);
-      if (bibIds.length) break;
+      levels.push(await bibsInFolder(token, current));
       current = (await driveGetMeta(token, current)).parents?.[0];
     }
+    bibIds = levels.reverse().flat();
   }
   if (!bibIds.length) return "";
 
