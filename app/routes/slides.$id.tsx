@@ -8,14 +8,17 @@ import { buildSlidesHtml } from "~/lib/slides-build";
 import { bibForSource } from "~/lib/bib.server";
 import { parseBib } from "~/lib/citations";
 import { stripMistBanner } from "~/shared/mist-banner";
+import { mintAssetTokenForDoc, type DriveSessionEnv } from "~/lib/drive-access.server";
 
 /**
  * Standalone deck page, built server-side from the backend source, for printing
  * to PDF: open with `?print-pdf` and reveal lays the deck out one slide per page
  * for the browser's Save as PDF. Add `&combine-fragments` to print one page per
  * slide (fragments collapsed) instead of one page per animation step. Authorised
- * by the doc's secret key; Drive asset links carry a signed asset token so the
- * printed deck keeps its css/images.
+ * by the doc's secret key. The page mints its own asset token for the deck's
+ * css and images once the key checks out, so a link needs only `?k=`, never goes
+ * stale, and local gmist's print (which opens this page with no token) keeps its
+ * pictures. A `token` in the URL is ignored.
  */
 export async function loader({ params, request, context }: Route.LoaderArgs) {
   const id = params.id;
@@ -23,7 +26,6 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
 
   const url = new URL(request.url);
   const docKey = url.searchParams.get("k") ?? "";
-  const token = url.searchParams.get("token") ?? "";
   // `combine-fragments` collapses each slide's animation steps onto one PDF page
   // (one page per slide) instead of reveal's default page-per-fragment.
   const separateFragments = !url.searchParams.has("combine-fragments");
@@ -31,6 +33,7 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
   const { env } = getCloudflare(context);
   const { role, drive } = await resolveDoc(env, id, docKey);
   if (!role) return new Response("forbidden", { status: 403 });
+  const token = (await mintAssetTokenForDoc(env as unknown as DriveSessionEnv, true)) ?? "";
 
   try {
     // A shared room has no file: its text comes from the room, with no .bib.
