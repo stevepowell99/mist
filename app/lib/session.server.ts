@@ -85,44 +85,90 @@ export async function verifySession(
 }
 
 /**
- * Short-lived asset token for the sandboxed slides iframe, which cannot send the
- * session cookie cross-origin. The doc page (which has the session) mints one
- * and the iframe passes it on /drive/asset requests as `?token=`. It carries no
- * email, only an expiry; it is the session-derived replacement for the shared
- * passphrase on asset fetches.
+ * Short-lived asset tokens: how a page with no session cookie (the sandboxed
+ * slides iframe, a public deck view, the headless browser that prints a PDF)
+ * fetches a deck's private-Drive css and images from /drive/asset. A token is
+ * never a session: only /drive/asset (and the /print page, for the file it
+ * names) reads one, and it admits only what its scope names. Two kinds:
+ *
+ *  - A deck token names a deck file and the viewer it was minted for, after
+ *    that viewer passed the deck's own access check (the editor's preview, the
+ *    print page). It admits that deck's relative assets and shared-library
+ *    images, which is what the viewer's own session could fetch.
+ *  - A single-asset token names one asset of one deck (`path:<path>`) or one
+ *    library image (`id:<fileId>`). The public `/slides` page signs one for each
+ *    asset URL it renders, so a public view link reaches exactly the files that
+ *    deck shows and nothing else.
  */
 const ASSET_TTL_SECONDS = 60 * 60 * 6; // 6 hours
 
+export interface AssetScope {
+  /** The deck (Drive or local file id) the token was minted for. */
+  deck: string | null;
+  /** Deck token: the authorised viewer it was minted for. */
+  email: string | null;
+  /** Single-asset token: `path:<deck-relative path>` or `id:<library file id>`. */
+  asset: string | null;
+}
+
+/** What a /drive/asset request asks for: a library image by id, or a path
+ *  relative to a deck's folder. */
+export type AssetRequest = { id: string } | { deck: string; path: string };
+
 export async function signAssetToken(
   secret: string,
+  scope: { deck?: string | null; email?: string | null; asset?: string | null },
   ttlSeconds: number = ASSET_TTL_SECONDS,
   now: number = Date.now(),
 ): Promise<string> {
-  const payload = b64urlEncode(
-    new TextEncoder().encode(JSON.stringify({ a: 1, exp: Math.floor(now / 1000) + ttlSeconds })),
-  );
+  const claims: Record<string, unknown> = { a: 2, exp: Math.floor(now / 1000) + ttlSeconds };
+  if (scope.deck) claims.d = scope.deck;
+  if (scope.email) claims.e = scope.email;
+  if (scope.asset) claims.r = scope.asset;
+  const payload = b64urlEncode(new TextEncoder().encode(JSON.stringify(claims)));
   const sig = b64urlEncode(await hmac(secret, payload));
   return `${payload}.${sig}`;
 }
 
+/** The scope of a valid, unexpired asset token, or null. A token from before
+ *  tokens were scoped (`a: 1`, which admitted everything) is refused. */
 export async function verifyAssetToken(
   value: string | null | undefined,
   secret: string,
   now: number = Date.now(),
-): Promise<boolean> {
-  if (!value || !secret) return false;
+): Promise<AssetScope | null> {
+  if (!value || !secret) return null;
   const dot = value.indexOf(".");
-  if (dot < 1) return false;
+  if (dot < 1) return null;
   const payload = value.slice(0, dot);
   const sig = value.slice(dot + 1);
   const expected = b64urlEncode(await hmac(secret, payload));
-  if (!timingSafeEqual(sig, expected)) return false;
+  if (!timingSafeEqual(sig, expected)) return null;
   try {
-    const claims = JSON.parse(new TextDecoder().decode(b64urlDecode(payload))) as { a?: number; exp?: number };
-    return claims.a === 1 && typeof claims.exp === "number" && claims.exp >= Math.floor(now / 1000);
+    const c = JSON.parse(new TextDecoder().decode(b64urlDecode(payload))) as {
+      a?: number;
+      exp?: number;
+      d?: string;
+      e?: string;
+      r?: string;
+    };
+    if (c.a !== 2 || typeof c.exp !== "number" || c.exp < Math.floor(now / 1000)) return null;
+    const scope: AssetScope = { deck: c.d ?? null, email: c.e ?? null, asset: c.r ?? null };
+    return scope.deck || scope.asset ? scope : null;
   } catch {
-    return false;
+    return null;
   }
+}
+
+/** Whether a token's scope admits one /drive/asset request. */
+export function assetScopeAllows(scope: AssetScope, req: AssetRequest): boolean {
+  if ("id" in req) {
+    if (scope.asset) return scope.asset === `id:${req.id}`;
+    return !!scope.deck && !!scope.email;
+  }
+  if (!scope.deck || req.deck !== scope.deck) return false;
+  if (scope.asset) return scope.asset === `path:${req.path}`;
+  return !!scope.email;
 }
 
 /** Read the raw session cookie value from a request, or null. */

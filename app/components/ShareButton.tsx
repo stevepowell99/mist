@@ -27,10 +27,9 @@ export function shareLink(href: string, key: string | null, asPreview: boolean):
  * (by design, for editing), so it asks a public viewer to sign in even when
  * the Drive file itself is shared with anyone.
  */
-export function deckViewLink(origin: string, docId: string, key: string | null, assetToken: string | null): string {
+export function deckViewLink(origin: string, docId: string, key: string | null): string {
   const url = new URL(`/slides/${docId}`, origin);
   if (key) url.searchParams.set("k", key);
-  if (assetToken) url.searchParams.set("token", assetToken);
   return url.toString();
 }
 
@@ -39,11 +38,8 @@ export function deckViewLink(origin: string, docId: string, key: string | null, 
  * returned as a file, falling back to the browser-print page when it cannot.
  * `combineFragments` puts each slide on one page rather than one per step.
  */
-export function deckPdfLink(docId: string, key: string | null, assetToken: string | null, combineFragments = true): string {
-  return (
-    `/slides/${docId}/pdf?k=${encodeURIComponent(key ?? "")}&token=${encodeURIComponent(assetToken ?? "")}` +
-    (combineFragments ? "&combine-fragments" : "")
-  );
+export function deckPdfLink(docId: string, key: string | null, combineFragments = true): string {
+  return `/slides/${docId}/pdf?k=${encodeURIComponent(key ?? "")}` + (combineFragments ? "&combine-fragments" : "");
 }
 
 /**
@@ -57,13 +53,13 @@ export function docPdfLink(docId: string, key: string | null): string {
 }
 
 export default function ShareButton() {
-  const { docId, markdown, threads, frontmatter, role, docKey, suggestKey, assetToken, drive } = useDocument();
+  const { docId, markdown, threads, frontmatter, role, docKey, suggestKey, drive } = useDocument();
   const [copied, setCopied] = useState<"edit" | "suggest" | null>(null);
   const [copiedView, setCopiedView] = useState(false);
   const [asPreview, setAsPreview] = useState(false);
   const [combineFragments, setCombineFragments] = useState(true);
   const deck = isSlideDeck(markdown, frontmatter);
-  const pdfHref = deck ? deckPdfLink(docId, docKey, assetToken, combineFragments) : docPdfLink(docId, docKey);
+  const pdfHref = deck ? deckPdfLink(docId, docKey, combineFragments) : docPdfLink(docId, docKey);
 
   const handleCopy = useCallback(
     async (kind: "edit" | "suggest", key: string | null) => {
@@ -81,10 +77,10 @@ export default function ShareButton() {
   // be turned back into an edit link.
   const handleCopyView = useCallback(async () => {
     const key = role === "edit" ? suggestKey : docKey;
-    await navigator.clipboard.writeText(deckViewLink(window.location.origin, docId, key, assetToken));
+    await navigator.clipboard.writeText(deckViewLink(window.location.origin, docId, key));
     setCopiedView(true);
     setTimeout(() => setCopiedView(false), 2000);
-  }, [role, suggestKey, docKey, docId, assetToken]);
+  }, [role, suggestKey, docKey, docId]);
 
   const handleDownload = useCallback(() => {
     const content = serializeThreads(markdown, threads, frontmatter);

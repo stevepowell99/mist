@@ -7,7 +7,13 @@
  * link). Drive sharing stays the single source of truth; mist keeps no separate
  * allowlist.
  */
-import { verifySession, readSessionCookie, signAssetToken, verifyAssetToken } from "./session.server";
+import {
+  verifySession,
+  readSessionCookie,
+  signAssetToken,
+  verifyAssetToken,
+  type AssetScope,
+} from "./session.server";
 import {
   driveListPermissions,
   emailHasAccess,
@@ -42,26 +48,22 @@ export async function getRequestEmail(request: Request, env: DriveSessionEnv): P
 }
 
 /**
- * Gate for /drive/* endpoints: a valid Google session, or the shared passphrase
- * during the transition. Returns the email when a session is present.
+ * Gate for /drive/* endpoints: a valid Google session (in local mode, the local
+ * user). An asset token is never a session here: /drive/asset reads one itself
+ * through `assetAccess`, and nothing else accepts one.
  */
 export async function driveAccess(request: Request, env: DriveSessionEnv): Promise<DriveAccess> {
   const email = await getRequestEmail(request, env);
   if (email) return { ok: true, email };
-  // A signed asset token (minted from a valid session by the doc page) lets the
-  // sandboxed slides iframe fetch assets without the session cookie. Coarse
-  // access: email null, so per-file ACL is not enforced for assets.
-  const token = new URL(request.url).searchParams.get("token");
-  if (token && (await verifyAssetToken(token, env.SESSION_SECRET ?? ""))) return { ok: true, email: null };
   return { ok: false, email: null };
 }
 
 /**
- * The shared opening gate for the /drive/* endpoints: a valid session (or asset
- * token) AND Drive configured. Returns the verified access, or an error Response
- * to return as-is, so each route drops the repeated four-line preamble. Routes
- * with their own bespoke flow (per-file ACL, key-gated folder listing) still call
- * the finer-grained helpers directly.
+ * The shared opening gate for the /drive/* endpoints: a valid session AND Drive
+ * configured. Returns the verified access, or an error Response to return
+ * as-is, so each route drops the repeated four-line preamble. Routes with their
+ * own bespoke flow (per-file ACL, key-gated folder listing) still call the
+ * finer-grained helpers directly.
  */
 export async function openDriveRequest(
   request: Request,
@@ -74,38 +76,68 @@ export async function openDriveRequest(
 }
 
 /**
- * Mint a short-lived asset token for a holder of a valid doc key (the secret
- * link). The asset token lets the sandboxed slides iframe fetch the deck's
- * private-Drive CSS/images, so a collaborator opening a share link sees styles
- * and images without a Google account, matching the no-account model. The token
- * is coarse (it does not carry a per-file ACL), exactly like the session-minted
- * one. Returns null if the doc key was invalid or there is no signing secret.
+ * Who is asking /drive/asset for a file: a session (or local mode), or else the
+ * scope of a valid asset token in `?token=`. Null when neither.
  */
-export async function mintAssetTokenForDoc(env: DriveSessionEnv, hasValidKey: boolean): Promise<string | null> {
-  if (!hasValidKey || !env.SESSION_SECRET) return null;
-  return signAssetToken(env.SESSION_SECRET);
-}
-
-/** Mint a short-lived asset token if the request is authorised; else null. */
-export async function mintAssetToken(request: Request, env: DriveSessionEnv): Promise<string | null> {
-  if (!env.SESSION_SECRET) return null;
-  const access = await driveAccess(request, env);
-  if (!access.ok) return null;
-  return signAssetToken(env.SESSION_SECRET);
+export type AssetAccess = { session: string } | { scope: AssetScope };
+export async function assetAccess(request: Request, env: DriveSessionEnv): Promise<AssetAccess | null> {
+  const email = await getRequestEmail(request, env);
+  if (email) return { session: email };
+  const scope = await verifyAssetToken(new URL(request.url).searchParams.get("token"), env.SESSION_SECRET ?? "");
+  return scope ? { scope } : null;
 }
 
 /**
- * Whether a user may open a specific Drive file, by that file's sharing. A
- * passphrase-only session (email null) passes, since the passphrase is the
- * coarse transition gate; once sign-in is the only gate, every request carries
- * an email and per-file sharing is enforced.
+ * A deck token for a viewer who has already passed that deck's access check
+ * (see session.server.ts): what the editor's sandboxed preview and the print
+ * page use. Null without a deck or a signing secret.
+ */
+export async function mintDeckToken(
+  env: DriveSessionEnv,
+  deck: string | null | undefined,
+  email: string | null,
+): Promise<string | null> {
+  if (!deck || !email || !env.SESSION_SECRET) return null;
+  return signAssetToken(env.SESSION_SECRET, { deck, email });
+}
+
+/** Stands in for the token while a public deck page is built; see `signAssetUrls`. */
+export const ASSET_TOKEN_PLACEHOLDER = "MISTASSETTOKEN";
+
+/**
+ * Give every /drive/asset URL in a built page its own single-asset token, in
+ * place of `ASSET_TOKEN_PLACEHOLDER`. The public `/slides` page is built on the
+ * server, so it can sign each asset it renders rather than hand out a key to
+ * the deck's folder: the link then reaches exactly what the deck shows. The
+ * token signs the asset as /drive/asset will read it back (`searchParams`).
+ */
+export async function signAssetUrls(html: string, env: DriveSessionEnv): Promise<string> {
+  const secret = env.SESSION_SECRET;
+  const re = new RegExp(String.raw`/drive/asset\?([^"\s<>]*?)token=${ASSET_TOKEN_PLACEHOLDER}`, "g");
+  const queries = new Set<string>();
+  for (const m of html.matchAll(re)) queries.add(m[1]);
+  const signed = new Map<string, string>();
+  for (const q of queries) {
+    const p = new URLSearchParams(q);
+    const id = p.get("id");
+    const deck = p.get("deck");
+    const path = p.get("path");
+    const scope = id ? { asset: `id:${id}` } : deck && path ? { deck, asset: `path:${path}` } : null;
+    signed.set(q, scope && secret ? await signAssetToken(secret, scope) : "");
+  }
+  return html.replace(re, (_m, q: string) => `/drive/asset?${q}token=${encodeURIComponent(signed.get(q) ?? "")}`);
+}
+
+/**
+ * Whether a user may open a specific Drive file, by that file's sharing.
+ * Fails closed without an email.
  */
 export async function canAccessFile(
   env: DriveSessionEnv,
   fileId: string,
   email: string | null,
 ): Promise<boolean> {
-  if (!email) return true;
+  if (!email) return false;
   try {
     const token = await getDriveAccessToken(env);
     const grants = await driveListPermissions(token, fileId);
@@ -119,15 +151,14 @@ export async function canAccessFile(
  * The mist role a user gets when opening a Drive file, from the file's own
  * sharing: a writer/owner edits; a commenter or reader gets suggest-only (their
  * changes land as CriticMarkup suggestions, never silent edits). Returns null if
- * the user has no access at all. A session without an email (asset-token path)
- * gets "edit", since there is no per-user role to enforce there.
+ * the user has no access at all, or there is no email to check.
  */
 export async function fileAccessRole(
   env: DriveSessionEnv,
   fileId: string,
   email: string | null,
 ): Promise<DocRole | null> {
-  if (!email) return "edit";
+  if (!email) return null;
   try {
     const token = await getDriveAccessToken(env);
     const grants = await driveListPermissions(token, fileId);
@@ -172,7 +203,7 @@ export async function authorizeDoc(
   return { status: "ok", role, email };
 }
 
-/** 401 for no/expired session and no passphrase. */
+/** 401 for no/expired session. */
 export function driveUnauthenticated(): Response {
   return new Response(JSON.stringify({ error: "sign in required" }), {
     status: 401,

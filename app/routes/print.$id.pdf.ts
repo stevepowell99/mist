@@ -3,7 +3,7 @@ import { isValidDocumentId } from "~/shared/constants";
 import { isLocalFileId } from "~/lib/localfs-ids";
 import { resolveDoc, readRoomSource } from "~/lib/doc-resolve.server";
 import { getCloudflare } from "~/lib/cloudflare.server";
-import { authorizeDoc, mintAssetTokenForDoc, type DriveSessionEnv } from "~/lib/drive-access.server";
+import { authorizeDoc, mintDeckToken, type DriveSessionEnv } from "~/lib/drive-access.server";
 import { printPdf } from "~/lib/pdf.server";
 import { docTitle } from "~/lib/slides-build";
 
@@ -11,8 +11,9 @@ import { docTitle } from "~/lib/slides-build";
  * A document as a PDF file, printed by headless Chrome from its `/print/:id`
  * page (see pdf.server.ts). The viewer asking must pass the file's Drive sharing,
  * as they must to open the page itself; the headless browser has no session, so
- * it is given a short-lived asset token in their place. The fallback sends the
- * viewer's own browser to the page with `autoprint`, and carries no token.
+ * it is given a short-lived deck token for this file in their place. The
+ * fallback sends the viewer's own browser to the page with `autoprint`, and
+ * carries no token.
  */
 export async function loader({ params, request, context }: Route.LoaderArgs) {
   const id = params.id;
@@ -31,7 +32,7 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
   const fallback = new URL(`/print/${id}`, url.origin);
   fallback.searchParams.set("k", key);
   const page = new URL(fallback);
-  page.searchParams.set("token", (await mintAssetTokenForDoc(sessionEnv, true)) ?? "");
+  page.searchParams.set("token", (await mintDeckToken(sessionEnv, drive?.fileId, auth.email)) ?? "");
   fallback.searchParams.set("autoprint", "");
   const title = docTitle(drive, drive ? "" : await readRoomSource(env, id, key));
   const name = title.replace(/&/g, "&amp;").replace(/</g, "&lt;");

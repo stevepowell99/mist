@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useState } from "react";
 import { data } from "react-router";
 import type { Route } from "./+types/edit.$id";
 import { getCloudflare } from "~/lib/cloudflare.server";
-import { mintAssetToken, openDriveRequest, type DriveSessionEnv } from "~/lib/drive-access.server";
+import { mintDeckToken, openDriveRequest, type DriveSessionEnv } from "~/lib/drive-access.server";
 import { driveGetMeta, getDriveAccessToken, isLocalMode } from "~/lib/google.server";
 import { isLocalFileId } from "~/lib/localfs-ids";
 
@@ -41,7 +41,7 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
     const meta = await driveGetMeta(await getDriveAccessToken(env), id);
     // Without a token a relative image never leaves the page: resolveAssetSrc only
     // rewrites to /drive/asset when it has one, so every figure 404ed here.
-    const assetToken = await mintAssetToken(request, env as unknown as DriveSessionEnv);
+    const assetToken = await mintDeckToken(env as unknown as DriveSessionEnv, id, gate.access.email);
     return { id, name: meta.name, folderId: meta.parents?.[0] ?? null, assetToken };
   } catch {
     throw data("file not found", { status: 404 });

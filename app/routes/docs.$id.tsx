@@ -7,7 +7,7 @@ import { resolveDoc } from "~/lib/doc-resolve.server";
 import type { DocRole, DriveMeta } from "~/shared/types";
 import { getCloudflare } from "~/lib/cloudflare.server";
 import { isLocalMode } from "~/lib/google.server";
-import { mintAssetToken, mintAssetTokenForDoc, authorizeDoc, type DriveSessionEnv } from "~/lib/drive-access.server";
+import { mintDeckToken, authorizeDoc, type DriveSessionEnv } from "~/lib/drive-access.server";
 import { EditorView } from "@codemirror/view";
 import { useChordListener } from "~/lib/useChordListener";
 import { QuickOpenTrigger } from "~/components/QuickOpen";
@@ -95,11 +95,11 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
   if (auth.status === "forbidden") return { id, gate: "forbidden" as const };
   const effectiveRole = auth.role ?? role;
 
-  // Short-lived token so the sandboxed slides iframe (and document preview) can
-  // fetch private-Drive assets without the session cookie.
-  const assetToken =
-    (await mintAssetTokenForDoc(env as unknown as DriveSessionEnv, !!role)) ??
-    (await mintAssetToken(request, env as unknown as DriveSessionEnv));
+  // Short-lived deck token so the sandboxed slides iframe, which cannot send the
+  // session cookie, can fetch this file's private-Drive css and images. It is
+  // minted for the viewer who just passed authorizeDoc, and admits only this
+  // file's assets and library images. An unbound room has no file, so no token.
+  const assetToken = await mintDeckToken(env as unknown as DriveSessionEnv, drive?.fileId, auth.email);
 
   return {
     id,
@@ -558,11 +558,11 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
   // navigated this tab away as well.
   const printPdf = useCallback(() => {
     if (unsaved) saveNow();
-    const url = deck ? deckPdfLink(id, docKey, assetToken) : docPdfLink(id, docKey);
+    const url = deck ? deckPdfLink(id, docKey) : docPdfLink(id, docKey);
     const w = window.open(url, "_blank");
     if (w) w.opener = null;
     else window.location.assign(url);
-  }, [unsaved, saveNow, deck, id, docKey, assetToken]);
+  }, [unsaved, saveNow, deck, id, docKey]);
 
   // The deck iframe forwards F (plain) as a present request and Ctrl/Cmd+P as a
   // print request, since the sandboxed iframe can neither fullscreen the app nor
@@ -1071,7 +1071,7 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
           <div className="relative h-full w-full overflow-hidden bg-black">
             <SlidesView {...slideProps} />
             <PresentControls
-              speakerHref={`/slides/${id}?k=${encodeURIComponent(docKey ?? "")}&token=${encodeURIComponent(assetToken ?? "")}`}
+              speakerHref={`/slides/${id}?k=${encodeURIComponent(docKey ?? "")}`}
               notesOpen={railOpen}
               slidesOpen={outlineOpen}
               onToggleNotes={() => setRailOpen((v) => !v)}

@@ -6,7 +6,7 @@ import { isLocalFileId } from "~/lib/localfs-ids";
 import { resolveDoc, readRoomSource } from "~/lib/doc-resolve.server";
 import { getCloudflare } from "~/lib/cloudflare.server";
 import { getDriveAccessToken, driveRead, driveConfigured } from "~/lib/google.server";
-import { authorizeDoc, mintAssetTokenForDoc, type DriveSessionEnv } from "~/lib/drive-access.server";
+import { authorizeDoc, mintDeckToken, type DriveSessionEnv } from "~/lib/drive-access.server";
 import { verifyAssetToken } from "~/lib/session.server";
 import { bibForSource } from "~/lib/bib.server";
 import { parseBib } from "~/lib/citations";
@@ -30,8 +30,8 @@ import { docTitle, pdfTitle } from "~/lib/slides-build";
  *
  * The secret key alone is not enough to read a document, unlike a deck's public
  * view, so there are two ways in: a signed-in viewer the file's Drive sharing
- * admits, or the short-lived asset token the PDF route gives the headless
- * browser, which has no session.
+ * admits, or the deck token for this file that the PDF route gives the headless
+ * browser, which has no session, on behalf of a viewer it has just checked.
  */
 export async function loader({ params, request, context }: Route.LoaderArgs) {
   const id = params.id;
@@ -43,10 +43,13 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
   const key = url.searchParams.get("k") ?? "";
   const { role, drive } = await resolveDoc(env, id, key);
   if (!role) throw data("Not found.", { status: 404 });
-  if (!(await verifyAssetToken(url.searchParams.get("token"), sessionEnv.SESSION_SECRET ?? ""))) {
+  const scope = await verifyAssetToken(url.searchParams.get("token"), sessionEnv.SESSION_SECRET ?? "");
+  let viewer = scope && drive && scope.deck === drive.fileId && !scope.asset ? scope.email : null;
+  if (!viewer) {
     const auth = await authorizeDoc(sessionEnv, request, drive, role);
     if (auth.status === "needsAuth") throw data("Sign in to gmist to print this document.", { status: 401 });
     if (auth.status !== "ok") throw data("You do not have access to this file.", { status: 403 });
+    viewer = auth.email;
   }
   // A shared room has no file: its text comes from the room, with no .bib.
   let markdown: string;
@@ -65,7 +68,7 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
     drive,
     bib,
     // For the images: headless Chrome fetches them with this, having no session.
-    assetToken: (await mintAssetTokenForDoc(sessionEnv, true)) ?? "",
+    assetToken: (await mintDeckToken(sessionEnv, drive?.fileId, viewer)) ?? "",
     heading,
     pdfName: pdfTitle(heading),
     browserPrint: url.searchParams.has("autoprint"),

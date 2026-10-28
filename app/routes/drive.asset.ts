@@ -5,8 +5,15 @@ import {
   driveGetMeta,
   driveResolvePath,
   driveDownload,
+  driveConfigured,
 } from "~/lib/google.server";
-import { openDriveRequest, canAccessFile, driveForbidden } from "~/lib/drive-access.server";
+import {
+  assetAccess,
+  canAccessFile,
+  driveForbidden,
+  driveUnauthenticated,
+} from "~/lib/drive-access.server";
+import { assetScopeAllows } from "~/lib/session.server";
 import { isInLibrary, type LibraryEnv } from "~/lib/library.server";
 import { mimeForPath } from "~/lib/mime";
 
@@ -14,13 +21,18 @@ import { mimeForPath } from "~/lib/mime";
  * Stream a deck's relative asset (CSS, image, font) from Drive through the relay
  * identity, so the slides iframe can load private-Drive resources that have no
  * public URL. The path is resolved against the deck file's own folder.
+ *
+ * A signed-in session (or local mode) may ask for anything its Drive sharing
+ * allows, as before. Without one, an asset token must name exactly this request:
+ * a deck token only this deck's assets and library images, a single-asset token
+ * only its one asset (see session.server.ts).
  */
 export async function loader({ request, context }: Route.LoaderArgs) {
   const url = new URL(request.url);
   const { env } = getCloudflare(context) as { env: LibraryEnv };
-  const gate = await openDriveRequest(request, env);
-  if ("error" in gate) return gate.error;
-  const { access } = gate;
+  const access = await assetAccess(request, env);
+  if (!access) return driveUnauthenticated();
+  if (!driveConfigured(env)) return new Response("Drive not configured", { status: 501 });
 
   // id-mode: a shared-library image by Drive id, so the same image is reusable
   // across decks. Two MANDATORY constraints keep this from being a read-any-file
@@ -28,6 +40,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   // live inside the configured library subtree.
   const id = url.searchParams.get("id");
   if (id) {
+    if ("scope" in access && !assetScopeAllows(access.scope, { id })) return driveForbidden();
     try {
       const token = await getDriveAccessToken(env);
       const meta = await driveGetMeta(token, id);
@@ -48,7 +61,11 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   const deck = url.searchParams.get("deck");
   const path = url.searchParams.get("path");
   if (!deck || !path) return new Response("missing deck or path", { status: 400 });
-  if (!(await canAccessFile(env, deck, access.email))) return driveForbidden();
+  if ("scope" in access) {
+    if (!assetScopeAllows(access.scope, { deck, path })) return driveForbidden();
+  } else if (!(await canAccessFile(env, deck, access.session))) {
+    return driveForbidden();
+  }
 
   try {
     const token = await getDriveAccessToken(env);

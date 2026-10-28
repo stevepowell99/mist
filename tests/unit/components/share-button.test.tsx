@@ -30,14 +30,12 @@ describe("shareLink", () => {
  * Drive file's sharing grants.
  */
 describe("deckViewLink", () => {
-  it("points at /slides/:id with the key and asset token", () => {
-    expect(deckViewLink("https://m.example", "test-doc", "SK", "AT")).toBe(
-      "https://m.example/slides/test-doc?k=SK&token=AT",
-    );
+  it("points at /slides/:id with the key and no asset token", () => {
+    expect(deckViewLink("https://m.example", "test-doc", "SK")).toBe("https://m.example/slides/test-doc?k=SK");
   });
 
-  it("omits k and token when absent, rather than writing an empty value", () => {
-    expect(deckViewLink("https://m.example", "test-doc", null, null)).toBe(
+  it("omits k when absent, rather than writing an empty value", () => {
+    expect(deckViewLink("https://m.example", "test-doc", null)).toBe(
       "https://m.example/slides/test-doc",
     );
   });

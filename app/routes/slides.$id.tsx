@@ -8,17 +8,19 @@ import { buildSlidesHtml } from "~/lib/slides-build";
 import { bibForSource } from "~/lib/bib.server";
 import { parseBib } from "~/lib/citations";
 import { stripMistBanner } from "~/shared/mist-banner";
-import { mintAssetTokenForDoc, type DriveSessionEnv } from "~/lib/drive-access.server";
+import { ASSET_TOKEN_PLACEHOLDER, signAssetUrls, type DriveSessionEnv } from "~/lib/drive-access.server";
 
 /**
  * Standalone deck page, built server-side from the backend source, for printing
  * to PDF: open with `?print-pdf` and reveal lays the deck out one slide per page
  * for the browser's Save as PDF. Add `&combine-fragments` to print one page per
  * slide (fragments collapsed) instead of one page per animation step. Authorised
- * by the doc's secret key. The page mints its own asset token for the deck's
- * css and images once the key checks out, so a link needs only `?k=`, never goes
- * stale, and local gmist's print (which opens this page with no token) keeps its
- * pictures. A `token` in the URL is ignored.
+ * by the doc's secret key, so this is the public view link. Once the key checks
+ * out, the page signs each css and image URL it renders with its own
+ * single-asset token (`signAssetUrls`), so a link needs only `?k=`, never goes
+ * stale, reaches only the files the deck shows, and local gmist's print (which
+ * opens this page with no token) keeps its pictures. A `token` in the URL is
+ * ignored.
  */
 export async function loader({ params, request, context }: Route.LoaderArgs) {
   const id = params.id;
@@ -33,7 +35,6 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
   const { env } = getCloudflare(context);
   const { role, drive } = await resolveDoc(env, id, docKey);
   if (!role) return new Response("forbidden", { status: 403 });
-  const token = (await mintAssetTokenForDoc(env as unknown as DriveSessionEnv, true)) ?? "";
 
   try {
     // A shared room has no file: its text comes from the room, with no .bib.
@@ -49,15 +50,16 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
     }
     const bibLib = bib.trim() ? parseBib(bib) : null;
 
-    const html = buildSlidesHtml(stripMistBanner(source), {
+    const built = buildSlidesHtml(stripMistBanner(source), {
       drive,
       origin: url.origin,
-      driveToken: token,
+      driveToken: ASSET_TOKEN_PLACEHOLDER,
       bust: "print",
       docFrontmatter: "",
       pdfSeparateFragments: separateFragments,
       bibLib,
     });
+    const html = await signAssetUrls(built, env as unknown as DriveSessionEnv);
     return new Response(html, {
       headers: { "Content-Type": "text/html; charset=utf-8" },
     });

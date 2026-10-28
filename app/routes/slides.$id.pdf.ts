@@ -5,8 +5,8 @@ import { printPdf } from "~/lib/pdf.server";
 /**
  * A deck as a PDF file, printed by headless Chrome from the same
  * `/slides/:id?print-pdf` page the browser's own print uses (see pdf.server.ts).
- * Takes the same `k` / `token` / `combine-fragments` parameters as `/slides/:id`
- * and passes them through, so it is gated exactly as that page is.
+ * Takes the same `k` / `combine-fragments` parameters as `/slides/:id` and
+ * passes them through, so it is gated exactly as that page is.
  */
 export async function loader({ params, request, context }: Route.LoaderArgs) {
   const { env } = getCloudflare(context);
