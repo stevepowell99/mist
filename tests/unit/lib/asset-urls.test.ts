@@ -29,6 +29,12 @@ describe("rewriteImages", () => {
     expect(rewriteImages("![[Some note]]", ctx)).toBe("![[Some note]]");
   });
 
+  it("reads a percent-encoded path as the name it encodes, once", () => {
+    // Obsidian writes a space as %20; the proxy must look up "Clipboard image.png".
+    expect(rewriteImages("![](Clipboard%20image.png)", ctx)).toContain("path=Clipboard%20image.png&");
+    expect(rewriteImages("![](<100% done.png>)", ctx)).toContain("path=100%25%20done.png&");
+  });
+
   it("leaves absolute URLs untouched", () => {
     expect(rewriteImages("![a](https://e.com/i.png)", ctx)).toBe("![a](https://e.com/i.png)");
   });

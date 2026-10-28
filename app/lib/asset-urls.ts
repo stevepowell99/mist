@@ -11,9 +11,24 @@ export function driveAssetUrl(drive: DriveMeta, origin: string, relPath: string,
   // Encode each path segment but keep literal "/" separators. The full reveal.js
   // markdown renderer re-encodes URLs in slide content, so an escaped "%2F"
   // becomes "%252F" and the proxy can no longer split the path. Real slashes
-  // survive that pass untouched.
-  const encPath = relPath.split("/").map(encodeURIComponent).join("/");
+  // survive that pass untouched. A segment the author already percent-encoded
+  // (`![](Clipboard%20image.png)`, which Obsidian writes for a space) is decoded
+  // first, as markdown means it, so the proxy looks up the file's real name.
+  const encPath = relPath
+    .split("/")
+    .map((seg) => encodeURIComponent(decodeSegment(seg)))
+    .join("/");
   return `${origin}/drive/asset?deck=${encodeURIComponent(drive.fileId)}&path=${encPath}&token=${encodeURIComponent(token)}`;
+}
+
+/** A path segment as markdown means it: `%20` is a space. A segment that is not
+ *  valid percent-encoding (`100% done.png`) is a literal name. */
+function decodeSegment(seg: string): string {
+  try {
+    return decodeURIComponent(seg);
+  } catch {
+    return seg;
+  }
 }
 
 export interface AssetCtx {
