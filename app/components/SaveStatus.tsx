@@ -37,18 +37,16 @@ export default function SaveStatus() {
   // Click to dismiss once you have noted the copy.
   if (forkedNotice !== null) {
     return (
-      <button
+      <SaveBadge
+        state="kept"
+        label="Kept a copy"
         onClick={clearForkedNotice}
-        className="flex h-full cursor-pointer items-center gap-2 bg-amber-500/15 px-3 text-sm uppercase tracking-wider text-amber-600 hover:bg-amber-500/25"
         title={
           forkedNotice
             ? `Drive also held a different version of this file. Your text was kept; the other version was saved alongside as "${forkedNotice}". Click to dismiss.`
             : "Drive also held a different version of this file. Your text was kept; the other version was saved alongside in the same folder. Click to dismiss."
         }
-      >
-        <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-amber-500" />
-        Kept a copy
-      </button>
+      />
     );
   }
 
@@ -58,14 +56,12 @@ export default function SaveStatus() {
   // before the body is replaced, so the reload can never lose work.
   if (upstreamChanged) {
     return (
-      <button
+      <SaveBadge
+        state="changed"
+        label={local ? "File changed on disk — load it" : "Load Drive version"}
         onClick={reloadFromDrive}
-        className="upstream-flash flex h-full cursor-pointer items-center gap-2 px-3 text-sm font-semibold uppercase tracking-wider"
         title={`This file changed ${where} while you were editing. Click to load that version. Any unsaved edits here are saved alongside as a recovery copy first, so nothing is lost.`}
-      >
-        <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-current" />
-        {local ? "File changed on disk — load it" : "Load Drive version"}
-      </button>
+      />
     );
   }
 
@@ -75,39 +71,80 @@ export default function SaveStatus() {
   // the Drive version, snapshotting any unsaved edits to a recovery copy first.
   if (conflict) {
     return (
-      <button
+      <SaveBadge
+        state="conflict"
+        label="Conflict"
         onClick={reloadFromDrive}
-        className="flex h-full cursor-pointer items-center gap-2 bg-amber-500/15 px-3 text-sm uppercase tracking-wider text-amber-600 hover:bg-amber-500/25"
         title="This file was also changed in Obsidian/Drive. gmist will not overwrite it and keeps your edits in this session, retrying automatically in case the change was a transient Drive sync blip. If it persists it is a real external edit: click to load the Drive version (your unsaved edits are saved alongside as a recovery copy first)."
-      >
-        <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-amber-500" />
-        Conflict
-      </button>
+      />
     );
   }
 
+  return unsaved ? (
+    <SaveBadge state="saving" label="Saving…" onClick={saveNow} title="Saving to Drive. Click to save now." />
+  ) : (
+    <SaveBadge
+      state="saved"
+      label="Synced"
+      onClick={saveNow}
+      title="In sync with Drive (this copy matches the file in Drive)"
+    />
+  );
+}
+
+/** What a save indicator can say, in either editor. */
+export type SaveState = "opening" | "saved" | "unsaved" | "saving" | "changed" | "conflict" | "kept" | "error";
+
+/**
+ * The save indicator both editors draw: the Drive editor through SaveStatus
+ * above, the local editor from its own file sync. Only the look lives here; each
+ * editor decides the state, the words and what a click does, because a Drive
+ * room and a file on disk fail in different ways.
+ */
+export function SaveBadge({
+  state,
+  label,
+  title,
+  onClick,
+}: {
+  state: SaveState;
+  label: string;
+  title: string;
+  onClick?: () => void;
+}) {
+  const look =
+    state === "changed"
+      ? "upstream-flash font-semibold"
+      : state === "conflict" || state === "kept" || state === "error"
+        ? "bg-amber-500/15 text-amber-600 hover:bg-amber-500/25"
+        : state === "unsaved" || state === "saving"
+          ? "text-coral hover:bg-coral/10"
+          : "text-muted hover:bg-border";
+  const mark =
+    state === "saved" ? (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="20 6 9 17 4 12" />
+      </svg>
+    ) : state === "opening" ? null : (
+      <span
+        className={`inline-block h-2 w-2 shrink-0 rounded-full ${
+          state === "changed" ? "bg-current" : state === "unsaved" || state === "saving" ? "bg-coral" : "bg-amber-500"
+        }`}
+      />
+    );
   return (
     <button
-      onClick={saveNow}
-      className={`flex h-full cursor-pointer items-center gap-2 px-3 text-sm uppercase tracking-wider transition-colors ${
-        unsaved ? "text-coral hover:bg-coral/10" : "text-muted hover:bg-border"
+      type="button"
+      onClick={onClick}
+      disabled={!onClick}
+      title={title}
+      aria-label={label}
+      className={`flex h-full items-center gap-2 whitespace-nowrap px-3 text-sm uppercase tracking-wider transition-colors ${look} ${
+        onClick ? "cursor-pointer" : "cursor-default"
       }`}
-      title={unsaved ? "Saving to Drive. Click to save now." : "In sync with Drive (this copy matches the file in Drive)"}
-      aria-label={unsaved ? "Saving" : "In sync with Drive"}
     >
-      {unsaved ? (
-        <>
-          <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-coral" />
-          Saving…
-        </>
-      ) : (
-        <>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="20 6 9 17 4 12" />
-          </svg>
-          Synced
-        </>
-      )}
+      {mark}
+      {label}
     </button>
   );
 }

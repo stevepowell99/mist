@@ -19,17 +19,23 @@ const svg = (paths: React.ReactNode) => (
   </svg>
 );
 
+// No two glyphs in the bar share a shape. Four of them used to be stacks of
+// horizontal lines (outline, editor, live, comments), so the bar read as a row
+// of identical hamburgers and the tooltip was the only way to tell them apart.
 export const IconEditing = () => svg(<><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></>);
-export const IconSuggesting = () => svg(<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z" />);
-export const IconEditorOnly = () => svg(<><path d="M4 6h16M4 10h16M4 14h10M4 18h10" /></>);
+// A highlighter: marking up someone's text rather than rewriting it.
+export const IconSuggesting = () => svg(<><path d="m9 11-6 6v3h9l3-3" /><path d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4" /></>);
+// The markdown source: code brackets, since this is the view that shows the marks.
+export const IconEditorOnly = () => svg(<><path d="m16 18 6-6-6-6" /><path d="m8 6-6 6 6 6" /></>);
 // Live preview: the same lines as the editor icon, but the top one is a heading
 // bar, so the pair reads as "source" then "typeset".
 export const IconLive = () => svg(<><path d="M4 6h9" strokeWidth="3.5" /><path d="M4 11h16M4 15h16M4 19h10" /></>);
 export const IconSplit = () => svg(<><rect x="3" y="4" width="18" height="16" rx="1" /><path d="M12 4v16" /></>);
 export const IconPreviewOnly = () => svg(<><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" /><circle cx="12" cy="12" r="3" /></>);
+// A tree of headings, for the outline (or a deck's slide list).
 export const IconOutline = () => svg(<>
-  <line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" />
-  <line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" />
+  <path d="M21 12h-8" /><path d="M21 6H8" /><path d="M21 18h-8" />
+  <path d="M3 6v4c0 1.1.9 2 2 2h3" /><path d="M3 10v6c0 1.1.9 2 2 2h3" />
 </>);
 export const IconPresent = () => svg(<>
   <rect x="2" y="3" width="20" height="14" rx="2" /><path d="M8 21h8M12 17v4" />
@@ -40,11 +46,12 @@ export const IconPrint = () => svg(<>
   <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
   <rect x="6" y="14" width="12" height="8" rx="1" />
 </>);
-export const IconComments = () => svg(<path d="M4 6h16M4 12h16M4 18h16" />);
-/** Take this file to the other gmist (local editor only). */
-export const IconOnline = () => svg(<>
-  <circle cx="12" cy="12" r="9" /><path d="M3 12h18" />
-  <path d="M12 3a15 15 0 0 1 0 18a15 15 0 0 1 0-18Z" />
+// A speech bubble with text, for the comments and suggestions panel.
+export const IconComments = () => svg(<>
+  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z" /><path d="M13 8H7" /><path d="M17 12H7" />
+</>);
+export const IconMore = () => svg(<>
+  <circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" />
 </>);
 
 /** The four exclusive layouts the navbar, keyboard and URL all name. */
@@ -55,7 +62,7 @@ export type DocView = "editor" | "live" | "split" | "preview";
  * tooltip. `omit` drops a view the caller cannot offer (Split is desktop-only).
  */
 export const VIEW_BUTTONS: { view: DocView; title: string; Icon: () => React.ReactElement }[] = [
-  { view: "editor", title: "Editor only (Ctrl/Cmd+Alt+1)", Icon: IconEditorOnly },
+  { view: "editor", title: "Source: the markdown as written (Ctrl/Cmd+Alt+1)", Icon: IconEditorOnly },
   { view: "live", title: "Live preview (Ctrl/Cmd+Alt+4)", Icon: IconLive },
   { view: "split", title: "Split (Ctrl/Cmd+Alt+2)", Icon: IconSplit },
   { view: "preview", title: "Preview only (Ctrl/Cmd+Alt+3)", Icon: IconPreviewOnly },
@@ -115,7 +122,7 @@ export function ToolbarButton({
   active?: boolean;
   children: React.ReactNode;
 }) {
-  const cls = `flex shrink-0 cursor-pointer items-center px-3 transition-colors ${
+  const cls = `flex shrink-0 cursor-pointer items-center gap-1.5 px-3 text-sm uppercase tracking-wider transition-colors ${
     active ? "bg-ink text-paper" : "text-muted hover:bg-border hover:text-ink"
   }`;
   if (href) {
@@ -128,6 +135,44 @@ export function ToolbarButton({
   return (
     <button type="button" onClick={onClick} title={title} aria-pressed={active} className={cls}>
       {children}
+    </button>
+  );
+}
+
+/**
+ * Editing or Suggesting, as one labelled button rather than a two-part toggle:
+ * the word says which mode you are in, the colour says it again, and a click
+ * switches. `locked` is a suggest-link holder, who can only suggest.
+ */
+export function ModeToggle({
+  mode,
+  onToggle,
+  locked,
+}: {
+  mode: "edit" | "suggest";
+  onToggle: () => void;
+  locked?: boolean;
+}) {
+  const editing = mode === "edit";
+  return (
+    <button
+      type="button"
+      onClick={locked ? undefined : onToggle}
+      disabled={locked}
+      aria-pressed={!editing}
+      title={
+        locked
+          ? "Suggesting: this link can only suggest changes"
+          : editing
+            ? "Editing: your edits are applied. Click to suggest instead (Ctrl/Cmd+Alt+S)"
+            : "Suggesting: your edits become tracked changes. Click to edit instead (Ctrl/Cmd+Alt+E)"
+      }
+      className={`flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm uppercase tracking-wider text-paper transition-colors ${
+        editing ? "bg-coral" : "bg-amber-500"
+      } ${locked ? "cursor-default opacity-80" : "cursor-pointer hover:opacity-90"}`}
+    >
+      {editing ? <IconEditing /> : <IconSuggesting />}
+      <span className="hidden sm:inline">{editing ? "Editing" : "Suggesting"}</span>
     </button>
   );
 }

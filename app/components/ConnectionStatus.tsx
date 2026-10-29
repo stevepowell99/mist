@@ -41,13 +41,18 @@ export default function ConnectionStatus() {
     };
   }, [socket]);
 
+  // Connected is the normal state and the save badge already says "Synced", so
+  // the dot shows only when something is wrong.
+  if (readyState === WebSocket.OPEN) return null;
+
   return (
     <span
-      className="inline-flex items-center"
+      className="inline-flex items-center gap-2 px-3 text-sm uppercase tracking-wider text-muted"
       title={display.text}
       aria-label={`Connection: ${display.text}`}
     >
       <span className={`h-2.5 w-2.5 rounded-full ${display.dotClass}`} />
+      {display.text}
     </span>
   );
 }

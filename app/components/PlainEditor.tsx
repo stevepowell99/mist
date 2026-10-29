@@ -29,10 +29,10 @@ import SlidesView, { isSlideDeck } from "~/components/SlidesView";
 import { slideIndexForOffset } from "~/lib/slide-cursor";
 import PresenterRail from "~/components/PresenterRail";
 import PresentControls from "~/components/PresentControls";
-import {
-  ToolbarToggle, ToolbarGroup, ToolbarButton, VIEW_BUTTONS, IconEditing, IconSuggesting,
-  IconOutline, IconPresent, IconPrint, IconComments, IconOnline,
-} from "~/components/Toolbar";
+import { ToolbarButton } from "~/components/Toolbar";
+import DocNavbar from "~/components/DocNavbar";
+import { SaveBadge } from "~/components/SaveStatus";
+import { idToPath } from "~/lib/localfs-ids";
 import { useChordListener } from "~/lib/useChordListener";
 import CommitButton from "~/components/CommitButton";
 import OutlinePanel from "~/components/OutlinePanel";
@@ -398,6 +398,7 @@ export default function PlainEditor({
   /** A deck is the same document with a different preview: the source is
    *  markdown either way, and the editor does not change. */
   const deck = useMemo(() => isSlideDeck(text), [text]);
+  const folderLabel = useMemo(() => folderTrail(fileId), [fileId]);
   const slideProps = {
     markdown: text,
     drive: folderId ? ({ fileId, name, folderId } as DriveMeta) : null,
@@ -675,112 +676,69 @@ export default function PlainEditor({
 
   return (
     <div className="flex h-screen flex-col bg-paper">
-      <header className="flex h-11 shrink-0 items-center gap-3 border-b border-border px-3 text-sm">
-        <span className="font-medium text-ink">{name}</span>
-        <span className="text-xs uppercase tracking-wider text-muted">{describe(status)}</span>
-        <CommitButton
-          fileId={fileId}
-          unsaved={status === "dirty" || status === "saving"}
-          saveNow={() => saveNowRef.current()}
-        />
-        {status === "conflict" && (
-          <button
-            type="button"
-            onClick={takeDisk}
-            className="upstream-flash cursor-pointer rounded px-2 py-1 text-xs font-semibold uppercase tracking-wider"
-          >
-            File changed on disk — load it
-          </button>
-        )}
-        {note && <span className="truncate text-xs text-muted">{note}</span>}
-        {/* From here right, the same controls as the Drive editor and drawn from
-            the same parts (components/Toolbar): an outline toggle, the deck
-            actions, then the Mode and View groups. They were lowercase words in
-            a different order, which made two editors of one app look like two
-            programs. What differs is only what genuinely differs: no Share (a
-            local file has no address to share), and an Online button, which
-            only a local file needs. */}
-        <div className="ml-auto flex shrink-0 items-stretch gap-2">
-          <ToolbarButton
-            onClick={() =>
-              setOutlineOpen((o) => {
-                remember(OUTLINE_KEY, o ? "no" : "yes");
-                return !o;
-              })
-            }
-            title={`${deck ? "Slide list" : "Outline"} (Ctrl/Cmd+Alt+D)`}
-            active={outlineOpen}
-          >
-            <IconOutline />
-          </ToolbarButton>
-          {deck && (
-            <ToolbarButton onClick={enterPresent} title="Present (Ctrl/Cmd+Alt+P)">
-              <IconPresent />
-            </ToolbarButton>
-          )}
-          <ToolbarButton
-            onClick={() => void print()}
-            title="Print to PDF (Ctrl/Cmd+P): opens a print view, where Save as PDF makes the file. The online gmist makes the PDF file itself"
-          >
-            <IconPrint />
-          </ToolbarButton>
+      <DocNavbar
+        homeHref="/go"
+        outline={{
+          open: outlineOpen,
+          onToggle: () =>
+            setOutlineOpen((o) => {
+              remember(OUTLINE_KEY, o ? "no" : "yes");
+              return !o;
+            }),
+        }}
+        deck={deck}
+        folder={folderLabel ? { label: folderLabel } : null}
+        title={name}
+        status={
+          <>
+            <LocalSaveBadge status={status} note={note} save={() => saveNowRef.current()} load={takeDisk} />
+            <CommitButton
+              fileId={fileId}
+              unsaved={status === "dirty" || status === "saving"}
+              saveNow={() => saveNowRef.current()}
+            />
+            {note && status !== "conflict" && status !== "error" && (
+              <span className="hidden max-w-[16rem] items-center truncate px-2 text-xs text-muted lg:flex">{note}</span>
+            )}
+          </>
+        }
+        mode={{
+          value: mode,
+          onToggle: () => {
+            const next = mode === "edit" ? "suggest" : "edit";
+            remember(MODE_KEY, next);
+            setMode(next);
+          },
+        }}
+        view={{ value: layout, onChange: setLayoutPersist, allowSplit: true }}
+        onPresent={deck ? enterPresent : undefined}
+        share={
+          // A local file has no address to share, so this slot takes it to the
+          // online gmist, where it can be shared or presented to others.
           <ToolbarButton
             href={`${DEPLOYED_ORIGIN}/go?q=${encodeURIComponent(name)}`}
             title="Find this file in the online gmist, where it can be shared or presented to others"
           >
-            <IconOnline />
+            Online ↗
           </ToolbarButton>
-          <ToolbarGroup>
-            <ToolbarToggle
-              active={mode === "edit"}
-              onClick={() => {
-                remember(MODE_KEY, "edit");
-                setMode("edit");
-              }}
-              title="Editing: your edits are applied (Ctrl/Cmd+Alt+E)"
-              activeClass="bg-coral text-paper"
-            >
-              <IconEditing />
-            </ToolbarToggle>
-            <ToolbarToggle
-              active={mode === "suggest"}
-              onClick={() => {
-                remember(MODE_KEY, "suggest");
-                setMode("suggest");
-              }}
-              title="Suggesting: your edits become tracked changes (Ctrl/Cmd+Alt+S)"
-              activeClass="bg-amber-500 text-paper"
-            >
-              <IconSuggesting />
-            </ToolbarToggle>
-          </ToolbarGroup>
-          <ToolbarGroup>
-            {VIEW_BUTTONS.map(({ view: v, title, Icon }) => (
-              <ToolbarToggle
-                key={v}
-                active={layout === v}
-                onClick={() => setLayoutPersist(v)}
-                title={title}
-                activeClass={v === "preview" ? "bg-emerald-600 text-paper" : "bg-ink text-paper"}
-              >
-                <Icon />
-              </ToolbarToggle>
-            ))}
-          </ToolbarGroup>
-          <ToolbarButton
-            onClick={() =>
-              setReviewOpen((o) => {
-                remember(REVIEW_KEY, o ? "no" : "yes");
-                return !o;
-              })
-            }
-            title="Suggested edits and comments (Ctrl/Cmd+Alt+C)"
-            active={reviewOpen}
-          >
-            <IconComments />
-          </ToolbarButton>
-        </div>
-      </header>
+        }
+        menu={[
+          {
+            label: "Print to PDF",
+            keys: "Ctrl+P",
+            title: "Opens a print view, where Save as PDF makes the file. The online gmist makes the PDF file itself",
+            onSelect: () => void print(),
+          },
+        ]}
+        comments={{
+          open: reviewOpen,
+          onToggle: () =>
+            setReviewOpen((o) => {
+              remember(REVIEW_KEY, o ? "no" : "yes");
+              return !o;
+            }),
+        }}
+      />
       {alreadyOpen && (
         <div className="flex flex-1 flex-col items-center justify-center gap-4 px-8 text-center">
           <span className="text-sm uppercase tracking-wider text-amber-600">
@@ -904,11 +862,47 @@ export default function PlainEditor({
   );
 }
 
-function describe(status: Status): string {
-  if (status === "loading") return "opening";
-  if (status === "dirty") return "unsaved";
-  if (status === "saving") return "saving";
-  if (status === "conflict") return "";
-  if (status === "error") return "";
-  return "saved";
+/** The file's save state, drawn by the same badge the Drive editor uses. */
+function LocalSaveBadge({
+  status,
+  note,
+  save,
+  load,
+}: {
+  status: Status;
+  note: string | null;
+  save: () => void;
+  load: () => void;
+}) {
+  if (status === "loading") return <SaveBadge state="opening" label="Opening" title="Reading the file" />;
+  if (status === "conflict") {
+    return (
+      <SaveBadge
+        state="changed"
+        label="File changed on disk — load it"
+        onClick={load}
+        title={`${note ?? "The file changed on disk."} Click to load it; your version is saved beside the file first.`}
+      />
+    );
+  }
+  if (status === "error") {
+    return <SaveBadge state="error" label="Not saved" onClick={save} title={`${note ?? "The last save failed."} Click to try again.`} />;
+  }
+  if (status === "dirty") return <SaveBadge state="unsaved" label="Unsaved" onClick={save} title="Not yet on disk. Click to save now." />;
+  if (status === "saving") return <SaveBadge state="saving" label="Saving…" title="Writing to disk" />;
+  return <SaveBadge state="saved" label="Saved" onClick={save} title="This copy matches the file on disk" />;
+}
+
+/**
+ * The last few folders above a file, for the navbar. The immediate parent is
+ * not enough: `rubicon/docs/principles.md` and
+ * `rubicon-function/app/rubicon/docs/principles.md` both showed as "docs /
+ * principles", which is how forty minutes of editing went into a directory a
+ * deploy script rebuilds from scratch.
+ */
+function folderTrail(fileId: string): string | null {
+  const path = idToPath(fileId);
+  if (!path) return null;
+  const parts = path.split("\\").join("/").split("/").filter(Boolean);
+  return parts.slice(Math.max(0, parts.length - 4), parts.length - 1).join("/") || null;
 }

@@ -1,8 +1,8 @@
-import { data, redirect, Link } from "react-router";
+import { data, redirect } from "react-router";
 import { useRef, useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import type { Route } from "./+types/docs.$id";
 import { APP_NAME, isValidDocumentId } from "~/shared/constants";
-import { idToPath, isLocalFileId } from "~/lib/localfs-ids";
+import { isLocalFileId } from "~/lib/localfs-ids";
 import { resolveDoc } from "~/lib/doc-resolve.server";
 import type { DocRole, DriveMeta } from "~/shared/types";
 import { getCloudflare } from "~/lib/cloudflare.server";
@@ -29,7 +29,6 @@ import CleanViewToggle from "~/components/CleanViewToggle";
 import SuggestionList from "~/components/SuggestionList";
 import CommentInput from "~/components/CommentInput";
 import ThreadList from "~/components/ThreadList";
-import ThemeSelector from "~/components/ThemeSelector";
 import MobilePanel from "~/components/MobilePanel";
 import NamePrompt from "~/components/NamePrompt";
 import FolderSidebar from "~/components/FolderSidebar";
@@ -42,10 +41,8 @@ import ShareOnOpen from "~/components/ShareOnOpen";
 import RememberRoom from "~/components/RememberRoom";
 import SlidesView, { isSlideDeck } from "~/components/SlidesView";
 import PresentControls from "~/components/PresentControls";
-import {
-  ToolbarToggle, ToolbarGroup, VIEW_BUTTONS, IconEditing, IconSuggesting,
-  type DocView,
-} from "~/components/Toolbar";
+import { type DocView } from "~/components/Toolbar";
+import DocNavbar from "~/components/DocNavbar";
 import { fileTitle } from "~/lib/slides-build";
 
 // useLayoutEffect on the client (so scroll is restored before paint, no flash),
@@ -433,21 +430,7 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
   // The parent folder's name for the navbar breadcrumb. The folder id is on the
   // DriveMeta; its name is the last entry of the folder trail, which the search
   // endpoint already returns, so no new route or schema field is needed.
-  //
-  // For a local file the immediate parent is not enough. Two files can be called
-  // the same thing in folders called the same thing, and one of them can be a
-  // build artefact: `rubicon/docs/principles.md` and
-  // `rubicon-function/app/rubicon/docs/principles.md` both showed as
-  // "docs / principles", which is how forty minutes of editing went into a
-  // directory a deploy script rebuilds from scratch. So show enough of the path
-  // to tell them apart.
   const [folderName, setFolderName] = useState<string | null>(null);
-  const localFolder = useMemo(() => {
-    const path = drive?.fileId ? idToPath(drive.fileId) : null;
-    if (!path) return null;
-    const parts = path.split("\\").join("/").split("/").filter(Boolean);
-    return parts.slice(Math.max(0, parts.length - 4), parts.length - 1).join("/");
-  }, [drive?.fileId]);
   useEffect(() => {
     const fid = drive?.folderId;
     if (!fid) {
@@ -877,177 +860,53 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
     <div className="flex h-screen flex-col overflow-hidden">
       <QuickOpenTrigger />
       {!present && (
-      <header ref={headerRef} className="flex items-stretch border-b border-border">
-        <Link
-          to="/"
-          className="flex shrink-0 items-center bg-ink px-4 py-2 font-medium text-paper transition-colors hover:bg-chartreuse hover:text-[#1a1a1a]"
-        >
-          {APP_NAME}
-        </Link>
-        <FolderSidebar />
-        <button
-          type="button"
-          onClick={() => setOutlineOpen((v) => !v)}
-          title={`${deck ? "Slide list" : "Outline"} (Ctrl/Cmd+Alt+D)`}
-          aria-label="Toggle outline"
-          aria-pressed={outlineOpen}
-          className={`flex shrink-0 cursor-pointer items-center border-r border-border px-3 transition-colors ${outlineOpen ? "bg-ink text-paper" : "hover:bg-border hover:text-ink"}`}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" />
-            <line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" />
-          </svg>
-        </button>
-        <button
-          type="button"
-          onClick={() => window.dispatchEvent(new CustomEvent("mist-toggle-library"))}
-          title="Insert a standard slide from the library (or type /library)"
-          aria-label="Open the library"
-          className="hidden shrink-0 cursor-pointer items-center border-r border-border px-3 transition-colors hover:bg-border hover:text-ink lg:flex"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" />
-          </svg>
-        </button>
-        {/* Present: fill the app (fullscreen), hide the chrome and show the
-            presenter rail. One in-app mode, so the slide and our own UI share the
-            screen. Ctrl/Cmd+Alt+P toggles it; Esc leaves. */}
-        {deck && (
-          <button
-            type="button"
-            onClick={enterPresent}
-            title="Present (Ctrl/Cmd+Alt+P)"
-            aria-label="Present deck"
-            className="hidden shrink-0 cursor-pointer items-center border-r border-border px-3 transition-colors hover:bg-border hover:text-ink lg:flex"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <rect x="2" y="3" width="20" height="14" rx="2" /><path d="M8 21h8M12 17v4" /><path d="M10 8.5 14.5 11 10 13.5Z" fill="currentColor" stroke="none" />
-            </svg>
-          </button>
-        )}
-        {/* Print to PDF: a deck's slides or a document's A4 pages, made into a
-            PDF file on the server and downloaded. */}
-        <button
-          type="button"
-          onClick={printPdf}
-          title="Print to PDF (Ctrl/Cmd+P)"
-          aria-label="Print to PDF"
-          className="hidden shrink-0 cursor-pointer items-center border-r border-border px-3 transition-colors hover:bg-border hover:text-ink lg:flex"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M6 9V2h12v7" /><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /><rect x="6" y="14" width="12" height="8" rx="1" />
-          </svg>
-        </button>
-        <div className="flex min-w-0 grow items-center gap-2 px-4">
-          <span
-            className="hidden shrink-0 rounded border border-border px-1.5 py-0.5 text-xs uppercase tracking-wider text-muted sm:inline-block"
-            title={deck ? "Slide deck (format: revealjs)" : "Document"}
-          >
-            {deck ? "Deck" : "Doc"}
-          </span>
-          {/* Parent folder, paler and clickable: opens the Drive sidebar (which
-              starts at this folder). Hidden on the narrowest screens for room. */}
-          {(localFolder ?? folderName) && (
-            <span className="hidden min-w-0 shrink items-center gap-2 sm:flex">
-              <button
-                type="button"
-                onClick={() => window.dispatchEvent(new CustomEvent("mist-toggle-folder"))}
-                title={`Open folder: ${localFolder ?? folderName}`}
-                className="max-w-[12rem] cursor-pointer truncate text-muted opacity-70 hover:underline hover:opacity-100"
-              >
-                {localFolder ?? folderName}
-              </button>
-              <span className="text-muted opacity-50">/</span>
-            </span>
-          )}
-          <span className="truncate font-medium" title={title}>{title}</span>
-        </div>
-        {/* Two separate radio pills so the grouping reads at a glance: Mode
-            (Editing vs Suggesting, shared doc state, only an edit-link user can
-            switch) and View (Editor / Split / Preview, per-viewer). Shown at
-            every width: these are the single mode/view control, on mobile too
-            (Split is desktop-only and drops out below lg). */}
-        <div className="flex shrink-0 items-center gap-2 border-l border-border pl-3 pr-1">
-          <ToolbarGroup>
-            <ToolbarToggle
-              active={mode === "edit"}
-              onClick={() => role === "edit" && mode !== "edit" && toggleMode()}
-              disabled={role !== "edit"}
-              title="Editing (Ctrl/Cmd+Alt+E)"
-              activeClass="bg-coral text-paper"
-            >
-              <IconEditing />
-            </ToolbarToggle>
-            <ToolbarToggle
-              active={mode === "suggest"}
-              onClick={() => mode !== "suggest" && role === "edit" && toggleMode()}
-              disabled={role !== "edit"}
-              title="Suggesting (Ctrl/Cmd+Alt+S)"
-              activeClass="bg-amber-500 text-paper"
-            >
-              <IconSuggesting />
-            </ToolbarToggle>
-          </ToolbarGroup>
-          <ToolbarGroup>
-            {VIEW_BUTTONS.map(({ view: v, title, Icon }) =>
-              // Split needs the width for two panes, so it drops out below lg.
-              v === "split" && !isDesktop ? null : (
-                <ToolbarToggle
-                  key={v}
-                  active={view === v}
-                  onClick={() => setView(v)}
-                  title={title}
-                  activeClass={v === "preview" ? "bg-emerald-600 text-paper" : "bg-ink text-paper"}
-                >
-                  <Icon />
-                </ToolbarToggle>
-              ),
-            )}
-          </ToolbarGroup>
-        </div>
-        {/* On desktop the right group is the aside width so its left edge lines up with
-            the body/sidebar divide. On mobile there is no sidebar, so it sizes naturally. */}
-        <div className="flex shrink-0 items-stretch lg:w-96">
-          <div className="flex items-center border-l border-border px-3 lg:min-w-0 lg:flex-1 lg:justify-center lg:overflow-hidden lg:px-2">
+      <DocNavbar
+        headerRef={headerRef}
+        homeHref="/"
+        folderButton={<FolderSidebar />}
+        outline={{ open: outlineOpen, onToggle: () => setOutlineOpen((v) => !v) }}
+        deck={deck}
+        folder={
+          folderName
+            ? { label: folderName, onClick: () => window.dispatchEvent(new CustomEvent("mist-toggle-folder")) }
+            : null
+        }
+        title={title}
+        status={
+          <>
             <ConnectionStatus />
-          </div>
-          {peers.length > 0 && (
-            <div className="hidden shrink-0 items-center border-l border-border px-2 lg:flex">
-              <PresenceBar peers={peers} />
-            </div>
-          )}
-          <div className="hidden shrink-0 items-center border-l border-border lg:flex">
-            <UserName />
-          </div>
-          <div className="flex shrink-0 items-stretch border-l border-border">
             <SaveStatus />
-          </div>
-          <div className="shrink-0 border-l border-border">
-            <ShareButton />
-          </div>
-          <div className="flex shrink-0 items-center border-l border-border">
-            <ThemeSelector />
-          </div>
-          <button
-            type="button"
-            onClick={() => setAsideCollapsedPersist(!asideCollapsed)}
-            title="Comments panel (Ctrl/Cmd+Alt+C)"
-            aria-label="Toggle comments panel"
-            aria-pressed={!asideCollapsed}
-            className={`hidden shrink-0 cursor-pointer items-center border-l border-border px-3 transition-colors lg:flex ${
-              !asideCollapsed
-                ? "bg-ink text-paper"
-                : asidePeek
-                  ? "bg-muted text-paper"
-                  : "hover:bg-border hover:text-ink"
-            }`}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <path d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          </button>
-        </div>
-      </header>
+          </>
+        }
+        mode={{ value: mode, onToggle: () => role === "edit" && toggleMode(), locked: role !== "edit" }}
+        view={{ value: view, onChange: setView, allowSplit: isDesktop }}
+        onPresent={deck ? enterPresent : undefined}
+        share={<ShareButton />}
+        menu={[
+          { label: "Print to PDF", keys: "Ctrl+P", onSelect: printPdf },
+          {
+            label: "Insert from the library",
+            keys: "/library",
+            title: "A standard slide or image from the shared library",
+            onSelect: () => window.dispatchEvent(new CustomEvent("mist-toggle-library")),
+          },
+        ]}
+        people={
+          <>
+            {peers.length > 0 && (
+              <div className="flex items-center px-2">
+                <PresenceBar peers={peers} />
+              </div>
+            )}
+            <UserName />
+          </>
+        }
+        comments={{
+          open: !asideCollapsed,
+          peek: asidePeek,
+          onToggle: () => setAsideCollapsedPersist(!asideCollapsed),
+        }}
+      />
       )}
       <div className="relative flex flex-1 overflow-hidden">
         {!yjs.synced && !yjs.paused && (
