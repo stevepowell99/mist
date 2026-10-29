@@ -109,6 +109,8 @@ export function useFileSync(fileId: string, buffer: FileSyncBuffer, events: File
   const pending = useRef<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stopped = useRef(false);
+  /** Consecutive writes that found the file service down, for the retry backoff. */
+  const unreachable = useRef(0);
 
   // Held in refs so a re-render does not tear down the poll or the save timer.
   const buf = useRef(buffer);
@@ -197,9 +199,20 @@ export function useFileSync(fileId: string, buffer: FileSyncBuffer, events: File
       version.current = body.version;
       if (body.version) seen.current.add(body.version);
       clean.current = buf.current.held();
+      unreachable.current = 0;
       evt.current.onSaved?.(content);
     } catch {
       evt.current.onError?.("The local file service is not reachable.");
+      // The service restarts on every deploy (scripts/local-gmist.mjs) and is
+      // back within seconds, so try again rather than leave the edit unsaved
+      // until the next keystroke. A newer save that lands meanwhile wins.
+      if (stopped.current || unreachable.current >= 30) return;
+      const wait = Math.min(15000, 2000 * 2 ** unreachable.current++);
+      setTimeout(() => {
+        if (stopped.current || conflicted.current) return;
+        pending.current ??= content;
+        chain.current = chain.current.then(write);
+      }, wait);
     }
   }, [url]);
 

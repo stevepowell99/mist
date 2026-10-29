@@ -18,6 +18,8 @@ class FakeDisk {
   version: string;
   writes: { body: string; expected: string | null }[] = [];
   refuseNext = false;
+  /** POSTs to fail as a network error, as while the service restarts. */
+  downFor = 0;
 
   constructor(text: string) {
     this.text = text;
@@ -60,6 +62,10 @@ beforeEach(() => {
   disk = new FakeDisk("one\ntwo\nthree\n");
   vi.stubGlobal("fetch", async (input: string, init?: RequestInit) => {
     const url = new URL(input, "http://local");
+    if (init?.method === "POST" && url.pathname === "/local/doc" && disk.downFor > 0) {
+      disk.downFor -= 1;
+      throw new TypeError("Failed to fetch");
+    }
     if (init?.method === "POST" && url.pathname === "/local/doc") {
       const expected = url.searchParams.get("expected");
       const body = String(init.body);
@@ -197,6 +203,24 @@ describe("useFileSync", () => {
 
     expect(disk.writes[0].expected).toBe(loaded);
     expect(disk.text).toBe("one\ntwo\nthree\nand mine\n");
+  });
+
+  it("tries a write again when the file service is briefly down", async () => {
+    const buf = plainBuffer();
+    const errors: string[] = [];
+    let saved = 0;
+    const { result } = mount(buf, { onError: (m: string) => errors.push(m), onSaved: () => (saved += 1) });
+    await waitFor(() => expect(result.current.ready).toBe(true));
+
+    disk.downFor = 1;
+    buf.type("one\ntwo\nthree\nwritten during a restart\n");
+    await act(async () => {
+      result.current.save();
+    });
+    await waitFor(() => expect(errors).toHaveLength(1));
+    // Nothing else asks for a save; the retry alone has to land it.
+    await waitFor(() => expect(saved).toBe(1), { timeout: 4000 });
+    expect(disk.text).toBe("one\ntwo\nthree\nwritten during a restart\n");
   });
 
   it("stops writing once a write is refused", async () => {

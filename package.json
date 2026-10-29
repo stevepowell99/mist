@@ -5,10 +5,11 @@
 	"scripts": {
 		"build": "react-router build",
 		"cf-typegen": "wrangler types",
-		"deploy": "npm run build && wrangler deploy",
+		"deploy": "node scripts/deploy.mjs",
 		"dev": "react-router dev",
 		"dev:local": "node scripts/dev-local.mjs",
 		"localfs": "node scripts/localfs-server.mjs",
+		"local:refresh": "node scripts/local-gmist.mjs refresh --build",
 		"gen:styles": "node scripts/gen-styles.mjs",
 		"lint": "eslint .",
 		"postinstall": "npm run cf-typegen",
