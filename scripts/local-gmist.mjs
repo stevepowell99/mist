@@ -45,14 +45,16 @@ function powershell(command) {
   }).trim();
 }
 
-/** The processes listening on gmist's two ports, with their command lines and parents. */
+/** The processes listening on gmist's two ports, with their command lines and parents.
+ *  The trailing `exit 0` matters: Windows PowerShell exits 1 when
+ *  Get-NetTCPConnection matches nothing, SilentlyContinue or not. */
 function listeners() {
   const out = powershell(
     `Get-NetTCPConnection -LocalPort ${PORT},${SIDECAR_PORT} -State Listen -ErrorAction SilentlyContinue |` +
       ` Select-Object -Unique LocalPort, OwningProcess | ForEach-Object {` +
       ` $p = Get-CimInstance Win32_Process -Filter "ProcessId=$($_.OwningProcess)";` +
       ` [pscustomobject]@{ port = $_.LocalPort; pid = $_.OwningProcess; parent = $p.ParentProcessId; cmd = $p.CommandLine } } |` +
-      ` ConvertTo-Json -Compress`,
+      ` ConvertTo-Json -Compress; exit 0`,
   );
   if (!out) return [];
   const parsed = JSON.parse(out);
