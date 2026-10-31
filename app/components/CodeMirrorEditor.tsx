@@ -22,6 +22,7 @@ import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { yCollab, yUndoManagerKeymap } from "y-codemirror.next";
 import { criticMarkup } from "~/lib/cm-criticmarkup";
 import { selectionToolbar } from "~/lib/cm-selection-toolbar";
+import { wordCount } from "~/lib/cm-word-count";
 import { markdownLineStyle } from "~/lib/cm-markdown-style";
 import { livePreview } from "~/lib/cm-live-preview";
 import { fencedDivStyle } from "~/lib/cm-fenced-divs";
@@ -292,6 +293,7 @@ export default function CodeMirrorEditor({
         fencedDivStyle,
         criticMarkup,
         selectionToolbar(() => canEditRef.current),
+        wordCount,
         activeCommentField,
         EditorView.domEventHandlers({
           paste: (event, v) =>

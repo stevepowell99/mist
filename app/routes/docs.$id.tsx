@@ -1005,7 +1005,7 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
             }`}
             style={splitOpen ? { width: `${editorPct}%` } : undefined}
           >
-            <div className={`min-h-full ${(splitOpen ? false : showPreview) ? "hidden" : ""}`}>
+            <div className={`min-h-full ${(splitOpen ? false : showPreview) ? "hidden" : "flex flex-col"}`}>
               <CodeMirrorEditor
                 doc={yjs.doc}
                 awareness={yjs.awareness}
@@ -1024,7 +1024,7 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
                 onUserEdit={markUserEdited}
                 onImagePaste={drive ? uploadImage : undefined}
                 onShortcut={runChord}
-                className="min-h-full text-base"
+                className="flex flex-1 flex-col text-base"
               />
             </div>
             {/* Full-screen document preview stays inside main (it scrolls with

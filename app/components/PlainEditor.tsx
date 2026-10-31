@@ -19,6 +19,7 @@ import { parseCssClasses } from "~/lib/cm-classes";
 import DECK_BASE_CSS from "~/styles/deck-base.css?raw";
 import { suggestMode } from "~/lib/cm-suggest";
 import { selectionToolbar } from "~/lib/cm-selection-toolbar";
+import { wordCount } from "~/lib/cm-word-count";
 import { insertCommentChange } from "~/lib/cm-comments";
 import { wrapOnSelection } from "~/lib/cm-shortcuts";
 import PlainReview from "~/components/PlainReview";
@@ -608,6 +609,7 @@ export default function PlainEditor({
             // changes. All four write CriticMarkup into the text, so none of
             // them needs anything stored anywhere.
             selectionToolbar(() => !conflicted.current),
+            wordCount,
             keymap.of([
               {
                 key: "Mod-Alt-m",
@@ -821,8 +823,8 @@ export default function PlainEditor({
             layout === "preview"
               ? "hidden"
               : layout === "split"
-                ? "w-1/2 border-r border-border"
-                : "flex-1"
+                ? "flex w-1/2 flex-col border-r border-border"
+                : "flex flex-1 flex-col"
           }`}
         />
         {/* Live is the editor alone, typeset in place. Only split and preview put a

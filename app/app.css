@@ -210,6 +210,40 @@ body {
   outline: none;
 }
 
+/* The editor fills its pane (both hosts lay it out as a flex column) and its
+   bottom panels sit at the pane's foot, so the word count is at the bottom
+   right even on a document shorter than the window. */
+.cm-editor {
+  flex: 1 0 auto;
+}
+.cm-editor .cm-panels-bottom {
+  margin-top: auto;
+}
+
+/* Word count (`cm-word-count.ts`): a small label, not a status bar. On its own
+   the panel strip is transparent and lets clicks through to the text beneath;
+   with the search panel open it shares that panel's strip. */
+.cm-editor .cm-panels-bottom:has(> .cm-wordcount:only-child) {
+  background: transparent;
+  border-top: none;
+  pointer-events: none;
+}
+.cm-wordcount {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 0.75rem 0.4rem;
+}
+.cm-wordcount span {
+  pointer-events: auto;
+  padding: 0.1rem 0.5rem;
+  border-radius: 0.25rem;
+  background: color-mix(in srgb, var(--color-paper) 85%, transparent);
+  color: var(--color-muted);
+  font-family: var(--font-sans);
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+}
+
 /* Discrete heading styling in the source editor: weight gradient + a faint
    background for the top levels. Font family and size stay constant (monospace,
    one size everywhere) per the editor's source-view design. */
