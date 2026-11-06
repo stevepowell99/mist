@@ -447,6 +447,19 @@ html.reveal-print .reveal .slides section:not(.stack) { padding: 1.2em 1.8em !im
    a dark background (a dark theme, or a .dark panel) without each one overriding. */
 .reveal code { font-size: 0.85em; background: rgba(128,128,128,0.18); padding: 0.1em 0.3em; border-radius: 3px; color: inherit; }
 .reveal blockquote { border-left: 3px solid var(--teal); background: none; padding: 0.2em 0 0.2em 0.8em; margin: 0.4em 0; font-style: italic; font-size: 0.85em; box-shadow: none; width: auto; }
+/* Tables. Reveal's core CSS styles none, so without this a deck table sets its
+   columns flush. Cell padding reads --cell-pad, so one table loosens or tightens
+   with a wrapper: ::: {style="--cell-pad: 0.4em 1.4em"}; its size is a .scale-*
+   wrapper, and the padding (in em) shrinks with it. Zero specificity, so a theme,
+   class or style= still wins. A markdown `---:` column arrives as an align
+   attribute, which any CSS text-align would beat, so the header rule skips
+   aligned cells; an unaligned header follows its column rather than centring.
+   Rules use currentColor so they read on a dark slide too. */
+:where(.reveal) table { border-collapse: collapse; margin: 0.4em 0; font-variant-numeric: tabular-nums; }
+:where(.reveal) :is(th, td) { padding: var(--cell-pad, 0.2em 0.8em); vertical-align: top; }
+:where(.reveal) th { border-bottom: 2px solid color-mix(in srgb, currentColor 55%, transparent); }
+:where(.reveal) th:not([align]) { text-align: inherit; }
+:where(.reveal) td { border-bottom: 1px solid color-mix(in srgb, currentColor 18%, transparent); }
 
 /* Speaker notes belong off the slide. `::: {.notes}` becomes `aside.notes`
    (parseAttrs in slides-build.ts) and reveal hides that inside its own deck,

@@ -680,7 +680,14 @@ body {
 .preview th,
 .preview td {
   border: 1px solid var(--color-border);
-  padding: 0.35em 0.75em;
+  /* --cell-pad: per-table spacing from a wrapper, as in a deck (deck-base.css). */
+  padding: var(--cell-pad, 0.35em 0.75em);
+}
+
+/* Not on aligned cells: a markdown `---:` column is an align attribute, which
+   any CSS text-align overrides. */
+.preview th:not([align]),
+.preview td:not([align]) {
   text-align: left;
 }
 

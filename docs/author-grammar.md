@@ -36,6 +36,7 @@ Background and the staged plan to converge the two are in
 | Inline span | `[text]{.class}` | yes | yes | yes |
 | Fenced div | `::: {.class}` ... `:::` | full (any classes, nesting) | partial (heading/section classes) | converge in Phase 3 |
 | Image attrs | `![alt](src){.class width=…}` | yes (capped to the slide by default; `.scale-*` or `width=`/`height=` overrides) | yes | yes |
+| Table spacing and size | wrap the table: `::: {style="--cell-pad: 0.4em 1.4em"}` for cell padding, `::: {.scale-75}` for size | yes (deck default `0.2em 0.8em`, doc default `0.35em 0.75em`) | no | gmist-only |
 | Citation | `[@key]` / bare `@key` + a `.bib` | inline APA + reference list | inline APA + reference list | yes |
 | Math | `$…$`, `$$…$$` | yes | yes (MathJax) | yes |
 | Mermaid | ` ```mermaid ` | yes | yes | yes |
