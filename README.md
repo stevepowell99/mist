@@ -51,7 +51,7 @@ gmist began as a fork of [inanimate-tech/mist](https://github.com/inanimate-tech
 
 ## Getting started
 
-Requires Node.js 22+ (see `.nvmrc`) and a Cloudflare account. gmist needs Google OAuth credentials and a session secret to reach Drive; see `.dev.vars.example` for the variables and `CLAUDE.md` for the relay-identity and OAuth setup.
+Requires Node.js 22 (the version CI uses) and a Cloudflare account. gmist needs Google OAuth credentials and a session secret to reach Drive; see `.dev.vars.example` for the variables, `CLAUDE.md` ("Hosting, deploy and secrets") for the OAuth setup and the scripts that mint each secret, and `docs/technical-architecture.md` ("Auth and access") for the relay-identity model.
 
 ```bash
 npm install
@@ -82,10 +82,10 @@ app/
   styles/     deck-base.css (the house framework), classes.json, themes/
 workers/      Cloudflare Worker entry point
 docs/         Design system, architecture, the author grammar
-plans/        Design notes (live-collab.md is the current truth)
+plans/        Design plans as written at the time (mostly June 2026)
 ```
 
-Architecture and the author grammar are documented in `docs/`; project guidance and the current state are in `CLAUDE.md`.
+Architecture, the design notes behind each area and the author grammar are documented in `docs/`; the rules for working in this repo are in `CLAUDE.md`.
 
 ## Licence
 
