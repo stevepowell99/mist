@@ -407,6 +407,31 @@ export default function DriveBrowser({
     [driveOp, refresh],
   );
 
+  // Del trashes the row under the pointer (or the keyboard-focused row), as its
+  // hover trash button does. The search box keeps focus while you browse, so a
+  // Del there counts only when it would do nothing in the box (caret at the end,
+  // nothing selected); in the editor or any other text field it is left alone.
+  useEffect(() => {
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key !== "Delete" || ev.ctrlKey || ev.metaKey || ev.altKey || ev.shiftKey || busy || !data) return;
+      const root = rootRef.current;
+      if (!root) return;
+      const t = ev.target as HTMLElement | null;
+      if (t?.isContentEditable || t instanceof HTMLTextAreaElement) return;
+      if (t instanceof HTMLInputElement && (t.selectionStart !== t.value.length || t.selectionEnd !== t.value.length)) return;
+      const focused = document.activeElement instanceof HTMLElement && root.contains(document.activeElement)
+        ? document.activeElement.closest<HTMLElement>("li[data-row-id]")
+        : null;
+      const row = root.querySelector<HTMLElement>("li[data-row-id]:hover") ?? focused;
+      const item = row && data.items.find((i) => i.id === row.dataset.rowId);
+      if (!item) return;
+      ev.preventDefault();
+      void trashItem(item);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [busy, data, trashItem]);
+
   const copyPath = useCallback((item: Item) => {
     const p = (item.path ? `${item.path} / ` : "") + item.name;
     void navigator.clipboard?.writeText(p);
@@ -495,7 +520,7 @@ export default function DriveBrowser({
               const isCurrent = e.id === currentFileId;
               const cursor = e.isFolder || e.openInMist ? "cursor-pointer" : "cursor-alias";
               return (
-                <li key={e.id} className="group flex items-stretch hover:bg-black/5">
+                <li key={e.id} data-row-id={e.id} className="group flex items-stretch hover:bg-black/5">
                   <button
                     type="button"
                     disabled={busy}
@@ -515,7 +540,7 @@ export default function DriveBrowser({
                       <span className="mt-0.5 shrink-0 text-xs opacity-50">Drive</span>
                     )}
                   </button>
-                  <div className="hidden shrink-0 items-center gap-0.5 pr-1.5 group-hover:flex">
+                  <div className="hidden shrink-0 items-center gap-0.5 pr-1.5 group-focus-within:flex group-hover:flex">
                     {!e.isFolder && (
                       <RowAction title="Duplicate" disabled={busy} onClick={() => void duplicateItem(e)}>
                         <CopyGlyph />
@@ -527,7 +552,7 @@ export default function DriveBrowser({
                     <RowAction title="Copy path" disabled={busy} onClick={() => copyPath(e)}>
                       <LinkGlyph />
                     </RowAction>
-                    <RowAction title="Move to trash" disabled={busy} onClick={() => void trashItem(e)}>
+                    <RowAction title="Move to trash (Del)" disabled={busy} onClick={() => void trashItem(e)}>
                       <TrashGlyph />
                     </RowAction>
                   </div>
