@@ -9,6 +9,7 @@ export default [
   route("local/recovery", "routes/local.recovery.ts"),
   route("edit/:id", "routes/edit.$id.tsx"),
   route("local/git", "routes/local.git.ts"),
+  route("local/obsidian", "routes/local.obsidian.ts"),
   route("docs/:id", "routes/docs.$id.tsx"),
   route("docs/:id/folder", "routes/docs.$id.folder.ts"),
   route("slides/:id", "routes/slides.$id.tsx"),

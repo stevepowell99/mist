@@ -11,6 +11,11 @@ export const APP_NAME = "gmist";
  */
 export const DEPLOYED_ORIGIN = "https://mist.broad-smoke-cc64.workers.dev";
 
+/** The local gmist (the GmistLocal task, `PORT` in scripts/local-gmist.mjs):
+ *  the one gmist that can see this machine's files, so the deployed site asks
+ *  it where a Drive file lives (Open in Obsidian). */
+export const LOCAL_GMIST_ORIGIN = "http://localhost:5173";
+
 export function isValidDocumentId(id: string): boolean {
   if (id.length !== 8) return false;
   return /^[a-z0-9]+$/.test(id);

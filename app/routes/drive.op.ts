@@ -6,10 +6,11 @@ import {
   driveRename,
   driveCopy,
   driveTrash,
+  driveDelete,
   driveGetMeta,
   driveListFolder,
 } from "~/lib/google.server";
-import { openDriveRequest, canAccessFile, driveForbidden } from "~/lib/drive-access.server";
+import { openDriveRequest, fileAccessRole, driveForbidden } from "~/lib/drive-access.server";
 import { json } from "~/lib/http.server";
 
 /** Ensure a markdown-ish extension on a new/renamed file name. */
@@ -36,8 +37,9 @@ function nextDuplicateName(original: string, existing: string[]): string {
 
 /**
  * File operations on Drive for the browser's New button and per-row action menu:
- * create, rename, duplicate, trash (recoverable, not permanent delete). Gated by
- * the shared Drive passphrase.
+ * create, rename, duplicate, trash (recoverable), and delete (permanent, files
+ * only: Shift+Del). Every one changes Drive, so each needs edit rights on its
+ * target, by the file's own sharing.
  */
 export async function action({ request, context }: Route.ActionArgs) {
   if (request.method !== "POST") return json({ error: "method not allowed" }, 405);
@@ -56,7 +58,11 @@ export async function action({ request, context }: Route.ActionArgs) {
   // Per-file sharing check on the operation's target (the folder for create, the
   // file otherwise). Absent ids fall through to the per-case validation below.
   const target = body.action === "create" ? body.folderId : body.fileId;
-  if (target && !(await canAccessFile(env, target, access.email))) return driveForbidden();
+  if (target) {
+    const role = await fileAccessRole(env, target, access.email);
+    if (!role) return driveForbidden();
+    if (role !== "edit") return json({ error: "you need edit access to this file" }, 403);
+  }
 
   try {
     const token = await getDriveAccessToken(env);
@@ -88,6 +94,11 @@ export async function action({ request, context }: Route.ActionArgs) {
       case "trash": {
         if (!body.fileId) return json({ error: "fileId required" }, 400);
         await driveTrash(token, body.fileId);
+        return json({ ok: true });
+      }
+      case "delete": {
+        if (!body.fileId) return json({ error: "fileId required" }, 400);
+        await driveDelete(token, body.fileId);
         return json({ ok: true });
       }
       default:

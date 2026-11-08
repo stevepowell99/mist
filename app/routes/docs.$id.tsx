@@ -10,6 +10,7 @@ import { isLocalMode } from "~/lib/google.server";
 import { mintDeckToken, authorizeDoc, type DriveSessionEnv } from "~/lib/drive-access.server";
 import { EditorView } from "@codemirror/view";
 import { useChordListener } from "~/lib/useChordListener";
+import { isObsidianKey, openInObsidian } from "~/lib/open-in-obsidian";
 import { QuickOpenTrigger } from "~/components/QuickOpen";
 import { useSplitDrag } from "~/lib/useSplitDrag";
 import { offsetForSlideIndex, slideIndexForOffset } from "~/lib/slide-cursor";
@@ -555,23 +556,29 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
       const t = (e.data as { type?: string })?.type;
       if (t === "mist-present") enterPresent();
       else if (t === "mist-print") printPdf();
+      else if (t === "mist-obsidian" && drive?.fileId) openInObsidian(drive.fileId);
     };
     window.addEventListener("message", onMsg);
     return () => window.removeEventListener("message", onMsg);
-  }, [enterPresent, printPdf]);
+  }, [enterPresent, printPdf, drive?.fileId]);
 
-  // Ctrl/Cmd+P prints through gmist, not the raw app. For a deck, focus inside
-  // the iframe instead forwards mist-print (the runtime cannot open the page).
+  // Ctrl/Cmd+P prints through gmist, not the raw app; Ctrl/Cmd+O opens the
+  // Drive file in Obsidian (a room without a file leaves it to the browser).
+  // For a deck, focus inside the iframe instead forwards mist-print or
+  // mist-obsidian (the runtime cannot open either page).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.key === "p" || e.key === "P") && (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey) {
         e.preventDefault();
         printPdf();
+      } else if (isObsidianKey(e) && drive?.fileId) {
+        e.preventDefault();
+        openInObsidian(drive.fileId);
       }
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [printPdf]);
+  }, [printPdf, drive?.fileId]);
 
   const runChord = useCallback(
     (c: string): boolean => {

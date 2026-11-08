@@ -264,6 +264,13 @@ window.addEventListener("keydown", function(e){
     parent.postMessage({ type: "mist-print" }, "*");
     return;
   }
+  // Ctrl/Cmd+O inside the embedded deck: Open in Obsidian is the app's, so ask it.
+  if ((e.key === "o" || e.key === "O") && (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && window.parent !== window) {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    parent.postMessage({ type: "mist-obsidian" }, "*");
+    return;
+  }
   var alt = e.altKey || (e.getModifierState && e.getModifierState("AltGraph"));
   if (!(e.ctrlKey || e.metaKey) || !alt) return;
   var c = e.code, chord = null;

@@ -730,6 +730,19 @@ const handlers = {
     console.log(`localfs: trashed ${abs} -> ${TRASH}/`);
     return { ok: true };
   },
+
+  // Shift+Del in the file browser: gone for good, not into TRASH. Never a
+  // folder, which goes to the trash only.
+  "POST /delete": async (params) => {
+    const abs = absOf(params.get("path"));
+    const st = await fs.stat(abs).catch(() => {
+      throw new HttpError(404, `file not found: ${abs}`);
+    });
+    if (st.isDirectory()) throw new HttpError(400, "a folder can only be moved to the trash");
+    await fs.unlink(abs);
+    console.log(`localfs: deleted ${abs}`);
+    return { ok: true };
+  },
 };
 
 const server = http.createServer(async (req, res) => {

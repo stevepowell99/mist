@@ -36,6 +36,7 @@ const LAYOUT: Shortcut[] = [
   { keys: [MOD, "Alt", "-"], label: "Shrink editor pane (split view)" },
   { keys: [MOD, "Alt", "="], label: "Grow editor pane (split view)" },
   { keys: [MOD, "P"], label: "Print to PDF" },
+  { keys: [MOD, "O"], label: "Open this file in Obsidian (needs the local gmist and a vault containing it)" },
 ];
 
 const PANELS: Shortcut[] = [
@@ -131,7 +132,7 @@ const REVIEW: Shortcut[] = [
 // Drive / files behaviour. Mirrors the Drive sidebar, autosave toggle, the
 // conflict-safe round-trip (CLAUDE.md 16 June note) and the @-citation picker.
 const FILES: { name: string; desc: string }[] = [
-  { name: "Open from Drive", desc: "Browse on the home page, Ctrl/Cmd+Alt+J to search, or Ctrl/Cmd+Alt+F for the current folder's sidebar; click a .md or .qmd to open it. Hover a file for rename, duplicate, copy path and trash; Del trashes the file under the pointer." },
+  { name: "Open from Drive", desc: "Browse on the home page, Ctrl/Cmd+Alt+J to search, or Ctrl/Cmd+Alt+F for the current folder's sidebar; click a .md or .qmd to open it. Hover a file for rename, duplicate, copy path and trash; Del trashes the file under the pointer, and Shift+Del deletes a file for good." },
   { name: "Autosave to Drive", desc: "On by default; edits save on a short pause. The toggle sits at the foot of the comments panel; with it off, Ctrl/Cmd+S or a click on the save badge saves." },
   { name: "Same file elsewhere", desc: "Edit it in Obsidian or Drive too. With no unsaved edits here, gmist loads the newer file; if both changed, your text here is kept and the Drive version is saved beside it as a \"(drive copy)\" file." },
   { name: "Citations", desc: "Type @ to pick a reference from a .bib named in the frontmatter or found in a folder above the file; a reference list renders at the end." },

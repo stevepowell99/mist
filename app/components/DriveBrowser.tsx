@@ -407,13 +407,33 @@ export default function DriveBrowser({
     [driveOp, refresh],
   );
 
+  // Shift+Del: a file goes for good, as in Explorer. A folder still only goes to
+  // the trash, because Drive would delete everything inside it too.
+  const deleteItem = useCallback(
+    async (item: Item) => {
+      if (item.isFolder) return trashItem(item);
+      if (!window.confirm(`Permanently delete "${item.name}"? It skips the trash and cannot be undone.`)) return;
+      setBusy(true);
+      setError(null);
+      try {
+        await driveOp({ action: "delete", fileId: item.id });
+        await refresh();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "could not delete");
+        setBusy(false);
+      }
+    },
+    [driveOp, refresh, trashItem],
+  );
+
   // Del trashes the row under the pointer (or the keyboard-focused row), as its
-  // hover trash button does. The search box keeps focus while you browse, so a
-  // Del there counts only when it would do nothing in the box (caret at the end,
-  // nothing selected); in the editor or any other text field it is left alone.
+  // hover trash button does, and Shift+Del deletes it for good (deleteItem). The
+  // search box keeps focus while you browse, so a Del there counts only when it
+  // would do nothing in the box (caret at the end, nothing selected); in the
+  // editor or any other text field it is left alone.
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => {
-      if (ev.key !== "Delete" || ev.ctrlKey || ev.metaKey || ev.altKey || ev.shiftKey || busy || !data) return;
+      if (ev.key !== "Delete" || ev.ctrlKey || ev.metaKey || ev.altKey || busy || !data) return;
       const root = rootRef.current;
       if (!root) return;
       const t = ev.target as HTMLElement | null;
@@ -426,11 +446,11 @@ export default function DriveBrowser({
       const item = row && data.items.find((i) => i.id === row.dataset.rowId);
       if (!item) return;
       ev.preventDefault();
-      void trashItem(item);
+      void (ev.shiftKey ? deleteItem(item) : trashItem(item));
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [busy, data, trashItem]);
+  }, [busy, data, trashItem, deleteItem]);
 
   const copyPath = useCallback((item: Item) => {
     const p = (item.path ? `${item.path} / ` : "") + item.name;
@@ -552,7 +572,7 @@ export default function DriveBrowser({
                     <RowAction title="Copy path" disabled={busy} onClick={() => copyPath(e)}>
                       <LinkGlyph />
                     </RowAction>
-                    <RowAction title="Move to trash (Del)" disabled={busy} onClick={() => void trashItem(e)}>
+                    <RowAction title="Move to trash (Del; Shift+Del deletes a file for good)" disabled={busy} onClick={() => void trashItem(e)}>
                       <TrashGlyph />
                     </RowAction>
                   </div>

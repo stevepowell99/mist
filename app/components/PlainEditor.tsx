@@ -35,6 +35,7 @@ import DocNavbar from "~/components/DocNavbar";
 import { SaveBadge } from "~/components/SaveStatus";
 import { idToPath } from "~/lib/localfs-ids";
 import { useChordListener } from "~/lib/useChordListener";
+import { isObsidianKey, openInObsidian } from "~/lib/open-in-obsidian";
 import CommitButton from "~/components/CommitButton";
 import OutlinePanel from "~/components/OutlinePanel";
 import { livePreview } from "~/lib/cm-live-preview";
@@ -468,22 +469,27 @@ export default function PlainEditor({
       const type = e.data === "mist-present" ? e.data : e.data?.type;
       if (type === "mist-present") enterPresent();
       else if (type === "mist-print") void print();
+      else if (type === "mist-obsidian") openInObsidian(fileId);
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [enterPresent, print]);
+  }, [enterPresent, print, fileId]);
 
-  // Ctrl/Cmd+P prints through the print page, not the editor around it.
+  // Ctrl/Cmd+P prints through the print page, not the editor around it;
+  // Ctrl/Cmd+O opens the file in Obsidian.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.key === "p" || e.key === "P") && (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey) {
         e.preventDefault();
         void print();
+      } else if (isObsidianKey(e)) {
+        e.preventDefault();
+        openInObsidian(fileId);
       }
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [print]);
+  }, [print, fileId]);
 
   /**
    * The same chords as the Drive editor, through the same hook, because the two
