@@ -556,7 +556,7 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
       const t = (e.data as { type?: string })?.type;
       if (t === "mist-present") enterPresent();
       else if (t === "mist-print") printPdf();
-      else if (t === "mist-obsidian" && drive?.fileId) openInObsidian(drive.fileId);
+      else if (t === "mist-obsidian" && drive?.fileId) void openInObsidian(drive.fileId);
     };
     window.addEventListener("message", onMsg);
     return () => window.removeEventListener("message", onMsg);
@@ -573,7 +573,7 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
         printPdf();
       } else if (isObsidianKey(e) && drive?.fileId) {
         e.preventDefault();
-        openInObsidian(drive.fileId);
+        void openInObsidian(drive.fileId);
       }
     };
     window.addEventListener("keydown", onKey, true);

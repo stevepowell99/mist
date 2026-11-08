@@ -469,7 +469,7 @@ export default function PlainEditor({
       const type = e.data === "mist-present" ? e.data : e.data?.type;
       if (type === "mist-present") enterPresent();
       else if (type === "mist-print") void print();
-      else if (type === "mist-obsidian") openInObsidian(fileId);
+      else if (type === "mist-obsidian") void openInObsidian(fileId);
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
@@ -484,7 +484,7 @@ export default function PlainEditor({
         void print();
       } else if (isObsidianKey(e)) {
         e.preventDefault();
-        openInObsidian(fileId);
+        void openInObsidian(fileId);
       }
     };
     window.addEventListener("keydown", onKey, true);
