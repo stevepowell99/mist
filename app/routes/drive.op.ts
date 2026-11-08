@@ -6,7 +6,6 @@ import {
   driveRename,
   driveCopy,
   driveTrash,
-  driveDelete,
   driveGetMeta,
   driveListFolder,
 } from "~/lib/google.server";
@@ -37,9 +36,8 @@ function nextDuplicateName(original: string, existing: string[]): string {
 
 /**
  * File operations on Drive for the browser's New button and per-row action menu:
- * create, rename, duplicate, trash (recoverable), and delete (permanent, files
- * only: Shift+Del). Every one changes Drive, so each needs edit rights on its
- * target, by the file's own sharing.
+ * create, rename, duplicate, trash (recoverable, not permanent delete). Every one
+ * changes Drive, so each needs edit rights on its target, by the file's own sharing.
  */
 export async function action({ request, context }: Route.ActionArgs) {
   if (request.method !== "POST") return json({ error: "method not allowed" }, 405);
@@ -94,11 +92,6 @@ export async function action({ request, context }: Route.ActionArgs) {
       case "trash": {
         if (!body.fileId) return json({ error: "fileId required" }, 400);
         await driveTrash(token, body.fileId);
-        return json({ ok: true });
-      }
-      case "delete": {
-        if (!body.fileId) return json({ error: "fileId required" }, 400);
-        await driveDelete(token, body.fileId);
         return json({ ok: true });
       }
       default:

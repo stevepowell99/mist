@@ -66,9 +66,9 @@ function pathOf(id: string): string {
  * resolved to its Drive for Desktop mirror copy (the sidecar's /drive-id). That
  * is how a deck's `drive:<id>` library image loads in local mode. Only meta and
  * download take this route: a write, or a listing whose ids would end up in a
- * document, stays on local ids alone. Also where Open in Obsidian finds a file.
+ * document, stays on local ids alone.
  */
-export async function readPathOf(token: string, id: string): Promise<string> {
+async function readPathOf(token: string, id: string): Promise<string> {
   const p = idToPath(id);
   if (p !== null) return p;
   return (await call<{ path: string }>(token, "/drive-id" + q({ id }))).path;
@@ -279,11 +279,6 @@ export async function driveCopy(
 
 export async function driveTrash(token: string, fileId: string): Promise<void> {
   await call<{ ok: boolean }>(token, "/trash" + q({ path: pathOf(fileId) }), { method: "POST" });
-}
-
-/** Delete a file for good, skipping `.gmist-trash`; the sidecar refuses a folder. */
-export async function driveDelete(token: string, fileId: string): Promise<void> {
-  await call<{ ok: boolean }>(token, "/delete" + q({ path: pathOf(fileId) }), { method: "POST" });
 }
 
 export async function driveDownload(token: string, fileId: string): Promise<ArrayBuffer> {

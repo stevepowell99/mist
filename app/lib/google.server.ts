@@ -57,13 +57,6 @@ export async function resolveLocalFilePath(
   return resolveLocalPath(await getDriveAccessToken(env), absPath);
 }
 
-/** Where a file lives on this machine: a local id's own path, or a Drive id's
- *  Drive for Desktop mirror copy. Local mode only, like resolveLocalFilePath. */
-export async function localFilePath(env: DriveEnv, fileId: string): Promise<string> {
-  if (!isLocalMode(env)) throw new Error("localFilePath is local-mode only");
-  return localfs.readPathOf(await getDriveAccessToken(env), fileId);
-}
-
 /** Git, for a local file. Local mode only, like resolveLocalFilePath above: a
  *  Drive document has no working tree to commit to. Kept out of StorageOps for
  *  that reason, rather than stubbed on the Drive side. */
@@ -84,7 +77,7 @@ type StorageOps = Pick<
   | "driveGetMeta" | "driveFileDetails" | "driveRead" | "driveWrite"
   | "driveListFolder" | "driveResolvePath" | "driveTrail"
   | "driveCreateFile" | "driveCreateBinary" | "driveEnsureSubfolder"
-  | "driveRename" | "driveCopy" | "driveTrash" | "driveDelete" | "driveDownload"
+  | "driveRename" | "driveCopy" | "driveTrash" | "driveDownload"
   | "driveFiles" | "driveFilesUnderFolders" | "driveListPermissions"
 >;
 
@@ -167,10 +160,6 @@ export function driveCopy(token: string, fileId: string, name?: string): Promise
 
 export function driveTrash(token: string, fileId: string): Promise<void> {
   return impl(token).driveTrash(token, fileId);
-}
-
-export function driveDelete(token: string, fileId: string): Promise<void> {
-  return impl(token).driveDelete(token, fileId);
 }
 
 export function driveDownload(token: string, fileId: string): Promise<ArrayBuffer> {

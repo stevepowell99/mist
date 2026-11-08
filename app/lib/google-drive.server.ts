@@ -333,17 +333,6 @@ export async function driveTrash(token: string, fileId: string): Promise<void> {
   if (!res.ok) throw new Error(`Drive trash failed (${res.status})`);
 }
 
-/** Delete a file for good, skipping the Drive trash. Never a folder: Drive
- *  deletes a folder with everything in it, so a folder only goes to the trash. */
-export async function driveDelete(token: string, fileId: string): Promise<void> {
-  const meta = await fetch(`${DRIVE}/files/${fileId}?fields=mimeType&${COMMON}`, { headers: authHeaders(token) });
-  if (!meta.ok) throw new Error(`Drive metadata failed (${meta.status})`);
-  const { mimeType } = (await meta.json()) as { mimeType?: string };
-  if (mimeType === FOLDER_MIME) throw new Error("a folder can only be moved to the trash");
-  const res = await fetch(`${DRIVE}/files/${fileId}?${COMMON}`, { method: "DELETE", headers: authHeaders(token) });
-  if (!res.ok) throw new Error(`Drive delete failed (${res.status})`);
-}
-
 /** Raw bytes of a Drive file (for asset proxying). */
 export async function driveDownload(token: string, fileId: string): Promise<ArrayBuffer> {
   const res = await fetch(`${DRIVE}/files/${fileId}?alt=media&${COMMON}`, {
