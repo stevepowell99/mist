@@ -2,22 +2,13 @@ import { useEffect, useRef } from "react";
 import * as Y from "yjs";
 import type { Awareness } from "y-protocols/awareness";
 import { Compartment, EditorState, Prec, Transaction } from "@codemirror/state";
-import {
-  EditorView,
-  keymap,
-  lineNumbers,
-  highlightActiveLine,
-  highlightActiveLineGutter,
-  drawSelection,
-  dropCursor,
-  rectangularSelection,
-  crosshairCursor,
-} from "@codemirror/view";
+import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { bracketMatching, codeFolding, foldGutter, foldKeymap } from "@codemirror/language";
 import { mistFolds } from "~/lib/cm-folding";
 import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } from "@codemirror/autocomplete";
-import { highlightSelectionMatches, searchKeymap } from "@codemirror/search";
+import { searchKeymap } from "@codemirror/search";
+import { selectionHelpers } from "~/lib/cm-selection";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { yCollab, yUndoManagerKeymap } from "y-codemirror.next";
 import { criticMarkup } from "~/lib/cm-criticmarkup";
@@ -226,17 +217,9 @@ export default function CodeMirrorEditor({
         highlightActiveLine(),
         highlightActiveLineGutter(),
         history(),
-        // Editor helpers: multi-cursor (Alt-click, Mod-D next occurrence,
-        // Alt-drag rectangular), bracket match/close, selection-match
-        // highlighting, drag-drop cursor.
-        EditorState.allowMultipleSelections.of(true),
-        drawSelection(),
-        dropCursor(),
-        rectangularSelection(),
-        crosshairCursor(),
+        selectionHelpers,
         bracketMatching(),
         closeBrackets(),
-        highlightSelectionMatches(),
         wrapOnSelection,
         // Typing "/" over a selection wraps it as a styled span/div; with no
         // selection it falls through to the slash-command menu.

@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Compartment, EditorState, Transaction } from "@codemirror/state";
-import { EditorView, keymap, highlightActiveLine, drawSelection, lineNumbers } from "@codemirror/view";
+import { EditorView, keymap, highlightActiveLine, lineNumbers } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
-import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
+import { searchKeymap } from "@codemirror/search";
+import { selectionHelpers } from "~/lib/cm-selection";
 import { bracketMatching, codeFolding, foldGutter, foldKeymap } from "@codemirror/language";
 import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } from "@codemirror/autocomplete";
 import { DEPLOYED_ORIGIN } from "~/shared/constants";
@@ -565,9 +566,8 @@ export default function PlainEditor({
           extensions: [
             lineNumbers(),
             history(),
-            drawSelection(),
+            selectionHelpers,
             highlightActiveLine(),
-            highlightSelectionMatches(),
             markdown({ base: markdownLanguage, codeLanguages: [] }),
             markdownLineStyle,
             EditorView.lineWrapping,
