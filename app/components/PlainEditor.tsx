@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Compartment, EditorState, Transaction } from "@codemirror/state";
-import { EditorView, keymap, highlightActiveLine, lineNumbers } from "@codemirror/view";
+import { EditorView, keymap, highlightActiveLine, highlightActiveLineGutter, lineNumbers } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { searchKeymap } from "@codemirror/search";
@@ -13,7 +13,7 @@ import { wrapKeymap } from "~/lib/cm-shortcuts";
 import { criticMarkup } from "~/lib/cm-criticmarkup";
 import { fencedDivStyle } from "~/lib/cm-fenced-divs";
 import { bibField, citationSource, setBib } from "~/lib/cm-citations";
-import { slashSource } from "~/lib/cm-slash";
+import { slashSource, slashWrapSelection } from "~/lib/cm-slash";
 import { iconSource } from "~/lib/cm-icons";
 import { classSource } from "~/lib/cm-classes";
 import { parseCssClasses } from "~/lib/cm-classes";
@@ -568,6 +568,7 @@ export default function PlainEditor({
             history(),
             selectionHelpers,
             highlightActiveLine(),
+            highlightActiveLineGutter(),
             markdown({ base: markdownLanguage, codeLanguages: [] }),
             markdownLineStyle,
             EditorView.lineWrapping,
@@ -604,6 +605,9 @@ export default function PlainEditor({
             }),
             wrapKeymap,
             wrapOnSelection,
+            // Typing "/" over a selection wraps it as a styled span/div; with no
+            // selection it falls through to the slash-command menu.
+            slashWrapSelection,
             suggestMode(() => modeRef.current),
             // The floating bar on a selection: Comment, and the three tracked
             // changes. All four write CriticMarkup into the text, so none of
