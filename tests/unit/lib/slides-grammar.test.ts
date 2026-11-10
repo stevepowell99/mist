@@ -25,6 +25,14 @@ describe("applyGrammar", () => {
     expect(div).toContain('<div class="panel blue">');
   });
 
+  it("gives a bare number a unit: % on divs and coordinates, px on images", () => {
+    expect(applyGrammar("::: {width=55}\n\nx\n\n:::")).toContain('style="width:55%"');
+    expect(applyGrammar('::: {width="55%"}\n\nx\n\n:::')).toContain('style="width:55%"');
+    expect(applyGrammar("::: {width=20em}\n\nx\n\n:::")).toContain('style="width:20em"');
+    expect(applyGrammar("![](a.png){width=300}")).toContain('style="width:300px"');
+    expect(applyGrammar("::: {top=25 left=50}\n\nx\n\n:::")).toMatch(/top:25%;left:50%/);
+  });
+
   it("leaves grammar shown inside code untouched", () => {
     const out = applyGrammar("`[x]{.y}` and a span [x]{.y}");
     expect(out).toContain("`[x]{.y}`");

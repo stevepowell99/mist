@@ -214,8 +214,14 @@ const CLASS_ALIAS: Record<string, string[]> = {
   "shot-cap": ["bg-ink", "left-0", "right-0", "bottom-0", "footer"],
 };
 
+/** CSS drops a unitless length, so a bare number in a size or coordinate attr
+ *  takes a unit: `bare` for width/height (a percentage on a div or span, as in
+ *  the column split `::: {width=60}`; pixels on an image, Pandoc's reading of
+ *  `{width=300}`), and always a percentage for top/left/right/bottom. */
+const withUnit = (v: string, bare: string) => (/^[\d.]+$/.test(v) ? `${v}${bare}` : v);
+
 /** Parse a Pandoc attribute spec: .classes, #id, and key="value" pairs. */
-function parseAttrs(attr: string): { classes: string[]; id: string | null; style: string } {
+function parseAttrs(attr: string, sizeUnit = "%"): { classes: string[]; id: string | null; style: string } {
   const classes = [
     ...new Set([...attr.matchAll(/\.([\w-]+)/g)].map((m) => m[1]).flatMap((c) => CLASS_ALIAS[c] ?? [c])),
   ];
@@ -224,13 +230,13 @@ function parseAttrs(attr: string): { classes: string[]; id: string | null; style
   const styleM = attr.match(/\bstyle="([^"]*)"/);
   if (styleM) styles.push(styleM[1].replace(/;\s*$/, ""));
   const wM = attr.match(/\bwidth="?([\d.]+(?:%|px|em|rem|vw)?)"?/);
-  if (wM && !/\bwidth\s*:/.test(styles.join(";"))) styles.push(`width:${wM[1]}`);
+  if (wM && !/\bwidth\s*:/.test(styles.join(";"))) styles.push(`width:${withUnit(wM[1], sizeUnit)}`);
   const hM = attr.match(/\bheight="?([\d.]+(?:%|px|em|rem|vh)?)"?/);
-  if (hM && !/\bheight\s*:/.test(styles.join(";"))) styles.push(`height:${hM[1]}`);
+  if (hM && !/\bheight\s*:/.test(styles.join(";"))) styles.push(`height:${withUnit(hM[1], sizeUnit)}`);
   // Position attrs: top=/left=/right=/bottom= become style declarations.
   for (const key of ["top", "left", "right", "bottom"]) {
     const m = attr.match(new RegExp(`\\b${key}="?([\\d.]+(?:%|px|em|rem|v[wh])?)"?`));
-    if (m && !new RegExp(`(^|;)\\s*${key}\\s*:`).test(styles.join(";"))) styles.push(`${key}:${m[1]}`);
+    if (m && !new RegExp(`(^|;)\\s*${key}\\s*:`).test(styles.join(";"))) styles.push(`${key}:${withUnit(m[1], "%")}`);
   }
   let style = styles.join(";");
   // Any coordinate (from a step style or a top=/left= attr) floats the block, so
@@ -361,7 +367,7 @@ export function convertImages(md: string): string {
   return md.replace(
     /!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)\{([^}]*)\}/g,
     (_w, alt: string, url: string, attr: string) => {
-      const { classes, id, style } = parseAttrs(attr);
+      const { classes, id, style } = parseAttrs(attr, "px");
       return `<img src="${url}" alt="${alt}"${attrString(classes, id, style)}>`;
     },
   );

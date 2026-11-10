@@ -87,7 +87,7 @@ ships (Phase 2).
 
 The two column syntaxes are intentionally different and both stay supported:
 
-- gmist: `::: {.columns}` wrapping child `:::` blocks (CSS flex). Each direct child is a column; set `width=` on a child for an uneven split. No `.column` class is needed.
+- gmist: `::: {.columns}` wrapping child `:::` blocks (CSS flex). Each direct child is a column; set `width=` on a child for an uneven split (`width=60` and `width="60%"` are the same: a bare number is a percentage on a div or span and in `top=`/`left=`, and pixels on an image, as in Pandoc). No `.column` class is needed.
 - Garden: the Obsidian multi-column plugin's `--- start-multi-column` fences,
   emitted as Bootstrap `.row` / `.col-md-*`.
 
