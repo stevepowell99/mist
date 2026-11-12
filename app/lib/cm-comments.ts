@@ -94,6 +94,36 @@ export function insertCommentChange(
 }
 
 /**
+ * The change that deletes the comment at `pos` (inside the comment span or the
+ * highlight it annotates), for an editor whose comments live only in the text:
+ * there is no thread or resolved flag, so dealing with a comment means deleting
+ * it. A highlight just before it, blank gap allowed, is unwrapped rather than
+ * left marking nothing. Empty if `pos` is not on a comment.
+ */
+export function deleteCommentAt(
+  text: string,
+  pos: number,
+): { from: number; to: number; insert: string }[] {
+  const spans = criticSpans(text);
+  for (let i = 0; i < spans.length; i++) {
+    const s = spans[i];
+    if (s.type !== "comment") continue;
+    const prev = spans[i - 1];
+    const hl =
+      prev && prev.type === "highlight" && text.slice(prev.to, s.from).trim() === "" ? prev : null;
+    const onIt = (pos >= s.from && pos <= s.to) || (hl !== null && pos >= hl.from && pos <= hl.to);
+    if (!onIt) continue;
+    return hl
+      ? [
+          { from: hl.from, to: hl.contentFrom, insert: "" },
+          { from: hl.contentTo, to: s.to, insert: "" },
+        ]
+      : [{ from: s.from, to: s.to, insert: "" }];
+  }
+  return [];
+}
+
+/**
  * The change that removes a comment's inline markup (used on resolve/delete):
  * drop the `{>>...<<}` entirely and, if present, unwrap the preceding
  * `{==...==}` highlight back to its plain text. Returns an empty list if the

@@ -871,3 +871,19 @@ body {
 .live-preview .cm-activeLine .cm-comment {
   font-size: inherit;
 }
+
+/* The local editor's comments (`inline-comments`, PlainEditor).
+ *
+ * The Drive editor can hide a comment's text because the comment also lives in
+ * its panel as a thread, with a point marker in the line. Here the text is the
+ * only copy, so clean view hides its braces but never the note. It is set off
+ * from the prose by a canary tint and a smaller size, so the words it is about
+ * keep their underline and the note reads as a note, on every line alike. */
+.inline-comments .cm-comment,
+.inline-comments.clean-view .cm-comment,
+.inline-comments.live-preview .cm-activeLine .cm-comment {
+  font-size: 0.85em;
+  text-decoration: none;
+  background-color: color-mix(in srgb, var(--color-canary) 30%, transparent);
+  border-radius: 2px;
+}

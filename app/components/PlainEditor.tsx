@@ -612,7 +612,10 @@ export default function PlainEditor({
             // The floating bar on a selection: Comment, and the three tracked
             // changes. All four write CriticMarkup into the text, so none of
             // them needs anything stored anywhere.
-            selectionToolbar(() => !conflicted.current),
+            selectionToolbar(() => !conflicted.current, { threads: false }),
+            // Comments here are the text and nothing else, so no view may hide
+            // one: this class keeps them on screen, set off as notes (app.css).
+            EditorView.editorAttributes.of({ class: "inline-comments" }),
             wordCount,
             keymap.of([
               {

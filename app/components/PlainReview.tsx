@@ -3,6 +3,7 @@ import type { EditorView } from "@codemirror/view";
 import { listSuggestions, resolveAtCursor } from "~/lib/cm-suggestion-actions";
 import { criticSpans } from "~/lib/critic";
 import { revealPos } from "~/lib/cm-reveal";
+import { deleteCommentAt } from "~/lib/cm-comments";
 
 /**
  * The review panel: every suggested edit and every comment in the document.
@@ -62,22 +63,10 @@ export default function PlainReview({
    * wrapped in markup that now marks nothing, which then shows as a stray
    * highlight nobody can explain. Unwrap it: keep the words, drop the braces.
    */
-  const drop = (from: number, to: number) => {
-    const v = view;
-    if (!v) return;
-    const doc = v.state.doc.toString();
-    const spans = criticSpans(doc);
-    const i = spans.findIndex((s) => s.from === from && s.to === to);
-    const before = i > 0 ? spans[i - 1] : undefined;
-    const abuts =
-      before?.type === "highlight" && doc.slice(before.to, from).trim() === "";
-    const changes = abuts
-      ? [
-          { from: before.from, to: before.contentFrom, insert: "" },
-          { from: before.contentTo, to, insert: "" },
-        ]
-      : [{ from, to, insert: "" }];
-    v.dispatch({ changes, userEvent: "input.reject" });
+  const drop = (from: number) => {
+    if (!view) return;
+    const changes = deleteCommentAt(view.state.doc.toString(), from);
+    if (changes.length) view.dispatch({ changes, userEvent: "input.reject" });
   };
 
   const nothing = edits.length === 0 && comments.length === 0;
@@ -151,7 +140,7 @@ export default function PlainReview({
           </button>
           <button
             type="button"
-            onClick={() => drop(c.from, c.to)}
+            onClick={() => drop(c.from)}
             className="mt-1 cursor-pointer text-xs uppercase tracking-wider text-muted hover:text-ink"
           >
             Delete

@@ -4,6 +4,7 @@ import {
   insertCommentChange,
   removeCommentChange,
   activeRangeFor,
+  deleteCommentAt,
 } from "~/lib/cm-comments";
 import { matchThreadsToComments } from "~/lib/comment-threads";
 import type { ThreadData } from "~/shared/types";
@@ -93,5 +94,28 @@ describe("comment survives concurrent edits (no anchor needed)", () => {
     const m2 = matchThreadsToComments(t, scanTextComments(after));
     expect(m2[0].position).toBe(pos1 + "PREFIX ".length);
     expect(after.slice(m2[0].position!, m2[0].endPosition!)).toBe("{>>q<<}");
+  });
+});
+
+describe("deleteCommentAt", () => {
+  it("deletes a point comment from a position inside it", () => {
+    const text = "Before {>>note<<} after";
+    expect(applyChanges(text, deleteCommentAt(text, 10))).toBe("Before  after");
+  });
+
+  it("unwraps the highlight it annotates, from a position on either part", () => {
+    const text = "Keep {==these words==}{>>why<<} here";
+    const done = "Keep these words here";
+    expect(applyChanges(text, deleteCommentAt(text, 8))).toBe(done);
+    expect(applyChanges(text, deleteCommentAt(text, 26))).toBe(done);
+  });
+
+  it("allows a blank gap between the highlight and the comment", () => {
+    const text = "{==words==} {>>why<<}";
+    expect(applyChanges(text, deleteCommentAt(text, 15))).toBe("words");
+  });
+
+  it("returns nothing off a comment", () => {
+    expect(deleteCommentAt("plain {++added++} text", 9)).toEqual([]);
   });
 });

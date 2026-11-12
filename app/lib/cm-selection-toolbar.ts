@@ -1,12 +1,13 @@
 import { EditorView, showTooltip, type Tooltip } from "@codemirror/view";
 import { StateField, Transaction } from "@codemirror/state";
-import { commentTextAt } from "./cm-comments";
+import { commentTextAt, deleteCommentAt } from "./cm-comments";
 import { criticSpans, type CriticSpan } from "./critic";
 import { resolveAtCursor } from "./cm-suggestion-actions";
 import { wrap } from "./cm-shortcuts";
 
 /**
- * A floating toolbar over a non-empty selection (the Google-Docs gesture), so
+ * A floating toolbar over a selection, or over a cursor clicked onto a
+ * suggestion or comment (the Google-Docs gesture), so
  * commenting and suggesting are discoverable without the sidebar. Unlike Docs or
  * Word, the suggest actions work in ANY mode: CriticMarkup is literal text in the
  * Y.Text, so wrapping a range as `{-- --}` / `{++ ++}` is a normal edit, not a
@@ -74,7 +75,15 @@ function suggestionAround(text: string, from: number, to: number): CriticSpan | 
   return null;
 }
 
-function buildToolbar(view: EditorView, canEdit: boolean): { dom: HTMLElement } {
+/** Whether a bare cursor at `pos` sits on markup with actions this user has: a
+ *  suggestion (accept/reject need edit rights), or a comment or its highlight
+ *  (Reply is anyone's on a thread; deleting a text-only comment is an edit). */
+function onMarkup(text: string, pos: number, canEdit: boolean, threads: boolean): boolean {
+  if (canEdit && suggestionAround(text, pos, pos)) return true;
+  return (threads || canEdit) && commentTextAt(text, pos) !== null;
+}
+
+function buildToolbar(view: EditorView, canEdit: boolean, threads: boolean): { dom: HTMLElement } {
   const dom = document.createElement("div");
   dom.className = "cm-sel-toolbar";
   const add = (label: string, title: string, run: () => void) => {
@@ -106,6 +115,18 @@ function buildToolbar(view: EditorView, canEdit: boolean): { dom: HTMLElement } 
   const cFrom = commentTextAt(text, from);
   const cTo = commentTextAt(text, to);
   const onComment = cFrom && cFrom === cTo ? cFrom : null;
+  if (onComment && !threads) {
+    // Comments that live only in the text: no thread to reply in or resolved
+    // flag to set, so the one action is to delete it, as an edit here.
+    if (canEdit) {
+      add("Delete", "Delete this comment", () => {
+        const changes = deleteCommentAt(view.state.doc.toString(), from);
+        if (changes.length) view.dispatch({ changes, userEvent: "input.reject", scrollIntoView: true });
+        view.focus();
+      });
+    }
+    return { dom };
+  }
   if (onComment) {
     add("Reply", "Reply to this comment", () =>
       window.dispatchEvent(new CustomEvent("mist-reply", { detail: onComment })));
@@ -160,17 +181,27 @@ function buildToolbar(view: EditorView, canEdit: boolean): { dom: HTMLElement } 
   return { dom };
 }
 
-export function selectionToolbar(getCanEdit: () => boolean) {
-  const tooltipsFor = (state: EditorView["state"]): readonly Tooltip[] => {
+/**
+ * The toolbar shows over any selection, and over a bare cursor that a click put
+ * on a suggestion or a comment, so their actions are a click away as in Docs.
+ * Only a click: a cursor that typing or the arrow keys leave inside one (typing
+ * a suggestion is exactly that) would keep the bar over the words being typed.
+ *
+ * `threads` is the comment model. The Drive editor keeps each comment as a
+ * thread, so the bar offers Reply, Resolve and Delete through its panel; the
+ * local editor's comments are the text alone, so it offers Delete, done here.
+ */
+export function selectionToolbar(getCanEdit: () => boolean, { threads = true }: { threads?: boolean } = {}) {
+  const tooltipsFor = (state: EditorView["state"], byClick: boolean): readonly Tooltip[] => {
     const sel = state.selection.main;
-    if (sel.empty) return [];
-    return [{ pos: sel.from, above: true, arrow: false, create: (view) => buildToolbar(view, getCanEdit()) }];
+    if (sel.empty && !(byClick && onMarkup(state.doc.toString(), sel.head, getCanEdit(), threads))) return [];
+    return [{ pos: sel.from, above: true, arrow: false, create: (view) => buildToolbar(view, getCanEdit(), threads) }];
   };
   const field = StateField.define<readonly Tooltip[]>({
-    create: tooltipsFor,
+    create: (state) => tooltipsFor(state, false),
     update(value, tr) {
       if (!tr.docChanged && tr.selection === undefined) return value;
-      return tooltipsFor(tr.state);
+      return tooltipsFor(tr.state, tr.isUserEvent("select.pointer"));
     },
     provide: (f) => showTooltip.computeN([f], (state) => state.field(f)),
   });
