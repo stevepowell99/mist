@@ -16,7 +16,11 @@ const FROM_TOP = 0.2;
  *  of a document there is nothing to scroll, and CodeMirror simply lands as
  *  close as it can. */
 export function revealPos(view: EditorView, pos: number): void {
-  const yMargin = Math.round(view.scrollDOM.clientHeight * FROM_TOP);
+  // The visible height, not the scroller's: both hosts let the editor grow to
+  // its content inside a scrolling pane, so `scrollDOM` is as tall as the whole
+  // document and a fifth of it put the target far below the fold.
+  const visible = Math.min(view.scrollDOM.clientHeight, window.innerHeight);
+  const yMargin = Math.round(visible * FROM_TOP);
   view.dispatch({
     selection: { anchor: pos },
     effects: EditorView.scrollIntoView(pos, { y: "start", yMargin }),
