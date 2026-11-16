@@ -34,7 +34,13 @@ let vars = readDevVars();
 // ask again. Both the sidecar and the worker read it from .dev.vars, so it must
 // live there (the worker does not see process.env), which is why this writes the
 // file rather than passing an ephemeral value. .dev.vars is gitignored.
-if (!vars.LOCAL_FS_TOKEN) {
+// LOCAL_FS_URL is what puts the worker in local mode: without it the sidecar still
+// starts on its default port, but the worker runs in Drive mode and every
+// /open?path= lands on the Google sign-in gate. Write both, never just the token.
+const missing = [];
+if (!vars.LOCAL_FS_TOKEN) missing.push(`LOCAL_FS_TOKEN=${randomUUID()}${randomUUID()}`);
+if (!vars.LOCAL_FS_URL) missing.push("LOCAL_FS_URL=http://127.0.0.1:5199");
+if (missing.length) {
   const devVarsPath = resolve(repoRoot, ".dev.vars");
   let existing = "";
   try {
@@ -43,8 +49,8 @@ if (!vars.LOCAL_FS_TOKEN) {
     /* no .dev.vars yet; appendFileSync creates it */
   }
   const prefix = existing && !existing.endsWith("\n") ? "\n" : "";
-  appendFileSync(devVarsPath, `${prefix}LOCAL_FS_TOKEN=${randomUUID()}${randomUUID()}\n`);
-  console.log("dev:local: generated a LOCAL_FS_TOKEN in .dev.vars (one-time).");
+  appendFileSync(devVarsPath, `${prefix}${missing.join("\n")}\n`);
+  console.log(`dev:local: wrote ${missing.map((l) => l.split("=")[0]).join(" and ")} to .dev.vars (one-time).`);
   vars = readDevVars();
 }
 
