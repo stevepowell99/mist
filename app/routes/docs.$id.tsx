@@ -18,6 +18,7 @@ import { offsetForSlideIndex, slideIndexForOffset } from "~/lib/slide-cursor";
 import { docFileKey, loadDocSettings, saveDocSettings } from "~/lib/doc-settings";
 import { resolveAssetSrc } from "~/lib/asset-urls";
 import { usePresence } from "~/lib/usePresence";
+import { useFreshAssetToken } from "~/lib/useFreshAssetToken";
 import PresenceBar from "~/components/PresenceBar";
 import { useYjsEditor } from "~/lib/useYjsEditor";
 import { DocumentProvider, useDocument } from "~/lib/DocumentContext";
@@ -169,6 +170,7 @@ function DocumentShell({
   local,
   yjs,
 }: EditorData & { yjs: ReturnType<typeof useYjsEditor> }) {
+  const freshAssetToken = useFreshAssetToken(assetToken, drive?.fileId);
   return (
     <DocumentProvider
       docId={id}
@@ -179,7 +181,7 @@ function DocumentShell({
       suggestKey={suggestKey}
       drive={drive}
       initialPreview={initialPreview}
-      assetToken={assetToken}
+      assetToken={freshAssetToken}
     >
       <DocumentLayout id={id} local={local} initialLive={initialLive} />
       <ShareOnOpen />

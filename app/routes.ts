@@ -17,6 +17,7 @@ export default [
   route("print/:id/pdf", "routes/print.$id.pdf.ts"),
   route("drive/import", "routes/drive.import.ts"),
   route("drive/asset", "routes/drive.asset.ts"),
+  route("drive/asset-token", "routes/drive.asset-token.ts"),
   route("drive/upload", "routes/drive.upload.ts"),
   route("drive/search", "routes/drive.search.ts"),
   route("drive/library", "routes/drive.library.ts"),

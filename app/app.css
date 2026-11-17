@@ -224,6 +224,21 @@ body {
   background-color: color-mix(in srgb, var(--color-ink) 10%, transparent);
 }
 
+/* The completion menus (slash commands, classes, citations, icons) follow the
+   app theme too. CodeMirror paints them pale grey in both themes while their
+   text inherits the editor's ink, which on dark paper is near-white on
+   near-white for every row but the selected one. */
+.cm-editor .cm-tooltip.cm-tooltip-autocomplete,
+.cm-editor .cm-tooltip.cm-completionInfo {
+  background-color: var(--color-paper);
+  color: var(--color-ink);
+  border: 1px solid var(--color-border);
+}
+.cm-editor .cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected] {
+  background-color: var(--color-ink);
+  color: var(--color-paper);
+}
+
 /* The editor fills its pane (both hosts lay it out as a flex column) and its
    bottom panels sit at the pane's foot, so the word count is at the bottom
    right even on a document shorter than the window. */
