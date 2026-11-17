@@ -3,10 +3,11 @@ import { isLocalFileId } from "~/lib/localfs-ids";
 import { useDocument } from "~/lib/DocumentContext";
 
 /**
- * Header indicator for backend-bound documents (Drive). Saving is live: edits
- * flush to Drive on a short debounce, so this shows "Saving…" while edits are in
- * flight and the steady state "Synced" (this copy matches Drive) once the relay
- * confirms the write. A click flushes immediately. When the file was changed
+ * Header indicator for backend-bound documents (Drive). Edits are live in the
+ * room at once and reach Drive after a quiet spell or on leaving the tab
+ * (`AUTOSAVE_DEBOUNCE_MS`), so this shows "Edited" while this copy is ahead of
+ * Drive and "Synced" (this copy matches Drive) once the relay confirms the
+ * write. A click writes immediately. When the file was changed
  * elsewhere and nothing is unsaved here, the relay now adopts the Drive version
  * automatically (Drive is the live truth), so the "Load Drive version" prompt is
  * only a fallback. Only a genuine clash (unsaved edits here AND a diverged Drive
@@ -81,7 +82,12 @@ export default function SaveStatus() {
   }
 
   return unsaved ? (
-    <SaveBadge state="saving" label="Saving…" onClick={saveNow} title="Saving to Drive. Click to save now." />
+    <SaveBadge
+      state="saving"
+      label="Edited"
+      onClick={saveNow}
+      title="Changes here are live for everyone in the document. They are written to Drive after five minutes without an edit, or as soon as you leave this tab. Click to save to Drive now."
+    />
   ) : (
     <SaveBadge
       state="saved"

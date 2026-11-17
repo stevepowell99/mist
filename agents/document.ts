@@ -209,20 +209,23 @@ class DocumentAgent extends Agent {
       return;
     }
 
-    // Catch an external edit (Obsidian/Drive) made while the room was idle, so
-    // a reload shows fresh content. A fresh connect should always re-read Drive
-    // (the throttle is only meant to damp reconnect storms, but it can also
-    // suppress the pull right after a reload), so clear it first. The version
-    // check inside still skips the pull when nothing actually changed. Never let
-    // a Drive hiccup break the connect.
+    // Catch an external edit (Obsidian/Drive) made while the room was idle. A
+    // fresh connect always re-reads Drive (the throttle only damps reconnect
+    // storms), and the version check inside skips the pull when nothing changed.
+    //
+    // The check runs BESIDE the connect, not before it: the room's own copy is
+    // sent at once, and if Drive turns out to be newer the adopt arrives a moment
+    // later as an ordinary update plus `reloaded`. Waiting for the Drive read
+    // first put about a second of Drive latency in front of every open and
+    // reload, for a change that is almost never there. Never let a Drive hiccup
+    // break the connect.
     this.logSync("open", this.roleForKey(k) ?? "");
-    try {
-      this.lastUpstreamCheck = 0;
-      await this.checkUpstream(false);
-    } catch (err) {
-      // upstream check is best-effort; fall through to sync the current state
+    this.lastUpstreamCheck = 0;
+    const upstream = this.checkUpstream(false).catch((err: unknown) => {
       this.logSync("upstream-error", err instanceof Error ? err.message : "read failed");
-    }
+    });
+    // Keeps the object alive until the check settles; absent under test doubles.
+    (this.ctx as { waitUntil?: (p: Promise<unknown>) => void } | undefined)?.waitUntil?.(upstream);
 
     // Send SyncStep1 to the new client
     const syncEncoder = encoding.createEncoder();

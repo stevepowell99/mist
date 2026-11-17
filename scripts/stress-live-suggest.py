@@ -237,8 +237,12 @@ with sync_playwright() as p:
 
     # --- Drive save ------------------------------------------------------------
     if drive_bound:
+        # Autosave waits for a long quiet spell; the badge saves on a click.
+        for pg in (A, B, C):
+            if pg.get_by_text("Edited", exact=True).count():
+                pg.get_by_text("Edited", exact=True).first.click()
         end = time.time() + 60
-        while time.time() < end and "SYNCED" not in status(A).upper():
+        while time.time() < end and not all("SYNCED" in status(x).upper() for x in (A, B, C)):
             time.sleep(2)
         sts = [status(x)[:60] for x in (A, B, C)]
         check("every visitor shows Synced after the edits", all("SYNCED" in s.upper() for s in sts), sts)

@@ -261,7 +261,10 @@ with sync_playwright() as p:
 
     # --- Drive save -------------------------------------------------------
     if drive_bound:
-        time.sleep(28)
+        for pg in (A, B):
+            if pg.get_by_text("Edited", exact=True).count():
+                pg.get_by_text("Edited", exact=True).first.click()
+        time.sleep(8)
         status = A.inner_text("body")[:120].replace("\n", "|")
         check("Drive doc reaches Synced after the edits", "SYNCED" in status.upper(), status)
         log = A.evaluate("async ([id, k]) => (await fetch(`/agents/document-agent/${id}?synclog=1&k=${encodeURIComponent(k)}`)).json()", [doc_id, key])

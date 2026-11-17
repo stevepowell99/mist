@@ -10,7 +10,9 @@ vi.mock("~/lib/google.server", async (importActual) => ({
   driveListPermissions: async () => grants.current,
 }));
 
-const { authorizeDoc, mintDeckToken, ANYONE_WITH_LINK_VIEWER } = await import("~/lib/drive-access.server");
+const { authorizeDoc, mintDeckToken, clearSharingCache, ANYONE_WITH_LINK_VIEWER } = await import(
+  "~/lib/drive-access.server"
+);
 
 const SECRET = "test-secret";
 const env = { SESSION_SECRET: SECRET } as never;
@@ -38,6 +40,17 @@ describe("driveRoleFor", () => {
 describe("authorizeDoc", () => {
   beforeEach(() => {
     grants.current = [];
+    clearSharingCache();
+  });
+
+  it("asks Drive for a file's sharing once across the opens of one page load", async () => {
+    grants.current = [anyone("writer")];
+    expect((await authorizeDoc(env, await request(), drive, "edit")).status).toBe("ok");
+    // The sharing changes in Drive; an open moments later still sees the first answer.
+    grants.current = [];
+    expect((await authorizeDoc(env, await request(), drive, "edit")).status).toBe("ok");
+    clearSharingCache();
+    expect((await authorizeDoc(env, await request(), drive, "edit")).status).toBe("needsAuth");
   });
 
   it("asks a visitor to sign in when the file is not shared with anyone with the link", async () => {

@@ -126,22 +126,21 @@ export interface DocumentContextValue {
 }
 
 /**
- * How long the typing has to stop before a live save flushes.
+ * How long the editing has to stop before a live save writes to Drive.
  *
- * Twenty seconds, not two and a half. Steve edits these files while agents edit
- * them too, and a save every two and a half seconds means the file is being
- * rewritten almost continuously: any read an agent takes is stale within a
- * breath, and any write it makes lands in the middle of somebody's sentence.
- * Obsidian and VS Code write when asked, which is why editing alongside agents
- * worked for years and then stopped.
+ * Five minutes. The room is the live copy: everyone in the document sees an
+ * edit at once, whatever Drive holds, so the write to Drive is for the file's
+ * other readers (Obsidian, a local editor, an agent), not for collaborators.
+ * Those readers are served badly by a file that is rewritten every few seconds
+ * while someone is mid-sentence: a read is stale within a breath and a write
+ * lands in the middle of somebody's work. A working session should produce a
+ * handful of Drive revisions.
  *
- * Twenty is a pause rather than a gap between keystrokes: long enough that a
- * working session produces a handful of writes rather than hundreds, short
- * enough that stepping away from the keyboard saves. Leaving the window, and
- * closing the tab, still flush immediately, so nothing waits on the timer to be
- * safe.
+ * Waiting this long is only safe because leaving flushes: blurring the window
+ * and hiding the tab both save at once (below), the badge saves on a click,
+ * and closing with unsaved edits warns.
  */
-const AUTOSAVE_DEBOUNCE_MS = 20000;
+const AUTOSAVE_DEBOUNCE_MS = 5 * 60_000;
 
 /**
  * A genuine save-conflict (Drive's body diverged from our last save) pauses

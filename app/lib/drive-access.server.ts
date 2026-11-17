@@ -130,6 +130,28 @@ export async function signAssetUrls(html: string, env: DriveSessionEnv): Promise
 }
 
 /**
+ * A file's Drive sharing, remembered briefly. Opening a document asks for it
+ * twice within a second (the page loader, then the WebSocket gate), and every
+ * reload asks again; each ask is a Drive API call of about half a second. A
+ * change to the sharing in Drive therefore takes up to this long to apply to
+ * NEW opens: short enough for revoking access, long enough to cover one open.
+ * The cache is per Worker isolate, so it is an optimisation, never a record.
+ */
+const SHARING_TTL_MS = 30_000;
+const sharingCache = new Map<string, { at: number; grants: Awaited<ReturnType<typeof driveListPermissions>> }>();
+async function fileSharing(env: DriveSessionEnv, fileId: string) {
+  const hit = sharingCache.get(fileId);
+  if (hit && Date.now() - hit.at < SHARING_TTL_MS) return hit.grants;
+  const grants = await driveListPermissions(await getDriveAccessToken(env), fileId);
+  sharingCache.set(fileId, { at: Date.now(), grants });
+  return grants;
+}
+/** Forget remembered sharing (tests; a failed check is never remembered). */
+export function clearSharingCache(): void {
+  sharingCache.clear();
+}
+
+/**
  * Whether a user may open a specific Drive file, by that file's sharing.
  * Fails closed without an email.
  */
@@ -140,9 +162,7 @@ export async function canAccessFile(
 ): Promise<boolean> {
   if (!email) return false;
   try {
-    const token = await getDriveAccessToken(env);
-    const grants = await driveListPermissions(token, fileId);
-    return emailHasAccess(grants, email);
+    return emailHasAccess(await fileSharing(env, fileId), email);
   } catch {
     return false; // fail closed if we cannot read the sharing
   }
@@ -161,9 +181,7 @@ export async function fileAccessRole(
   email: string | null,
 ): Promise<DocRole | null> {
   try {
-    const token = await getDriveAccessToken(env);
-    const grants = await driveListPermissions(token, fileId);
-    const role = driveRoleFor(grants, email);
+    const role = driveRoleFor(await fileSharing(env, fileId), email);
     if (!role) return null;
     return driveRoleCanEdit(role) ? "edit" : "suggest";
   } catch {

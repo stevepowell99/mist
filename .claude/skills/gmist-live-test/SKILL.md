@@ -32,7 +32,7 @@ For Claude, working in `C:\dev\mist`. The deployed worker is the place to verify
 ## Reading state
 
 - **Status badge and text**: `document.body.innerText.slice(0, 60)` for Synced / Saving / Suggesting / Editing; `[...document.querySelectorAll('.cm-line')].map(l => l.textContent).join('\n')` for the editor text.
-- **Autosave waits 20 seconds after the last keystroke** (`AUTOSAVE_DEBOUNCE_MS`). "Saving…" for 20 seconds is a queued save. Wait 26 seconds before reading Drive.
+- **Autosave waits five minutes after the last edit** (`AUTOSAVE_DEBOUNCE_MS`), or until the tab loses focus. The badge reads "Edited" meanwhile. To test a save, click the badge, then wait for "Synced" before reading Drive.
 - **What reached Drive**: `read_file_content` on the file id. The connector re-renders markdown, so trust it for words and markup, not for line breaks or escaping.
 - **The agent's own view**, fetched by the page so the key stays in the tab:
   - `/agents/document-agent/<id>?source=1&k=<key>` returns the room text;
