@@ -38,14 +38,62 @@ describe("suggestEdit: insertion", () => {
 });
 
 describe("suggestEdit: deletion", () => {
-  it("wraps a backspaced char as a deletion, cursor before it", () => {
+  it("wraps a backspaced char as a deletion, cursor before the markup", () => {
     // "abc", cursor after 'c' (offset 3), backspace deletes [2,3)
-    expect(apply("abc", suggestEdit("abc", 2, 3, "", true))).toBe("ab{--|c--}");
+    expect(apply("abc", suggestEdit("abc", 2, 3, "", true))).toBe("ab|{--c--}");
+  });
+
+  it("wraps a forward-deleted char, cursor after the markup", () => {
+    expect(apply("abc", suggestEdit("abc", 0, 1, "", false))).toBe("{--a--}|bc");
+  });
+
+  it("keeps the markup whole through repeated Backspace", () => {
+    let doc = "hello world";
+    let cursor = doc.length;
+    for (let i = 0; i < 5; i++) {
+      const res = suggestEdit(doc, cursor - 1, cursor, "", true)!;
+      for (const c of [...res.changes].sort((a, b) => b.from - a.from)) {
+        doc = doc.slice(0, c.from) + c.insert + doc.slice(c.to);
+      }
+      cursor = res.cursor;
+    }
+    expect(doc).toBe("hello {--world--}");
+    expect(cursor).toBe(6);
+  });
+
+  it("keeps the markup whole through repeated Delete", () => {
+    let doc = "hello world";
+    let cursor = 0;
+    for (let i = 0; i < 5; i++) {
+      const res = suggestEdit(doc, cursor, cursor + 1, "", false)!;
+      for (const c of [...res.changes].sort((a, b) => b.from - a.from)) {
+        doc = doc.slice(0, c.from) + c.insert + doc.slice(c.to);
+      }
+      cursor = res.cursor;
+    }
+    expect(doc).toBe("{--hello--} world");
+    expect(cursor).toBe(11);
+  });
+
+  it("never edits a deletion's delimiter", () => {
+    // Backspace with the cursor just inside "{--": the press is on the "-".
+    expect(suggestEdit("ab{--c--}", 4, 5, "", true)).toEqual({ changes: [], cursor: 2 });
+    // Delete with the cursor just before "--}".
+    expect(suggestEdit("ab{--c--}d", 6, 7, "", false)).toEqual({ changes: [], cursor: 9 });
+  });
+
+  it("aims a press on an addition's delimiter at the nearest character", () => {
+    // Backspace straight after "{++ab++}" removes the addition's last character.
+    expect(apply("x{++ab++}", suggestEdit("x{++ab++}", 8, 9, "", true))).toBe("x{++a|++}");
+    // Delete straight before it removes its first character.
+    expect(apply("x{++ab++}", suggestEdit("x{++ab++}", 1, 2, "", false))).toBe("x{++|b++}");
+    // Backspace at the start of its content strikes the character ahead of it.
+    expect(apply("x{++ab++}", suggestEdit("x{++ab++}", 3, 4, "", true))).toBe("|{--x--}{++ab++}");
   });
 
   it("merges with an adjacent preceding deletion", () => {
     // "a{--c--}" with cursor before the deletion at offset 1; backspace 'a' [0,1)
-    expect(apply("a{--c--}", suggestEdit("a{--c--}", 0, 1, "", true))).toBe("{--|ac--}");
+    expect(apply("a{--c--}", suggestEdit("a{--c--}", 0, 1, "", true))).toBe("|{--ac--}");
   });
 
   it("does a plain delete inside an addition", () => {
@@ -60,12 +108,12 @@ describe("suggestEdit: deletion", () => {
 
   it("steps over an already-struck char instead of re-deleting", () => {
     // "{--c--}", backspace targeting content 'c' at [3,4)
-    expect(suggestEdit("{--c--}", 3, 4, "", true)).toEqual({ changes: [], cursor: 3 });
+    expect(suggestEdit("{--c--}", 3, 4, "", true)).toEqual({ changes: [], cursor: 0 });
   });
 
   it("wraps a deleted selection of plain text", () => {
     expect(apply("hello world", suggestEdit("hello world", 0, 5, "", true))).toBe(
-      "{--|hello--} world",
+      "|{--hello--} world",
     );
   });
 });

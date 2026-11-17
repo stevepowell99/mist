@@ -97,9 +97,36 @@ export function suggestEdit(
       }
       return null; // shrink the addition with a plain delete
     }
-    if (deletionContaining(doc, fromA, toA)) {
-      // already struck: don't re-delete, just step the cursor over it
-      return { changes: [], cursor: backward ? fromA : toA };
+    // The deletion falls on existing markup (its delimiters, or text already
+    // struck). Never edit a delimiter: that is what nests markup inside itself.
+    const hit = criticSpans(doc).find(
+      (s) => (s.type === "deletion" || s.type === "addition") && fromA >= s.from && toA <= s.to,
+    );
+    if (hit?.type === "deletion") {
+      // Already struck: step right over the whole span, so the next key press
+      // meets live text on the far side and merges into this deletion.
+      return { changes: [], cursor: backward ? hit.from : hit.to };
+    }
+    if (hit) {
+      // On an addition's delimiter. The delimiter is invisible in clean view, so
+      // the key press is aimed at the nearest character in that direction.
+      const inOpener = toA <= hit.contentFrom;
+      const target = backward
+        ? inOpener
+          ? hit.from - 1 // before the addition: the character ahead of it
+          : hit.contentTo - 1 // after it: the addition's own last character
+        : inOpener
+          ? hit.contentFrom // before it: the addition's own first character
+          : hit.to; // after it: the character behind it
+      if (target < 0 || target >= doc.length) return { changes: [], cursor: backward ? fromA : toA };
+      // Null means "delete it plainly" (inside the addition), which here must be
+      // spelt out: passing the original edit through would delete the delimiter.
+      return (
+        suggestEdit(doc, target, target + 1, "", backward) ?? {
+          changes: [{ from: target, to: target + 1, insert: "" }],
+          cursor: target,
+        }
+      );
     }
     const leftMerge = doc.slice(fromA - 3, fromA) === "--}";
     const rightMerge = doc.slice(toA, toA + 3) === "{--";
@@ -107,9 +134,17 @@ export function suggestEdit(
     const close = rightMerge ? "" : "--}";
     const start = leftMerge ? fromA - 3 : fromA;
     const end = rightMerge ? toA + 3 : toA;
+    const insert = `${open}${deleted}${close}`;
+    // Leave the cursor outside the deletion, on the side the key was heading:
+    // Backspace before it, Delete after it. Inside, the next press would land
+    // on a delimiter.
+    const next = doc.slice(0, start) + insert + doc.slice(end);
+    const span = criticSpans(next).find((s) => s.type === "deletion" && start >= s.from && start < s.to);
+    const spanFrom = span?.from ?? start;
+    const spanTo = span?.to ?? start + insert.length;
     return {
-      changes: [{ from: start, to: end, insert: `${open}${deleted}${close}` }],
-      cursor: backward ? start + open.length : start + open.length + deleted.length,
+      changes: [{ from: start, to: end, insert }],
+      cursor: backward ? spanFrom : spanTo,
     };
   }
 
@@ -143,9 +178,17 @@ export function suggestMode(getMode: () => "edit" | "suggest") {
     if (tr.annotation(processed)) return tr;
     if (!tr.docChanged || getMode() !== "suggest") return tr;
     const ue = tr.annotation(Transaction.userEvent);
-    // Typing, pasting and deleting become suggestions; formatting wraps
+    // Typing, Enter, pasting and deleting become suggestions; formatting wraps
     // ("input.wrap") and programmatic edits (no user event) pass through.
-    const handled = !!ue && (ue.startsWith("input.type") || ue === "input.paste" || ue.startsWith("delete"));
+    // A bare "input" is the Enter key (insertNewlineAndIndent), "input.drop" a
+    // dragged-in text: both are this user's own insertions.
+    const handled =
+      !!ue &&
+      (ue === "input" ||
+        ue.startsWith("input.type") ||
+        ue === "input.paste" ||
+        ue === "input.drop" ||
+        ue.startsWith("delete"));
     if (!handled) return tr;
 
     let fromA = -1;
