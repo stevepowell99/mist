@@ -210,6 +210,20 @@ body {
   outline: none;
 }
 
+/* The cursor and the current-line tint follow the app theme. CodeMirror is not
+   told about dark mode, so by default it draws a black cursor and a pale blue
+   line tint in both themes: on dark paper the tint glares and the cursor
+   disappears into it. Both are taken from the ink colour instead. */
+.cm-editor .cm-scroller .cm-cursor,
+.cm-editor .cm-scroller .cm-dropCursor {
+  border-left-color: var(--color-ink);
+  border-left-width: 2px;
+}
+.cm-editor .cm-scroller .cm-activeLine,
+.cm-editor .cm-scroller .cm-activeLineGutter {
+  background-color: color-mix(in srgb, var(--color-ink) 5%, transparent);
+}
+
 /* The editor fills its pane (both hosts lay it out as a flex column) and its
    bottom panels sit at the pane's foot, so the word count is at the bottom
    right even on a document shorter than the window. */
