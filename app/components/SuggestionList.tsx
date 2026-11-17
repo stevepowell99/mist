@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { revealPos } from "~/lib/cm-reveal";
 import { useDocument } from "~/lib/DocumentContext";
+import { trustedClick } from "~/lib/trusted-click";
 import { listSuggestions, resolveAtCursor, resolveAll, type SuggestionItem } from "~/lib/cm-suggestion-actions";
 
 /**
@@ -100,10 +101,10 @@ export default function SuggestionList() {
           Edits ({items.length})
         </span>
         <div className="flex gap-1">
-          <button onClick={() => all(true)} className={`${btn} text-muted`}>
+          <button onClick={trustedClick(() => all(true))} className={`${btn} text-muted`}>
             Accept all
           </button>
-          <button onClick={() => all(false)} className={`${btn} text-muted`}>
+          <button onClick={trustedClick(() => all(false))} className={`${btn} text-muted`}>
             Reject all
           </button>
         </div>
@@ -161,13 +162,13 @@ function SuggestionCard({
       )}
       <div className="mt-2 flex border border-border" onClick={(e) => e.stopPropagation()}>
         <button
-          onClick={() => onResolve(item, true)}
+          onClick={trustedClick(() => onResolve(item, true))}
           className="flex-1 cursor-pointer px-2.5 py-1.5 text-sm uppercase tracking-wider text-green-600 transition-colors hover:bg-border"
         >
           Accept
         </button>
         <button
-          onClick={() => onResolve(item, false)}
+          onClick={trustedClick(() => onResolve(item, false))}
           className="flex-1 cursor-pointer border-l border-border px-2.5 py-1.5 text-sm uppercase tracking-wider text-red-500 transition-colors hover:bg-border"
         >
           Reject

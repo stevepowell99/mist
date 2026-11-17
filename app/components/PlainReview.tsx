@@ -4,6 +4,7 @@ import { listSuggestions, resolveAtCursor } from "~/lib/cm-suggestion-actions";
 import { criticSpans } from "~/lib/critic";
 import { revealPos } from "~/lib/cm-reveal";
 import { deleteCommentAt } from "~/lib/cm-comments";
+import { trustedClick } from "~/lib/trusted-click";
 
 /**
  * The review panel: every suggested edit and every comment in the document.
@@ -113,14 +114,14 @@ export default function PlainReview({
           <div className="mt-1 flex gap-2">
             <button
               type="button"
-              onClick={() => resolve(e.from, true)}
+              onClick={trustedClick(() => resolve(e.from, true))}
               className="cursor-pointer text-xs uppercase tracking-wider text-muted hover:text-ink"
             >
               Accept
             </button>
             <button
               type="button"
-              onClick={() => resolve(e.from, false)}
+              onClick={trustedClick(() => resolve(e.from, false))}
               className="cursor-pointer text-xs uppercase tracking-wider text-muted hover:text-ink"
             >
               Reject

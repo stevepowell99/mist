@@ -4,6 +4,7 @@ import { commentTextAt, deleteCommentAt } from "./cm-comments";
 import { criticSpans, type CriticSpan } from "./critic";
 import { resolveAtCursor } from "./cm-suggestion-actions";
 import { wrap } from "./cm-shortcuts";
+import { trustedClick } from "./trusted-click";
 
 /**
  * A floating toolbar over a selection, or over a cursor clicked onto a
@@ -94,7 +95,7 @@ function buildToolbar(view: EditorView, canEdit: boolean, threads: boolean): { d
     b.title = title;
     // Keep the editor selection/focus when the button is pressed.
     b.addEventListener("mousedown", (e) => e.preventDefault());
-    b.addEventListener("click", run);
+    b.addEventListener("click", trustedClick(run));
     dom.appendChild(b);
   };
 
