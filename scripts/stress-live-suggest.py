@@ -114,7 +114,13 @@ with sync_playwright() as p:
 
     # --- simultaneous typing, three suggesters ---------------------------
     cursor(A, anchor)
+    pre = A.evaluate("() => { const v = %s; const a = document.activeElement; return { focus: v.hasFocus, ro: v.state.readOnly, head: v.state.selection.main.head, len: v.state.doc.length, active: a ? a.tagName + '.' + String(a.className).slice(0, 60) : null }; }" % VIEW)
     A.keyboard.type(f" [A{stamp}]")
+    time.sleep(0.3)
+    if f"[A{stamp}]" not in text(A):
+        post = A.evaluate("() => { const v = %s; const a = document.activeElement; return { focus: v.hasFocus, head: v.state.selection.main.head, len: v.state.doc.length, active: a ? a.tagName + '.' + String(a.className).slice(0, 60) : null, val: a && 'value' in a ? String(a.value).slice(0, 40) : null }; }" % VIEW)
+        print("  [A's typing did not land] before:", pre, "after:", post, flush=True)
+        A.screenshot(path="_tmp/a_lost.png")
     ok, t = converge([A, B, C])
     cursor(B, anchor)
     B.keyboard.press("Enter")
@@ -124,7 +130,8 @@ with sync_playwright() as p:
     C.keyboard.press("Enter")
     C.keyboard.type(f"C{stamp} line")
     ok, t = converge([A, B, C])
-    check("each visitor's first suggestion reaches the others", ok and all(x in t for x in (f"[A{stamp}]", f"B{stamp} line", f"C{stamp} line")))
+    first = {x: (x in t if ok else [x in y for y in t]) for x in (f"[A{stamp}]", f"B{stamp} line", f"C{stamp} line")}
+    check("each visitor's first suggestion reaches the others", ok and all(first.values()), "" if ok and all(first.values()) else f"same text {ok}; present {first}")
 
     cursor(A, f"[A{stamp}]")
     cursor(B, f"B{stamp} line")
