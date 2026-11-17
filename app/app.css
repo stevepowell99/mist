@@ -221,7 +221,7 @@ body {
 }
 .cm-editor .cm-scroller .cm-activeLine,
 .cm-editor .cm-scroller .cm-activeLineGutter {
-  background-color: color-mix(in srgb, var(--color-ink) 5%, transparent);
+  background-color: color-mix(in srgb, var(--color-ink) 10%, transparent);
 }
 
 /* The editor fills its pane (both hosts lay it out as a flex column) and its
@@ -439,7 +439,7 @@ body {
   text-align: left;
 }
 .cm-lp-table th {
-  background: color-mix(in srgb, var(--color-ink) 5%, transparent);
+  background: color-mix(in srgb, var(--color-ink) 10%, transparent);
 }
 .cm-lp-mermaid pre {
   font-family: var(--font-mono);
