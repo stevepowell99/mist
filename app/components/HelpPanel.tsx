@@ -177,7 +177,7 @@ const FEATURES: { title: string; items: string[] }[] = [
     title: "Drive files",
     items: [
       "Sign in with Google, then open and browse Drive in a sidebar; edits autosave back to the file, conflict-safe",
-      "Share by a secret link with an edit or a suggest role; whoever opens it must also sign in and be shared on the file in Drive",
+      "Share by a secret link with an edit or a suggest role; whoever opens it must also sign in and be shared on the file in Drive, unless the file is shared in Drive with anyone with the link",
       "Citations from a .bib, and the shared slide library",
       "The same file round-trips with Obsidian and a local editor",
     ],
@@ -520,8 +520,10 @@ export default function HelpPanel() {
                 <Group title="Who can open it">
                   <p className="text-base text-ink/75">
                     <span className="text-ink">Drive files:</span> the secret link is not enough on its own. A reader
-                    must be signed in with a Google account the file is shared with in Drive; the effective role is the
-                    more restrictive of the link and the file&apos;s own sharing.{" "}
+                    must be signed in with a Google account the file is shared with in Drive, unless the file is shared
+                    in Drive with anyone with the link: then the link opens it without signing in, as an editor if that
+                    sharing is Editor and as a suggester if it is Commenter or Viewer. Either way the effective role is
+                    the more restrictive of the link and the file&apos;s own sharing.{" "}
                     <span className="text-ink">Shared rooms:</span> the link is the only key, so anyone holding it can
                     open the room without signing in. Nobody needs a gmist account.
                   </p>

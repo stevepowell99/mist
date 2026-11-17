@@ -82,10 +82,11 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
     throw data(null, { status: 404 });
   }
 
-  // The secret link is NOT sufficient: a Drive-bound doc requires a signed-in
-  // user the file is shared with (Drive sharing is the source of truth). The
-  // same check gates the WebSocket in workers/app.ts. The effective role is the
-  // more restrictive of the link's role and the user's Drive role.
+  // The secret link is NOT sufficient: a Drive-bound doc also requires the
+  // file's Drive sharing to grant the viewer, a signed-in user it is shared
+  // with or, without sign-in, anyone-with-link (Drive sharing is the source of
+  // truth). The same check gates the WebSocket in workers/app.ts. The effective
+  // role is the more restrictive of the link's role and the viewer's Drive role.
   const auth = await authorizeDoc(env as unknown as DriveSessionEnv, request, drive, role);
   if (auth.status === "badkey") throw data(null, { status: 404 });
   if (auth.status === "needsAuth") return { id, gate: "needsAuth" as const };
@@ -96,7 +97,7 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
   // session cookie, can fetch this file's private-Drive css and images. It is
   // minted for the viewer who just passed authorizeDoc, and admits only this
   // file's assets and library images. An unbound room has no file, so no token.
-  const assetToken = await mintDeckToken(env as unknown as DriveSessionEnv, drive?.fileId, auth.email);
+  const assetToken = await mintDeckToken(env as unknown as DriveSessionEnv, drive?.fileId, auth.viewer);
 
   return {
     id,

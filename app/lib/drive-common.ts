@@ -111,16 +111,16 @@ const ROLE_RANK: Record<string, number> = {
   owner: 5, organizer: 4, fileOrganizer: 4, writer: 3, commenter: 2, reader: 1,
 };
 
-/** The highest Drive role an email is granted on a file (across direct, domain
- *  and anyone grants), or null if it has no access. */
-export function driveRoleForEmail(grants: DriveGrant[], email: string): string | null {
-  const e = email.trim().toLowerCase();
-  if (!e) return null;
+/** The highest Drive role a viewer is granted on a file (across direct, domain
+ *  and anyone grants), or null if it has no access. A null email is a visitor
+ *  who has not signed in, whom only an anyone-with-link grant admits. */
+export function driveRoleFor(grants: DriveGrant[], email: string | null): string | null {
+  const e = (email ?? "").trim().toLowerCase();
   const domain = e.split("@")[1] ?? "";
   let best = 0;
   let bestRole: string | null = null;
   for (const g of grants) {
-    if (!grantMatches(g, e, domain)) continue;
+    if (!(e ? grantMatches(g, e, domain) : g.type === "anyone")) continue;
     const rank = ROLE_RANK[g.role ?? ""] ?? 0;
     if (rank > best) {
       best = rank;

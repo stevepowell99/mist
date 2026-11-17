@@ -29,8 +29,8 @@ import { docTitle, pdfTitle } from "~/lib/slides-build";
  * the same signal the deck page gives, which is what the PDF route waits for.
  *
  * The secret key alone is not enough to read a document, unlike a deck's public
- * view, so there are two ways in: a signed-in viewer the file's Drive sharing
- * admits, or the deck token for this file that the PDF route gives the headless
+ * view, so there are two ways in: a viewer the file's Drive sharing admits
+ * (`authorizeDoc`: signed in, or anyone-with-link), or the deck token for this file that the PDF route gives the headless
  * browser, which has no session, on behalf of a viewer it has just checked.
  */
 export async function loader({ params, request, context }: Route.LoaderArgs) {
@@ -49,7 +49,7 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
     const auth = await authorizeDoc(sessionEnv, request, drive, role);
     if (auth.status === "needsAuth") throw data("Sign in to gmist to print this document.", { status: 401 });
     if (auth.status !== "ok") throw data("You do not have access to this file.", { status: 403 });
-    viewer = auth.email;
+    viewer = auth.viewer;
   }
   // A shared room has no file: its text comes from the room, with no .bib.
   let markdown: string;

@@ -16,8 +16,9 @@ const requestHandler = createRequestHandler(
  * alone must NOT grant access to a Drive-bound document: routeAgentRequest would
  * otherwise connect anyone holding the link, regardless of the file's Drive
  * sharing. So before letting the upgrade through, look up the doc's bound file
- * and require a signed-in user the file is shared with (the same check the doc
- * loader and drive.import use). Returns a rejection Response, or null to allow.
+ * and require that its Drive sharing grants the viewer: a signed-in user it is
+ * shared with, or anyone-with-link (`authorizeDoc`, the same check the doc
+ * loader uses). Returns a rejection Response, or null to allow.
  */
 async function gateAgentRequest(request: Request, env: Env, docId: string, key: string | null): Promise<Response | null> {
   try {

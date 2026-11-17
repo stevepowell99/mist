@@ -21,11 +21,10 @@ export function shareLink(href: string, key: string | null, asPreview: boolean):
  * already opens, minus `print-pdf`, so it is the full interactive presentation
  * rather than the paginated print layout. Unlike `/docs/:id`, this route is
  * gated by the doc's own secret key alone (`resolveDoc`), with no Google
- * sign-in check, because it never touches per-user Drive ACL. That is what
- * makes it the right link for "shared with anyone with the link": `/docs/:id`
- * always requires a signed-in Google account the file's Drive sharing grants
- * (by design, for editing), so it asks a public viewer to sign in even when
- * the Drive file itself is shared with anyone.
+ * sign-in check, because it never touches per-user Drive ACL, and it cannot
+ * edit. `/docs/:id` checks the file's Drive sharing (`authorizeDoc`): a
+ * visitor who has not signed in gets in only when the Drive file is shared
+ * with anyone with the link, and then edits or suggests as that grant allows.
  */
 export function deckViewLink(origin: string, docId: string, key: string | null): string {
   const url = new URL(`/slides/${docId}`, origin);
@@ -71,8 +70,8 @@ export default function ShareButton() {
   );
 
   // A deck's public link goes to the standalone viewer page, which needs no
-  // Google sign-in and cannot edit, unlike /docs/:id (which always checks the
-  // file's Drive sharing, since it can drop into the editor). It carries the
+  // Google sign-in and cannot edit, unlike /docs/:id (which checks the file's
+  // Drive sharing, since it can drop into the editor). It carries the
   // suggest key, never the edit key, so a link passed around in public cannot
   // be turned back into an edit link.
   const handleCopyView = useCallback(async () => {
@@ -130,7 +129,7 @@ export default function ShareButton() {
                 checked={asPreview}
                 onCheckedChange={setAsPreview}
                 onSelect={(e) => e.preventDefault()}
-                title="The links below open in the app's own preview rather than the editor. Readers still sign in with Google to pass the file's Drive sharing"
+                title="The links below open in the app's own preview rather than the editor. Readers still pass the file's Drive sharing: they sign in with Google, unless the file is shared with anyone with the link"
                 className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-sm outline-none data-[highlighted]:bg-border"
               >
                 <span className="inline-flex h-3.5 w-3.5 items-center justify-center border border-ink">

@@ -2,10 +2,11 @@
  * Access gate for the /drive/* endpoints: Google sign-in plus per-file Drive
  * sharing. The interim shared passphrase has been retired (#7).
  *
- * Authorisation model (decided 15 June 2026): a user may open a file iff the
- * file's own Drive sharing grants their email (or their domain, or anyone-with-
- * link). Drive sharing stays the single source of truth; mist keeps no separate
- * allowlist.
+ * Authorisation model: a user may open a file iff the file's own Drive sharing
+ * grants their email (or their domain, or anyone-with-link). A visitor who has
+ * not signed in may open a document whose file is shared anyone-with-link, and
+ * nothing else. Drive sharing stays the single source of truth; mist keeps no
+ * separate allowlist.
  */
 import {
   verifySession,
@@ -17,7 +18,7 @@ import {
 import {
   driveListPermissions,
   emailHasAccess,
-  driveRoleForEmail,
+  driveRoleFor,
   driveRoleCanEdit,
   getDriveAccessToken,
   driveConfigured,
@@ -95,10 +96,10 @@ export async function assetAccess(request: Request, env: DriveSessionEnv): Promi
 export async function mintDeckToken(
   env: DriveSessionEnv,
   deck: string | null | undefined,
-  email: string | null,
+  viewer: string | null,
 ): Promise<string | null> {
-  if (!deck || !email || !env.SESSION_SECRET) return null;
-  return signAssetToken(env.SESSION_SECRET, { deck, email });
+  if (!deck || !viewer || !env.SESSION_SECRET) return null;
+  return signAssetToken(env.SESSION_SECRET, { deck, email: viewer });
 }
 
 /** Stands in for the token while a public deck page is built; see `signAssetUrls`. */
@@ -150,19 +151,19 @@ export async function canAccessFile(
 /**
  * The mist role a user gets when opening a Drive file, from the file's own
  * sharing: a writer/owner edits; a commenter or reader gets suggest-only (their
- * changes land as CriticMarkup suggestions, never silent edits). Returns null if
- * the user has no access at all, or there is no email to check.
+ * changes land as CriticMarkup suggestions, never silent edits). A null email
+ * is a visitor who has not signed in, admitted only by an anyone-with-link
+ * grant. Returns null if the viewer has no access at all.
  */
 export async function fileAccessRole(
   env: DriveSessionEnv,
   fileId: string,
   email: string | null,
 ): Promise<DocRole | null> {
-  if (!email) return null;
   try {
     const token = await getDriveAccessToken(env);
     const grants = await driveListPermissions(token, fileId);
-    const role = driveRoleForEmail(grants, email);
+    const role = driveRoleFor(grants, email);
     if (!role) return null;
     return driveRoleCanEdit(role) ? "edit" : "suggest";
   } catch {
@@ -170,18 +171,27 @@ export async function fileAccessRole(
   }
 }
 
+/** The viewer a deck token names for a visitor admitted without signing in. */
+export const ANYONE_WITH_LINK_VIEWER = "anyone-with-link";
+
 /**
  * The single authorisation decision for OPENING / EDITING an existing document,
  * used by both the doc loader and the WebSocket gate so they cannot drift. The
- * secret link key alone is NOT enough: a Drive-bound doc also requires a signed-
- * in user whom the file's own Drive sharing grants. The effective role is the
- * more restrictive of the link's role and the user's Drive role (a suggest link
- * stays suggest; a Drive commenter never edits, even on an edit link).
+ * secret link key alone is NOT enough: a Drive-bound doc also requires the
+ * file's own Drive sharing to grant the viewer, either a signed-in user it is
+ * shared with or, with no sign-in, an anyone-with-link grant. The effective
+ * role is the more restrictive of the link's role and the viewer's Drive role
+ * (a suggest link stays suggest; a Drive commenter never edits, even on an edit
+ * link).
  *
  *  - "badkey":    the URL key matches no role on this doc.
- *  - "needsAuth": Drive-bound, but the request carries no signed-in session.
+ *  - "needsAuth": Drive-bound, not signed in, and the file is not shared
+ *                 anyone-with-link.
  *  - "forbidden": signed in, but the file's Drive sharing does not grant them.
  *  - "ok":        allowed, with the effective role.
+ *
+ * `email` is the signed-in email, null for a visitor who has not signed in;
+ * `viewer` is who passed, for minting a deck token (`mintDeckToken`).
  *
  * A doc with no Drive file (legacy/unbound) has no ACL to enforce, so the key
  * stays its only gate.
@@ -192,15 +202,14 @@ export async function authorizeDoc(
   request: Request,
   drive: DriveMeta | null,
   keyRole: DocRole | null,
-): Promise<{ status: DocAuthStatus; role: DocRole | null; email: string | null }> {
-  if (!keyRole) return { status: "badkey", role: null, email: null };
-  if (!drive?.fileId) return { status: "ok", role: keyRole, email: null }; // unbound: key only
+): Promise<{ status: DocAuthStatus; role: DocRole | null; email: string | null; viewer: string | null }> {
+  if (!keyRole) return { status: "badkey", role: null, email: null, viewer: null };
+  if (!drive?.fileId) return { status: "ok", role: keyRole, email: null, viewer: null }; // unbound: key only
   const email = await getRequestEmail(request, env);
-  if (!email) return { status: "needsAuth", role: null, email: null };
   const driveRole = await fileAccessRole(env, drive.fileId, email);
-  if (!driveRole) return { status: "forbidden", role: null, email };
+  if (!driveRole) return { status: email ? "forbidden" : "needsAuth", role: null, email, viewer: null };
   const role: DocRole = keyRole === "edit" ? driveRole : "suggest";
-  return { status: "ok", role, email };
+  return { status: "ok", role, email, viewer: email ?? ANYONE_WITH_LINK_VIEWER };
 }
 
 /** 401 for no/expired session. */

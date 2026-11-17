@@ -32,7 +32,7 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
   const fallback = new URL(`/print/${id}`, url.origin);
   fallback.searchParams.set("k", key);
   const page = new URL(fallback);
-  page.searchParams.set("token", (await mintDeckToken(sessionEnv, drive?.fileId, auth.email)) ?? "");
+  page.searchParams.set("token", (await mintDeckToken(sessionEnv, drive?.fileId, auth.viewer)) ?? "");
   fallback.searchParams.set("autoprint", "");
   const title = docTitle(drive, drive ? "" : await readRoomSource(env, id, key));
   const name = title.replace(/&/g, "&amp;").replace(/</g, "&lt;");
