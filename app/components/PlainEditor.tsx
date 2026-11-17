@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Compartment, EditorState, Transaction } from "@codemirror/state";
 import { EditorView, keymap, highlightActiveLine, highlightActiveLineGutter, lineNumbers } from "@codemirror/view";
+import { remember, remembered } from "~/lib/remembered";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { searchKeymap } from "@codemirror/search";
@@ -109,24 +110,6 @@ const MODE_KEY = "gmist.plain.mode";
 /** The class names the deck stylesheet defines, for the `.`-picker. */
 const CSS_CLASSES = parseCssClasses(DECK_BASE_CSS);
 const OUTLINE_KEY = "gmist.plain.outline";
-
-function remembered<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
-  try {
-    const v = window.localStorage.getItem(key);
-    return v && (allowed as readonly string[]).includes(v) ? (v as T) : fallback;
-  } catch {
-    // a private window, or storage refused: the default is fine
-    return fallback;
-  }
-}
-
-function remember(key: string, value: string) {
-  try {
-    window.localStorage.setItem(key, value);
-  } catch {
-    // nothing here is worth failing an edit for
-  }
-}
 
 export default function PlainEditor({
   fileId,

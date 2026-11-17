@@ -10,6 +10,8 @@ import { isLocalMode } from "~/lib/google.server";
 import { mintDeckToken, authorizeDoc, type DriveSessionEnv } from "~/lib/drive-access.server";
 import { EditorView } from "@codemirror/view";
 import { useChordListener } from "~/lib/useChordListener";
+import { remember, remembered } from "~/lib/remembered";
+import { extractOutlineFromText } from "~/lib/outline";
 import { QuickOpenTrigger } from "~/components/QuickOpen";
 import { useSplitDrag } from "~/lib/useSplitDrag";
 import { offsetForSlideIndex, slideIndexForOffset } from "~/lib/slide-cursor";
@@ -131,6 +133,11 @@ type EditorData = {
   gate: null;
 };
 
+/** The reader's own choice for the document outline, per browser. */
+const DOC_OUTLINE_KEY = "gmist.doc.outline";
+/** Headings a document needs before its outline opens unasked. */
+const OUTLINE_MIN_HEADINGS = 3;
+
 export default function DocumentPage({ loaderData }: Route.ComponentProps) {
   // Not authorised for this file: show the sign-in / no-access screen, never the
   // editor (and the WebSocket is gated server-side too).
@@ -233,6 +240,29 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
   // 100 there is no split. Mobile keeps the full-swap Preview toggle.
   const [isDesktop, setIsDesktop] = useState(false);
   const [outlineOpen, setOutlineOpen] = useState(false);
+  // A document long enough to have an outline opens with it showing, on a
+  // screen wide enough to spare the column. The reader's own toggle is then
+  // remembered and wins on every later open. Decided once, when the text first
+  // arrives; a deck's slide list stays closed until asked for.
+  const outlineDecided = useRef(false);
+  useEffect(() => {
+    if (outlineDecided.current || !markdown) return;
+    outlineDecided.current = true;
+    if (deck) return;
+    const choice = remembered(DOC_OUTLINE_KEY, ["yes", "no", "unset"] as const, "unset");
+    const wide = window.matchMedia("(min-width: 1024px)").matches;
+    const open =
+      choice === "unset"
+        ? wide && extractOutlineFromText(markdown).length >= OUTLINE_MIN_HEADINGS
+        : choice === "yes" && wide;
+    if (open) setOutlineOpen(true);
+  }, [markdown, deck]);
+  const toggleOutline = useCallback(() => {
+    setOutlineOpen((v) => {
+      if (!deck) remember(DOC_OUTLINE_KEY, v ? "no" : "yes");
+      return !v;
+    });
+  }, [deck]);
   // Present mode: the deck fills the (fullscreened) app, chrome hidden, with an
   // optional presenter rail. One mode, app-controlled (we fullscreen the app, not
   // the deck iframe, so our own UI can sit over/beside the slide).
@@ -584,7 +614,7 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
         case "3": setView("preview"); return true;
         case "4": setView("live"); return true;
         // D opens the outline / slide list (the slide-out TOC).
-        case "d": setOutlineOpen((v) => !v); return true;
+        case "d": toggleOutline(); return true;
         case "c": setAsideCollapsedPersist(!asideCollapsed); return true;
         // Resize on - / = (not [ / ], which CodeMirror uses for fold-all).
         case "-": nudgeSplit(-5); return true;
@@ -599,7 +629,7 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
         default: return false;
       }
     },
-    [toggleMode, setView, isDesktop, setAsideCollapsedPersist, asideCollapsed, nudgeSplit, deck, enterPresent, exitPresent],
+    [toggleMode, setView, isDesktop, setAsideCollapsedPersist, asideCollapsed, nudgeSplit, deck, enterPresent, exitPresent, toggleOutline],
   );
 
   // Ctrl/Cmd+S (and Ctrl/Cmd+Enter, dispatched by the editor) flushes a save to
@@ -865,7 +895,7 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
         headerRef={headerRef}
         homeHref="/"
         folderButton={<FolderSidebar />}
-        outline={{ open: outlineOpen, onToggle: () => setOutlineOpen((v) => !v) }}
+        outline={{ open: outlineOpen, onToggle: toggleOutline }}
         deck={deck}
         folder={
           folderName
@@ -990,7 +1020,7 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
               peers={peers}
               currentSlide={localSlide}
               overlay={slidesFull}
-              onClose={() => setOutlineOpen(false)}
+              onClose={outlineOpen ? toggleOutline : () => {}}
               onMouseLeave={slidesFull ? () => setOutlineOpen(false) : undefined}
             />
           )}
