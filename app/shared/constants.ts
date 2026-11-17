@@ -51,3 +51,11 @@ export const DOC_FORMAT_VERSION = 2;
 export const MSG_SYNC = 0;
 /** Protocol message type: Yjs awareness */
 export const MSG_AWARENESS = 1;
+
+/** Header by which the Worker proves itself to a document's Durable Object:
+ *  its value is the session secret, which only those two hold. */
+export const INTERNAL_HEADER = "x-mist-internal";
+
+/** How long a file's Drive sharing is remembered. A sharing change in Drive
+ *  applies to NEW opens within this time. */
+export const SHARING_TTL_MS = 30_000;

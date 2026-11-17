@@ -1,6 +1,8 @@
 import { getAgentByName } from "agents";
 import { isLocalFileId } from "~/lib/localfs-ids";
 import { driveGetMeta, getDriveAccessToken, isLocalMode } from "~/lib/google.server";
+import type { DriveGrant } from "~/lib/drive-common";
+import { INTERNAL_HEADER } from "~/shared/constants";
 import type { DocRole, DriveMeta } from "~/shared/types";
 
 export interface ResolvedDoc {
@@ -9,6 +11,15 @@ export interface ResolvedDoc {
   role: DocRole | null;
   suggestKey?: string;
   drive: DriveMeta | null;
+  /** The bound file's Drive sharing as the room remembers it, for
+   *  `authorizeDoc`. Server-side only: never send it to the browser. */
+  sharing?: DriveGrant[] | null;
+}
+
+/** Headers that mark a request to a document's agent as the Worker's own. */
+export function internalHeaders(env: Env): HeadersInit {
+  const secret = (env as unknown as { SESSION_SECRET?: string }).SESSION_SECRET;
+  return secret ? { [INTERNAL_HEADER]: secret } : {};
 }
 
 /**
@@ -45,7 +56,7 @@ export async function resolveDoc(
 
   const stub = await getAgentByName(env.DocumentAgent, id);
   const res = await stub.fetch(
-    new Request(`https://do/?k=${encodeURIComponent(docKey ?? "")}`),
+    new Request(`https://do/?k=${encodeURIComponent(docKey ?? "")}`, { headers: internalHeaders(env) }),
   );
   return (await res.json()) as ResolvedDoc;
 }

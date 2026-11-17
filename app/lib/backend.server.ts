@@ -19,7 +19,7 @@ import {
   driveCreateFile,
   driveListFolder,
   driveListPermissions,
-  emailHasAccess,
+  type DriveGrant,
 } from "./google.server";
 
 /** One entry in a folder listing. */
@@ -57,8 +57,8 @@ export interface DocBackend {
    *  (Drive) that must look the parent up. */
   parentRef?(folderRef: string): string | null | Promise<string | null>;
 
-  /** Whether the signed-in user may access this document (Drive only). */
-  canAccess?(userEmail: string): Promise<boolean>;
+  /** The file's own sharing, as Drive lists it (Drive only). */
+  sharing?(): Promise<DriveGrant[]>;
 }
 
 /** Folders first, then files, each alphabetical (case-insensitive). */
@@ -145,8 +145,7 @@ export class DriveBackend implements DocBackend {
     }
   }
 
-  async canAccess(userEmail: string): Promise<boolean> {
-    const grants = await driveListPermissions(await this.token(), this.meta.fileId);
-    return emailHasAccess(grants, userEmail);
+  async sharing(): Promise<DriveGrant[]> {
+    return driveListPermissions(await this.token(), this.meta.fileId);
   }
 }

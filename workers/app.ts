@@ -2,7 +2,7 @@ import { createRequestHandler, RouterContextProvider } from "react-router";
 import { routeAgentRequest, getAgentByName } from "agents";
 import { cloudflareContext } from "../app/lib/cloudflare.server";
 import { authorizeDoc, type DriveSessionEnv } from "../app/lib/drive-access.server";
-import type { DocRole, DriveMeta } from "../app/shared/types";
+import { internalHeaders, type ResolvedDoc } from "../app/lib/doc-resolve.server";
 
 export { default as DocumentAgent } from "../agents/document";
 
@@ -23,10 +23,18 @@ const requestHandler = createRequestHandler(
 async function gateAgentRequest(request: Request, env: Env, docId: string, key: string | null): Promise<Response | null> {
   try {
     const stub = await getAgentByName(env.DocumentAgent, docId);
-    const metaRes = await stub.fetch(new Request(`https://do/?k=${encodeURIComponent(key ?? "")}`));
-    const meta = (await metaRes.json()) as { exists?: boolean; role?: DocRole | null; drive?: DriveMeta | null };
+    const metaRes = await stub.fetch(
+      new Request(`https://do/?k=${encodeURIComponent(key ?? "")}`, { headers: internalHeaders(env) }),
+    );
+    const meta = (await metaRes.json()) as ResolvedDoc;
     if (!meta.exists) return new Response("not found", { status: 404 });
-    const auth = await authorizeDoc(env as unknown as DriveSessionEnv, request, meta.drive ?? null, meta.role ?? null);
+    const auth = await authorizeDoc(
+      env as unknown as DriveSessionEnv,
+      request,
+      meta.drive ?? null,
+      meta.role ?? null,
+      meta.sharing,
+    );
     if (auth.status === "ok") return null;
     if (auth.status === "needsAuth") return new Response("sign in required", { status: 401 });
     return new Response("no access to this file", { status: 403 }); // forbidden / badkey

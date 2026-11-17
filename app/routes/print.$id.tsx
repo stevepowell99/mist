@@ -41,12 +41,12 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
   const sessionEnv = env as unknown as DriveSessionEnv;
 
   const key = url.searchParams.get("k") ?? "";
-  const { role, drive } = await resolveDoc(env, id, key);
+  const { role, drive, sharing } = await resolveDoc(env, id, key);
   if (!role) throw data("Not found.", { status: 404 });
   const scope = await verifyAssetToken(url.searchParams.get("token"), sessionEnv.SESSION_SECRET ?? "");
   let viewer = scope && drive && scope.deck === drive.fileId && !scope.asset ? scope.email : null;
   if (!viewer) {
-    const auth = await authorizeDoc(sessionEnv, request, drive, role);
+    const auth = await authorizeDoc(sessionEnv, request, drive, role, sharing);
     if (auth.status === "needsAuth") throw data("Sign in to gmist to print this document.", { status: 401 });
     if (auth.status !== "ok") throw data("You do not have access to this file.", { status: 403 });
     viewer = auth.viewer;

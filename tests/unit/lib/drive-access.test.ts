@@ -43,6 +43,13 @@ describe("authorizeDoc", () => {
     clearSharingCache();
   });
 
+  it("decides on the sharing the room hands over, without asking Drive", async () => {
+    grants.current = [];
+    const res = await authorizeDoc(env, await request(), drive, "edit", [anyone("writer")]);
+    expect(res.status).toBe("ok");
+    expect(res.role).toBe("edit");
+  });
+
   it("asks Drive for a file's sharing once across the opens of one page load", async () => {
     grants.current = [anyone("writer")];
     expect((await authorizeDoc(env, await request(), drive, "edit")).status).toBe("ok");

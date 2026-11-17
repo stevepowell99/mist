@@ -8,7 +8,8 @@ import * as decoding from "lib0/decoding";
 import { MSG_SYNC, MSG_AWARENESS, DOC_FORMAT_VERSION } from "../app/shared/constants";
 import type { DocRole, DriveMeta } from "../app/shared/types";
 import { type DocBackend, DriveBackend } from "../app/lib/backend.server";
-import { type DriveEnv, driveConfigured } from "../app/lib/google.server";
+import { type DriveEnv, type DriveGrant, driveConfigured } from "../app/lib/google.server";
+import { INTERNAL_HEADER, SHARING_TTL_MS } from "../app/shared/constants";
 import { quickHash } from "../app/shared/hash";
 import { stampDocId, isContaminated } from "../app/shared/doc-integrity";
 import { stripFrontmatter, deserializeThreads, serializeThreads } from "../app/lib/thread-serialization";
@@ -190,6 +191,32 @@ class DocumentAgent extends Agent {
       `;
     }
     return { editKey, suggestKey };
+  }
+
+  /** True for a request the Worker made itself: it carries the session secret,
+   *  which never leaves the Worker and this object. */
+  private isInternal(request: Request): boolean {
+    const secret = (this.env as unknown as { SESSION_SECRET?: string }).SESSION_SECRET;
+    return !!secret && request.headers.get(INTERNAL_HEADER) === secret;
+  }
+
+  /**
+   * The bound file's Drive sharing, remembered for `SHARING_TTL_MS`. This object
+   * is the one instance per room, so it is the one memory every open of the room
+   * shares: the Worker's own isolates each keep their own and miss about half
+   * the time. Null when it cannot be read; the Worker then asks Drive itself.
+   */
+  private sharingMemo: { at: number; grants: DriveGrant[] } | null = null;
+  private async sharing(): Promise<DriveGrant[] | null> {
+    if (this.sharingMemo && Date.now() - this.sharingMemo.at < SHARING_TTL_MS) return this.sharingMemo.grants;
+    try {
+      const grants = await this.backendFor()?.backend.sharing?.();
+      if (!grants) return null;
+      this.sharingMemo = { at: Date.now(), grants };
+      return grants;
+    } catch {
+      return null;
+    }
   }
 
   private roleForKey(k: string | null): DocRole | null {
@@ -797,6 +824,11 @@ class DocumentAgent extends Agent {
           // Edit-role callers get the suggest key so they can share suggest links
           suggestKey: role === "edit" ? this.readStoredText("suggestKey") : undefined,
           drive,
+          // The file's Drive sharing, for the Worker's access decision only. This
+          // endpoint is reachable from the browser, and the list names everyone
+          // the file is shared with, so it is given only to a caller that proves
+          // it is the Worker (`INTERNAL_HEADER`), and only for a valid key.
+          sharing: role && drive && this.isInternal(request) ? await this.sharing() : undefined,
         }),
         { headers: { "Content-Type": "application/json" } },
       );

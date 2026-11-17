@@ -23,8 +23,8 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
   const url = new URL(request.url);
   const key = url.searchParams.get("k") ?? "";
 
-  const { role, drive } = await resolveDoc(env, id, key);
-  const auth = await authorizeDoc(sessionEnv, request, drive, role);
+  const { role, drive, sharing } = await resolveDoc(env, id, key);
+  const auth = await authorizeDoc(sessionEnv, request, drive, role, sharing);
   if (auth.status === "badkey") return new Response("Not found.", { status: 404 });
   if (auth.status === "needsAuth") return new Response("Sign in to gmist to print this document.", { status: 401 });
   if (auth.status === "forbidden") return new Response("You do not have access to this file.", { status: 403 });

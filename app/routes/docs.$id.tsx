@@ -76,7 +76,7 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
   // same View pill the client will and hydration matches.
   const initialLive = searchParams.get("view") === "live";
   const { env } = getCloudflare(context);
-  const { exists, createdAt, role, suggestKey, drive } = await resolveDoc(env, id, docKey);
+  const { exists, createdAt, role, suggestKey, drive, sharing } = await resolveDoc(env, id, docKey);
 
   if (!exists || !role) {
     throw data(null, { status: 404 });
@@ -87,7 +87,7 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
   // with or, without sign-in, anyone-with-link (Drive sharing is the source of
   // truth). The same check gates the WebSocket in workers/app.ts. The effective
   // role is the more restrictive of the link's role and the viewer's Drive role.
-  const auth = await authorizeDoc(env as unknown as DriveSessionEnv, request, drive, role);
+  const auth = await authorizeDoc(env as unknown as DriveSessionEnv, request, drive, role, sharing);
   if (auth.status === "badkey") throw data(null, { status: 404 });
   if (auth.status === "needsAuth") return { id, gate: "needsAuth" as const };
   if (auth.status === "forbidden") return { id, gate: "forbidden" as const };

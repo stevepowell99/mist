@@ -25,8 +25,10 @@ import {
   isLocalMode,
   LOCAL_USER_EMAIL,
   type DriveEnv,
+  type DriveGrant,
 } from "./google.server";
 import { json } from "./http.server";
+import { SHARING_TTL_MS } from "~/shared/constants";
 import type { DocRole, DriveMeta } from "~/shared/types";
 
 export interface DriveSessionEnv extends DriveEnv {
@@ -135,9 +137,10 @@ export async function signAssetUrls(html: string, env: DriveSessionEnv): Promise
  * reload asks again; each ask is a Drive API call of about half a second. A
  * change to the sharing in Drive therefore takes up to this long to apply to
  * NEW opens: short enough for revoking access, long enough to cover one open.
- * The cache is per Worker isolate, so it is an optimisation, never a record.
+ * The cache is per Worker isolate, so it is an optimisation, never a record,
+ * and it misses often: opening a document uses the room's own memory of its
+ * sharing (the `sharing` argument of `authorizeDoc`), and this is the fallback.
  */
-const SHARING_TTL_MS = 30_000;
 const sharingCache = new Map<string, { at: number; grants: Awaited<ReturnType<typeof driveListPermissions>> }>();
 async function fileSharing(env: DriveSessionEnv, fileId: string) {
   const hit = sharingCache.get(fileId);
@@ -179,9 +182,10 @@ export async function fileAccessRole(
   env: DriveSessionEnv,
   fileId: string,
   email: string | null,
+  sharing?: DriveGrant[] | null,
 ): Promise<DocRole | null> {
   try {
-    const role = driveRoleFor(await fileSharing(env, fileId), email);
+    const role = driveRoleFor(sharing ?? (await fileSharing(env, fileId)), email);
     if (!role) return null;
     return driveRoleCanEdit(role) ? "edit" : "suggest";
   } catch {
@@ -208,6 +212,9 @@ export const ANYONE_WITH_LINK_VIEWER = "anyone-with-link";
  *  - "forbidden": signed in, but the file's Drive sharing does not grant them.
  *  - "ok":        allowed, with the effective role.
  *
+ * `sharing` is the file's Drive sharing as the room remembers it (`resolveDoc`),
+ * which saves asking Drive again; without it the sharing is looked up here.
+ *
  * `email` is the signed-in email, null for a visitor who has not signed in;
  * `viewer` is who passed, for minting a deck token (`mintDeckToken`).
  *
@@ -220,11 +227,12 @@ export async function authorizeDoc(
   request: Request,
   drive: DriveMeta | null,
   keyRole: DocRole | null,
+  sharing?: DriveGrant[] | null,
 ): Promise<{ status: DocAuthStatus; role: DocRole | null; email: string | null; viewer: string | null }> {
   if (!keyRole) return { status: "badkey", role: null, email: null, viewer: null };
   if (!drive?.fileId) return { status: "ok", role: keyRole, email: null, viewer: null }; // unbound: key only
   const email = await getRequestEmail(request, env);
-  const driveRole = await fileAccessRole(env, drive.fileId, email);
+  const driveRole = await fileAccessRole(env, drive.fileId, email, sharing);
   if (!driveRole) return { status: email ? "forbidden" : "needsAuth", role: null, email, viewer: null };
   const role: DocRole = keyRole === "edit" ? driveRole : "suggest";
   return { status: "ok", role, email, viewer: email ?? ANYONE_WITH_LINK_VIEWER };
