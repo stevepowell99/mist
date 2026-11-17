@@ -46,6 +46,12 @@ For Claude, working in `C:\dev\mist`. The deployed worker is the place to verify
 - To see who caused a click, add capture-phase listeners for `click`, `mousedown` and `keydown` and log `isTrusted`, the coordinates and the target. A click with `isTrusted` false and coordinates 0,0 that bypasses a patched `HTMLElement.prototype.click` came from a browser extension.
 - **Steve's Chrome has extensions; headless Playwright has none.** A fault seen in only one of the two is not yet a gmist fault or an extension fault: reproduce it in the other before reading code.
 
+## The scripted stress test
+
+- `python scripts/stress-live.py` (set `PYTHONIOENCODING=utf-8`) makes a throwaway shared room on the deployed worker and drives three clients in it, two editors and one suggester: simultaneous typing, the suggester's Backspace, Delete and Enter, comments and replies, Accept, a synthetic click on Reject, a reload storm, offline edits, a 60,000-character paste and a late joiner. It prints one PASS or FAIL line per check.
+- `python scripts/stress-live.py <edit link>` runs the same checks in an existing room, and for a Drive-bound room also waits for "Synced" and reads the sync log. Steve pastes the link; the Chrome tool cannot read it.
+- A FAIL is first a question about the script: place the cursor through `view.dispatch`, never with arrow keys, because a long line wraps on screen.
+
 ## What to check for a sharing or editing change
 
 - Unshared file, visitor: the sign-in screen, and a direct WebSocket to `/agents/document-agent/<id>?k=<key>` is refused.
