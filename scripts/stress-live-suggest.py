@@ -156,12 +156,14 @@ with sync_playwright() as p:
         ok, t = converge([A, B, C])
         got = line(A, "First ")
         check("Backspace x4 on original text is one tidy deletion", ok and "First {--line--}" in got, got[:120])
-    cursor(B, anchor, at_end=False)
+    # Delete from a line start. Meant for a fresh file: on a rerun the line
+    # already begins with this deletion and the keys step over it.
+    cursor(B, "First ", at_end=False)
     for _ in range(3):
         B.keyboard.press("Delete")
     ok, t = converge([A, B, C])
-    got = line(B, first_body[3:20])
-    check("Delete x3 at the line start is one tidy deletion", ok and got.startswith("{--" + first_body[:3] + "--}"), got[:80])
+    got = line(B, "st {--line--}") or ""
+    check("Delete x3 at the line start is one tidy deletion", ok and got.startswith("{--Fir--}st "), got[:80])
     check("the original text is still recoverable", strip_suggestions(t) == original)
 
     # --- comment and reply between suggesters -----------------------------

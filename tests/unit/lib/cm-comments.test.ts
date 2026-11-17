@@ -50,6 +50,24 @@ describe("insertCommentChange", () => {
     const r = insertCommentChange("the cat sat", 4, 7, "which cat?");
     expect(applyChanges("the cat sat", r.changes)).toBe("the {==cat==}{>>which cat?<<} sat");
   });
+
+  it("never wraps a selection that crosses other markup: a point comment follows it", () => {
+    const text = "one {--two--} three";
+    // "e {--tw": starts in plain text, ends inside the deletion
+    const r = insertCommentChange(text, 2, 9, "n");
+    expect(applyChanges(text, r.changes)).toBe("one {--two--}{>>n<<} three");
+    // a selection wholly containing the deletion
+    const r2 = insertCommentChange(text, 0, text.length, "n");
+    expect(applyChanges(text, r2.changes)).toBe("one {--two--} three{>>n<<}");
+  });
+
+  it("moves a point comment out of a span, and past a highlight's own comment", () => {
+    const inAddition = "a{++bcd++}e";
+    expect(applyChanges(inAddition, insertCommentChange(inAddition, 5, 5, "n").changes)).toBe("a{++bcd++}{>>n<<}e");
+    const pair = "the {==cat==}{>>q<<} sat";
+    // cursor inside the highlight
+    expect(applyChanges(pair, insertCommentChange(pair, 8, 8, "n").changes)).toBe("the {==cat==}{>>q<<}{>>n<<} sat");
+  });
 });
 
 describe("removeCommentChange", () => {

@@ -128,6 +128,8 @@ export function suggestEdit(
         }
       );
     }
+    const around = strikeAround(doc, fromA, toA, "", backward);
+    if (around) return around;
     const leftMerge = doc.slice(fromA - 3, fromA) === "--}";
     const rightMerge = doc.slice(toA, toA + 3) === "{--";
     const open = leftMerge ? "" : "{--";
@@ -151,6 +153,8 @@ export function suggestEdit(
   // Replace a selection with typed/pasted text: strike the old, add the new.
   if (deleting && inserting) {
     if (additionContaining(doc, fromA, toA)) return null; // replace inside an addition
+    const around = strikeAround(doc, fromA, toA, insert, backward);
+    if (around) return around;
     const deleted = doc.slice(fromA, toA);
     const leftMerge = doc.slice(fromA - 3, fromA) === "--}";
     const open = leftMerge ? "" : "{--";
@@ -163,6 +167,34 @@ export function suggestEdit(
   }
 
   return null;
+}
+
+/**
+ * A deletion or replacement whose range crosses existing CriticMarkup. The
+ * delimiters are hidden in clean view, so a selection can run across a tracked
+ * change or a comment unseen, and wrapping the whole range would put markup
+ * inside markup and break both. Strike only the live text between the spans it
+ * touches and leave those spans as they are; a replacement's new text goes in
+ * after the range. Null when the range touches no markup.
+ */
+function strikeAround(doc: string, fromA: number, toA: number, insert: string, backward: boolean): SuggestResult | null {
+  const spans = criticSpans(doc).filter((s) => s.from < toA && s.to > fromA);
+  if (!spans.length) return null;
+  const changes: SuggestChange[] = [];
+  let pos = fromA;
+  for (const s of spans) {
+    if (pos < s.from) changes.push({ from: pos, to: s.from, insert: `{--${doc.slice(pos, s.from)}--}` });
+    pos = Math.max(pos, s.to);
+  }
+  if (pos < toA) changes.push({ from: pos, to: toA, insert: `{--${doc.slice(pos, toA)}--}` });
+  const start = Math.min(fromA, spans[0].from);
+  const end = Math.max(toA, pos);
+  const grown = changes.length * 6;
+  if (insert) {
+    changes.push({ from: end, to: end, insert: `{++${insert}++}` });
+    return { changes, cursor: end + grown + 3 + insert.length };
+  }
+  return { changes, cursor: backward ? start : end + grown };
 }
 
 const processed = Annotation.define<boolean>();

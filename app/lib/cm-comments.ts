@@ -77,16 +77,45 @@ export interface CommentChange {
   cursor: number;
 }
 
-/** Wrap a selection as `{==sel==}{>>note<<}`, or insert a point `{>>note<<}`. */
+/** The nearest position at or after `pos` that is outside every CriticMarkup
+ *  span, and not between a highlight and the comment that annotates it. */
+function outsideMarkup(text: string, pos: number): number {
+  const spans = criticSpans(text);
+  for (let moved = true; moved; ) {
+    moved = false;
+    for (let i = 0; i < spans.length; i++) {
+      const s = spans[i];
+      const inside = pos > s.from && pos < s.to;
+      const betweenPair = s.type === "comment" && pos === s.from && spans[i - 1]?.type === "highlight" && spans[i - 1].to === pos;
+      if (inside || betweenPair) {
+        pos = s.to;
+        moved = true;
+      }
+    }
+  }
+  return pos;
+}
+
+/**
+ * Wrap a selection as `{==sel==}{>>note<<}`, or insert a point `{>>note<<}`.
+ *
+ * Markup never goes inside other markup. The delimiters are hidden in clean
+ * view, so a selection can cross a tracked change or another comment without
+ * the user seeing it, and wrapping that selection would cut the other span in
+ * two and break both. Such a selection gets a point comment after it instead,
+ * and a point comment whose position is inside a span moves to the span's end.
+ */
 export function insertCommentChange(
   text: string,
   from: number,
   to: number,
   note: string,
 ): CommentChange {
-  if (from === to) {
+  const crossesMarkup = from < to && criticSpans(text).some((s) => s.from < to && s.to > from);
+  if (from === to || crossesMarkup) {
+    const at = outsideMarkup(text, to);
     const insert = `{>>${note}<<}`;
-    return { changes: [{ from, to, insert }], cursor: from + insert.length };
+    return { changes: [{ from: at, to: at, insert }], cursor: at + insert.length };
   }
   const selected = text.slice(from, to);
   const insert = `{==${selected}==}{>>${note}<<}`;

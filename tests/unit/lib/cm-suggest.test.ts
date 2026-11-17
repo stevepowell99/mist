@@ -7,8 +7,8 @@ import { criticSpans, spanContentAt } from "~/lib/critic";
 function apply(doc: string, res: SuggestResult | null): string {
   if (!res) return "(null)";
   let text = doc;
-  // single change (or none) in these cases; apply on original offsets
-  for (const c of res.changes) {
+  // offsets are in the original text, so apply from the end backwards
+  for (const c of [...res.changes].sort((x, y) => y.from - x.from)) {
     text = text.slice(0, c.from) + c.insert + text.slice(c.to);
   }
   return text.slice(0, res.cursor) + "|" + text.slice(res.cursor);
@@ -109,6 +109,24 @@ describe("suggestEdit: deletion", () => {
   it("steps over an already-struck char instead of re-deleting", () => {
     // "{--c--}", backspace targeting content 'c' at [3,4)
     expect(suggestEdit("{--c--}", 3, 4, "", true)).toEqual({ changes: [], cursor: 0 });
+  });
+
+  it("strikes only the live text when a deleted selection crosses markup", () => {
+    const doc = "one {--two--} three {++four++} five";
+    // select from "one" to "five" inclusive
+    expect(apply(doc, suggestEdit(doc, 0, doc.length, "", true))).toBe(
+      "|{--one --}{--two--}{-- three --}{++four++}{-- five--}",
+    );
+    // a selection that starts in plain text and ends inside the deletion
+    expect(apply(doc, suggestEdit(doc, 2, 9, "", false))).toBe("on{--e --}{--two--}| three {++four++} five");
+    // across a comment and its highlight
+    const c = "a {==b==}{>>n<<} c";
+    expect(apply(c, suggestEdit(c, 0, c.length, "", true))).toBe("|{--a --}{==b==}{>>n<<}{-- c--}");
+  });
+
+  it("puts a replacement after the range when it crosses markup", () => {
+    const doc = "one {--two--} three";
+    expect(apply(doc, suggestEdit(doc, 0, doc.length, "X", true))).toBe("{--one --}{--two--}{-- three--}{++X|++}");
   });
 
   it("wraps a deleted selection of plain text", () => {
