@@ -23,10 +23,10 @@ Found 17 November 2026 while testing sign-in-free access. Blocks giving colleagu
 
 - Drive-bound versus unbound, in the same browser.
 - Anonymous versus signed in.
-- Steve's Chrome versus a clean browser on the Drive doc (the Chrome tool hides the room key, so Playwright could not open that room).
+- Steve's Chrome versus a browser without his profile or extensions, on the Drive doc (the Chrome tool hides the room key, so Playwright could not open that room).
 
 ## Next
 
 - Reproduce under `npm run dev` with a Drive-bound doc, hook `view.dispatch` in the main world and read the stack of the deleting transaction.
-- Also seen: after a reload the page can sit on "Connecting" or "Closing" for 10 seconds or more before the text appears.
-- Also seen: with a suggest-only role, End then Enter in the editor put a bare newline into the text, not a `{++ ++}` suggestion.
+- Also seen: after a reload the page can show "Connecting" or "Closing" for 10 seconds or more before the text appears.
+- Also seen: with a suggest-only role, End then Enter in the editor put a bare newline into the text where a `{++ ++}` suggestion was expected.
