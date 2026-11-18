@@ -94,13 +94,20 @@ export async function assetAccess(request: Request, env: DriveSessionEnv): Promi
  * A deck token for a viewer who has already passed that deck's access check
  * (see session.server.ts): what the editor's sandboxed preview and the print
  * page use. Null without a deck or a signing secret.
+ *
+ * Local mode has no signing secret and /drive/asset serves the local user
+ * without reading a token, but the page rewrites an image's src to /drive/asset
+ * only when it holds one, so local mode gets a fixed marker.
  */
+export const LOCAL_ASSET_TOKEN = "local";
 export async function mintDeckToken(
   env: DriveSessionEnv,
   deck: string | null | undefined,
   viewer: string | null,
 ): Promise<string | null> {
-  if (!deck || !viewer || !env.SESSION_SECRET) return null;
+  if (!deck || !viewer) return null;
+  if (isLocalMode(env)) return LOCAL_ASSET_TOKEN;
+  if (!env.SESSION_SECRET) return null;
   return signAssetToken(env.SESSION_SECRET, { deck, email: viewer });
 }
 
