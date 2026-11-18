@@ -408,6 +408,8 @@ html.reveal-print .reveal .slides section:not(.stack) { padding: 1.2em 1.8em !im
 .reveal h2 { font-size: 1.4em; border-bottom: 2px solid var(--teal); padding-bottom: 0.25em; margin-bottom: 0.6em; }
 .reveal section.center h2 { border-bottom: none; text-align: center; }
 .reveal p, .reveal li, .reveal blockquote { font-size: 0.7em; line-height: 1.4; }
+/* A nested item is sized against its parent item, which is already 0.7em. */
+.reveal li li { font-size: 0.85em; }
 .reveal ul, .reveal ol { margin: 0.3em 0 0.3em 1.2em; }
 .reveal ul li, .reveal ol li { margin: 0.15em 0; }
 /* Component font sizes inside the smaller deck body */
