@@ -231,6 +231,9 @@ window.addEventListener("message", function(e){
     pendingGoto = e.data.h; pendingFrag = (typeof e.data.f === "number") ? e.data.f : -1; applyGoto(); showDeck();
   } else if (e.data.type === "mist-render" && typeof e.data.sections === "string") {
     rerender(e.data.sections, typeof e.data.goto === "number" ? e.data.goto : null);
+  } else if (e.data.type === "mist-nav" && revealReady) {
+    // The speaker window's Back and Next: the same step as the arrow keys.
+    if (e.data.dir === "next") Reveal.next(); else if (e.data.dir === "prev") Reveal.prev();
   }
 });
 // Forward mod+alt layout shortcuts to the parent: this sandboxed iframe has its
@@ -246,13 +249,20 @@ window.addEventListener("keydown", function(e){
     Reveal.toggleOverview(false);
     return;
   }
-  // In the embedded preview, plain F enters the app's single Present mode instead
-  // of reveal's own iframe fullscreen, so there is one present path. The
-  // standalone /slides page (not in an iframe) keeps reveal's native F.
+  // In the embedded preview, plain F enters the app's single Present mode (or,
+  // once in it, toggles full screen) instead of reveal's own iframe fullscreen,
+  // so there is one present path. The standalone /slides page keeps reveal's F.
   if ((e.key === "f" || e.key === "F") && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && window.parent !== window) {
     e.preventDefault();
     e.stopImmediatePropagation();
     parent.postMessage({ type: "mist-present" }, "*");
+    return;
+  }
+  // Esc in the embedded deck: reveal's own Esc is off (KEYBOARD), so it closes
+  // the overview if open, and otherwise tells the app, which ends Present.
+  if (e.key === "Escape" && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && window.parent !== window) {
+    if (Reveal.isOverview && Reveal.isOverview()) { Reveal.toggleOverview(false); return; }
+    parent.postMessage({ type: "mist-escape" }, "*");
     return;
   }
   // Ctrl/Cmd+P inside the embedded deck: the browser crashes printing the live

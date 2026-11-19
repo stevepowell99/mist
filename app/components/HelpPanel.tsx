@@ -31,8 +31,8 @@ const LAYOUT: Shortcut[] = [
   { keys: [MOD, "Alt", "2"], label: "Split editor + preview" },
   { keys: [MOD, "Alt", "3"], label: "Preview only" },
   { keys: [MOD, "Alt", "4"], label: "Live preview (editor, syntax hidden)" },
-  { keys: [MOD, "Alt", "P"], label: "Present (deck: fullscreen)" },
-  { keys: [MOD, "Alt", "N"], label: "Present: presenter card (next slide, notes, timer)" },
+  { keys: [MOD, "Alt", "P"], label: "Present: the deck fills the window, notes in a floating window" },
+  { keys: [MOD, "Alt", "N"], label: "Present: speaker notes window (notes, next slide, timer)" },
   { keys: [MOD, "Alt", "-"], label: "Shrink editor pane (split view)" },
   { keys: [MOD, "Alt", "="], label: "Grow editor pane (split view)" },
   { keys: [MOD, "P"], label: "Print to PDF" },
@@ -66,8 +66,8 @@ const EDITOR: Shortcut[] = [
 
 const SLIDES: Shortcut[] = [
   { keys: [MOD, "S"], label: "Save now (Drive files) and rebuild the preview" },
-  { keys: ["F"], label: "Present, with focus in the preview" },
-  { keys: ["Esc"], label: "Leave Present" },
+  { keys: ["F"], label: "Present, with focus in the preview; in Present, full screen" },
+  { keys: ["Esc"], label: "Leave Present (from either window)" },
   { keys: ["O"], label: "Overview of all slides" },
   { keys: ["wheel"], label: "Scroll through the overview" },
   { keys: ["←", "→"], label: "Previous / next slide" },
@@ -170,7 +170,7 @@ const FEATURES: { title: string; items: string[] }[] = [
       "A composable framework: components, colour / fill / border / theme colours, shade, scale, opacity, placement",
       "Eight themes (causal-map, qualia, brutalist, editorial, blackboard, moonshot, handwritten, minimal)",
       "A shared library of reusable slides and images",
-      "Present (Ctrl/Cmd+Alt+P): fullscreen, with a presenter card (timer, next slide, notes)",
+      "Present (Ctrl/Cmd+Alt+P): share the deck window, with notes, next slide and timer in a floating window of their own",
     ],
   },
   {

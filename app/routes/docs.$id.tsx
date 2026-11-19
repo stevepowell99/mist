@@ -36,14 +36,14 @@ import MobilePanel from "~/components/MobilePanel";
 import NamePrompt from "~/components/NamePrompt";
 import FolderSidebar from "~/components/FolderSidebar";
 import OutlinePanel from "~/components/OutlinePanel";
-import PresenterRail from "~/components/PresenterRail";
+import PresentLayer from "~/components/PresentLayer";
+import { usePresent } from "~/lib/usePresent";
 import HelpPanel from "~/components/HelpPanel";
 import LibraryGallery from "~/components/LibraryGallery";
 import DocGate from "~/components/DocGate";
 import ShareOnOpen from "~/components/ShareOnOpen";
 import RememberRoom from "~/components/RememberRoom";
 import SlidesView, { isSlideDeck } from "~/components/SlidesView";
-import PresentControls from "~/components/PresentControls";
 import { type DocView } from "~/components/Toolbar";
 import DocNavbar from "~/components/DocNavbar";
 import { fileTitle } from "~/lib/slides-build";
@@ -265,15 +265,10 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
       return !v;
     });
   }, [deck]);
-  // Present mode: the deck fills the (fullscreened) app, chrome hidden, with an
-  // optional presenter rail. One mode, app-controlled (we fullscreen the app, not
-  // the deck iframe, so our own UI can sit over/beside the slide).
-  const [presenting, setPresenting] = useState(false);
-  const [presentStart, setPresentStart] = useState(0);
-  // The presenter card (bottom-right): railOpen is the persistent toggle
-  // (Ctrl/Cmd+Alt+N), railPeek is the on-hover reveal.
-  const [railOpen, setRailOpen] = useState(false);
-  const [railPeek, setRailPeek] = useState(false);
+  // Present mode: the deck fills the window, chrome hidden, and the notes get a
+  // floating window of their own (usePresent, shared with the local editor).
+  const presentMode = usePresent(deck);
+  const presenting = presentMode.presenting;
   const [editorPct, setEditorPct] = useState(() => {
     // Open in split if the URL asks for it (?view=split), so a reload or shared
     // link reopens the same layout. Preview-only is restored via initialPreview.
@@ -539,29 +534,6 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
     moveCursorToSlide(idx, false);
   };
 
-  // Enter/exit Present. Fullscreen the whole app (best-effort), not the deck
-  // iframe, so the presenter rail and exit control sit beside the slide. Esc (or
-  // any fullscreen exit) drops back out via the fullscreenchange listener below.
-  const enterPresent = useCallback(() => {
-    setPresenting(true);
-    setPresentStart(Date.now());
-    document.documentElement.requestFullscreen?.().catch(() => {});
-  }, []);
-  const exitPresent = useCallback(() => {
-    setPresenting(false);
-    if (typeof document !== "undefined" && document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
-  }, []);
-  // Leaving browser fullscreen (Esc, F11) leaves Present too, so the two never
-  // disagree. Held in a ref so the chord handler stays stable.
-  const presentingRef = useRef(presenting);
-  presentingRef.current = presenting;
-  useEffect(() => {
-    const onFs = () => {
-      if (!document.fullscreenElement && presentingRef.current) setPresenting(false);
-    };
-    document.addEventListener("fullscreenchange", onFs);
-    return () => document.removeEventListener("fullscreenchange", onFs);
-  }, []);
   // Print as a PDF made on the server (the same link as the Share menu's "Print
   // to PDF"): a deck from its /slides print page, a document from its /print
   // page. NEVER the live editing preview: the browser crashes printing the
@@ -580,18 +552,15 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
     else window.location.assign(url);
   }, [unsaved, saveNow, deck, id, docKey]);
 
-  // The deck iframe forwards F (plain) as a present request and Ctrl/Cmd+P as a
-  // print request, since the sandboxed iframe can neither fullscreen the app nor
-  // open the print page itself.
+  // The deck iframe forwards Ctrl/Cmd+P as a print request, since the sandboxed
+  // iframe cannot open the print page itself. (Its F and Esc go to usePresent.)
   useEffect(() => {
     const onMsg = (e: MessageEvent) => {
-      const t = (e.data as { type?: string })?.type;
-      if (t === "mist-present") enterPresent();
-      else if (t === "mist-print") printPdf();
+      if ((e.data as { type?: string })?.type === "mist-print") printPdf();
     };
     window.addEventListener("message", onMsg);
     return () => window.removeEventListener("message", onMsg);
-  }, [enterPresent, printPdf]);
+  }, [printPdf]);
 
   // Ctrl/Cmd+P prints through gmist, not the raw app. For a deck, focus inside
   // the iframe instead forwards mist-print (the runtime cannot open the page).
@@ -623,15 +592,15 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
         case "=": nudgeSplit(5); return true;
         case "f": window.dispatchEvent(new CustomEvent("mist-toggle-folder")); return true;
         case "g": syncEditorToSlideRef.current(); return true;
-        // P presents the deck (one mode: fullscreen app, chrome off, presenter rail).
-        case "p": if (!deck) return false; if (presentingRef.current) exitPresent(); else enterPresent(); return true;
-        // N toggles the presenter card (next slide + notes + timer) in Present.
-        case "n": setRailOpen((v) => !v); return true;
+        // P presents the deck (one mode: chrome off, notes in a window of their own).
+        case "p": if (!deck) return false; if (presentMode.presenting) presentMode.exit(); else presentMode.enter(); return true;
+        // N toggles the speaker notes (next slide + notes + timer) in Present.
+        case "n": if (presentMode.presenting) presentMode.toggleNotes(); return true;
         case "/": window.dispatchEvent(new CustomEvent("mist-toggle-help")); return true;
         default: return false;
       }
     },
-    [toggleMode, setView, isDesktop, setAsideCollapsedPersist, asideCollapsed, nudgeSplit, deck, enterPresent, exitPresent, toggleOutline],
+    [toggleMode, setView, isDesktop, setAsideCollapsedPersist, asideCollapsed, nudgeSplit, deck, presentMode, toggleOutline],
   );
 
   // Ctrl/Cmd+S (and Ctrl/Cmd+Enter, dispatched by the editor) flushes a save to
@@ -913,7 +882,7 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
         }
         mode={{ value: mode, onToggle: () => role === "edit" && toggleMode(), locked: role !== "edit" }}
         view={{ value: view, onChange: setView, allowSplit: isDesktop }}
-        onPresent={deck ? enterPresent : undefined}
+        onPresent={deck ? presentMode.enter : undefined}
         share={<ShareButton />}
         menu={[
           { label: "Print to PDF", keys: "Ctrl+P", onSelect: printPdf },
@@ -960,16 +929,16 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
           </button>
         )}
         {present ? (
-          <div className="relative h-full w-full overflow-hidden bg-black">
+          <PresentLayer
+            present={presentMode}
+            markdown={markdown}
+            frontmatter={frontmatter}
+            currentSlide={localSlide ?? 0}
+            slidesOpen={outlineOpen}
+            onToggleSlides={() => setOutlineOpen((v) => !v)}
+            className="relative h-full w-full overflow-hidden bg-black"
+          >
             <SlidesView {...slideProps} />
-            <PresentControls
-              speakerHref={`/slides/${id}?k=${encodeURIComponent(docKey ?? "")}`}
-              notesOpen={railOpen}
-              slidesOpen={outlineOpen}
-              onToggleNotes={() => setRailOpen((v) => !v)}
-              onToggleSlides={() => setOutlineOpen((v) => !v)}
-              onExit={exitPresent}
-            />
             {/* The slide list is still reachable in Present with Ctrl/Cmd+Alt+D. */}
             {outlineOpen && (
               <OutlinePanel
@@ -984,23 +953,7 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
                 onMouseLeave={() => setOutlineOpen(false)}
               />
             )}
-            {railOpen || railPeek ? (
-              <PresenterRail
-                markdown={markdown}
-                frontmatter={frontmatter}
-                currentSlide={localSlide ?? 0}
-                startedAt={presentStart}
-                onMouseLeave={() => setRailPeek(false)}
-              />
-            ) : (
-              // A right-edge target that reveals the presenter card on hover.
-              <div
-                onMouseEnter={() => setRailPeek(true)}
-                title="Presenter info (Ctrl/Cmd+Alt+N)"
-                className="absolute right-0 top-1/2 z-40 h-48 w-4 -translate-y-1/2"
-              />
-            )}
-          </div>
+          </PresentLayer>
         ) : (
         <>
         <div ref={contentRef} className="relative flex flex-1 overflow-hidden">

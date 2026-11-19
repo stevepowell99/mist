@@ -2,37 +2,33 @@
  * The controls that sit over a deck while presenting, shared by both editors so
  * Present is one thing rather than two that drifted.
  *
- * They are buttons rather than only a hover zone and a chord. Notes and the
- * slide list were reachable by Ctrl/Cmd+Alt+N and Ctrl/Cmd+Alt+D, or by finding
- * an invisible strip at the screen edge, which is not a way anyone discovers
- * that a presenter view exists at all. The chords and the hover still work; this
- * is the visible answer to "where are my speaker notes".
+ * They are buttons rather than only chords: Notes and the slide list were
+ * reachable by Ctrl/Cmd+Alt+N and Ctrl/Cmd+Alt+D alone, which is not a way
+ * anyone discovers that a presenter view exists at all.
  *
- * Deliberately quiet: low-contrast on the black surround, so a projected slide
- * is not framed by our own furniture. They sit top-right, out of the slide's
- * way, and the labels say what you get rather than what they toggle.
+ * This window is the one being shared or projected, so the controls must not
+ * frame the slide for the audience. While the speaker window is open, which has
+ * its own End, Back and Next, they stay invisible until the pointer reaches the
+ * top-right corner; without it they show faintly, as the only way out besides Esc.
  */
 export default function PresentControls({
   notesOpen,
   slidesOpen,
-  speakerHref,
+  fullscreen,
+  quiet,
   onToggleNotes,
   onToggleSlides,
+  onToggleFullscreen,
   onExit,
 }: {
   notesOpen: boolean;
   slidesOpen: boolean;
-  /**
-   * The deck's standalone page, for presenting on two screens. Notes here are
-   * a card on the SAME screen, which is right for rehearsing and wrong for a
-   * projector, where the audience would read them. reveal's own speaker view
-   * puts them in a second window, and it only works on a standalone page (a
-   * sandboxed srcDoc iframe has no URL for it to open), so that is where this
-   * sends you rather than trying to copy it.
-   */
-  speakerHref?: string;
+  fullscreen: boolean;
+  /** Hide until hovered: the speaker window is open and carries the controls. */
+  quiet: boolean;
   onToggleNotes: () => void;
   onToggleSlides: () => void;
+  onToggleFullscreen: () => void;
   onExit: () => void;
 }) {
   const cls = (on: boolean) =>
@@ -40,7 +36,11 @@ export default function PresentControls({
       on ? "bg-white/25 text-white" : "bg-black/40 text-white/70 hover:text-white"
     }`;
   return (
-    <div className="absolute right-3 top-3 z-50 flex items-center gap-1">
+    <div
+      className={`absolute right-0 top-0 z-50 flex items-center gap-1 p-3 transition-opacity ${
+        quiet && !slidesOpen ? "opacity-0 hover:opacity-100 focus-within:opacity-100" : ""
+      }`}
+    >
       <button
         type="button"
         onClick={onToggleSlides}
@@ -53,24 +53,22 @@ export default function PresentControls({
       <button
         type="button"
         onClick={onToggleNotes}
-        title="Speaker notes, next slide and timer (Ctrl/Cmd+Alt+N)"
+        title="Speaker notes, next slide and timer, in a window of their own (Ctrl/Cmd+Alt+N)"
         aria-pressed={notesOpen}
         className={cls(notesOpen)}
       >
         Notes
       </button>
-      {speakerHref && (
-        <a
-          href={speakerHref}
-          target="_blank"
-          rel="noopener noreferrer"
-          title="Two screens: opens the deck's own page, where Notes gives reveal's speaker view in a second window"
-          className={cls(false)}
-        >
-          Speaker view
-        </a>
-      )}
-      <button type="button" onClick={onExit} title="Exit present (Esc)" aria-label="Exit present" className={cls(false)}>
+      <button
+        type="button"
+        onClick={onToggleFullscreen}
+        title="Full screen, for a projector (F)"
+        aria-pressed={fullscreen}
+        className={cls(fullscreen)}
+      >
+        Full screen
+      </button>
+      <button type="button" onClick={onExit} title="End the presentation (Esc)" aria-label="Exit present" className={cls(false)}>
         Exit
       </button>
     </div>

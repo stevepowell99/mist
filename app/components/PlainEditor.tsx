@@ -30,8 +30,8 @@ import { markdownLineStyle } from "~/lib/cm-markdown-style";
 import PlainPreview from "~/components/PlainPreview";
 import SlidesView, { isSlideDeck } from "~/components/SlidesView";
 import { slideIndexForOffset } from "~/lib/slide-cursor";
-import PresenterRail from "~/components/PresenterRail";
-import PresentControls from "~/components/PresentControls";
+import PresentLayer from "~/components/PresentLayer";
+import { usePresent } from "~/lib/usePresent";
 import { ToolbarButton } from "~/components/Toolbar";
 import DocNavbar from "~/components/DocNavbar";
 import { SaveBadge } from "~/components/SaveStatus";
@@ -167,11 +167,8 @@ export default function PlainEditor({
   const [text, setText] = useState("");
   /** Where the cursor is, so a deck can show the slide being written. */
   const [cursorOffset, setCursorOffset] = useState(0);
-  /** Fullscreen, chrome hidden, the deck filling the screen. */
-  const [presenting, setPresenting] = useState(false);
-  /** The presenter card, and when the talk started, for its clock. */
-  const [railOpen, setRailOpen] = useState(false);
-  const [presentStart, setPresentStart] = useState(0);
+  /** The slide the deck last reported, which is what Present's notes follow. */
+  const [deckSlide, setDeckSlide] = useState<number | null>(null);
   const [bibLib, setBibLib] = useState<BibLibrary | null>(null);
   /** Spellcheck language, from a `lang:` in the frontmatter. British by default,
    *  which is the house style. */
@@ -394,37 +391,18 @@ export default function PlainEditor({
     bibLib,
   };
 
-  /**
-   * Present: fullscreen the whole app, not the deck's iframe.
-   *
-   * Fullscreening the iframe hides everything the app draws beside the slide,
-   * including the presenter card, which is why this takes the document element.
-   * Leaving fullscreen by any route leaves Present, through the listener below.
-   */
-  const enterPresent = useCallback(() => {
-    if (!deck) return;
-    setPresentStart(Date.now());
-    setPresenting(true);
-    document.documentElement.requestFullscreen?.().catch(() => {});
-  }, [deck]);
-
-  const exitPresent = useCallback(() => {
-    setPresenting(false);
-    if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
-  }, []);
-
-  const presentingRef = useRef(presenting);
+  /** Present: the deck fills this window and the notes get one of their own. */
+  const present = usePresent(deck);
+  const presenting = present.presenting;
   useEffect(() => {
-    presentingRef.current = presenting;
-  }, [presenting]);
-
-  useEffect(() => {
-    const onFs = () => {
-      if (!document.fullscreenElement && presentingRef.current) setPresenting(false);
+    const onMsg = (e: MessageEvent) => {
+      const d = e.data as { type?: string; h?: number } | null;
+      if (d?.type === "mist-slide" && typeof d.h === "number") setDeckSlide(d.h);
     };
-    document.addEventListener("fullscreenchange", onFs);
-    return () => document.removeEventListener("fullscreenchange", onFs);
+    window.addEventListener("message", onMsg);
+    return () => window.removeEventListener("message", onMsg);
   }, []);
+  const presentSlide = deckSlide ?? slideIndexForOffset(text, cursorOffset);
 
   /**
    * Print: a deck's slides or a document's A4 pages, in a print page of their
@@ -444,18 +422,15 @@ export default function PlainEditor({
     window.open(url, "_blank");
   }, [deck, fileId, status, sync]);
 
-  // The deck runtime intercepts plain F and Ctrl/Cmd+P inside its iframe and
-  // posts these, so reveal's own fullscreen never fires and the presenter card
-  // stays visible, and the sandboxed iframe is never printed.
+  // The deck runtime intercepts Ctrl/Cmd+P inside its iframe and posts this, so
+  // the sandboxed iframe is never printed. (Its F and Esc go to usePresent.)
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {
-      const type = e.data === "mist-present" ? e.data : e.data?.type;
-      if (type === "mist-present") enterPresent();
-      else if (type === "mist-print") void print();
+      if (e.data?.type === "mist-print") void print();
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [enterPresent, print]);
+  }, [print]);
 
   // Ctrl/Cmd+P prints through the print page, not the editor around it.
   useEffect(() => {
@@ -492,12 +467,12 @@ export default function PlainEditor({
         case "4": setLayoutPersist("live"); return true;
         case "d": setOutlineOpen((v) => { remember(OUTLINE_KEY, v ? "no" : "yes"); return !v; }); return true;
         case "c": setReviewOpen((v) => { remember(REVIEW_KEY, v ? "no" : "yes"); return !v; }); return true;
-        case "p": if (!deck) return false; if (presentingRef.current) exitPresent(); else enterPresent(); return true;
-        case "n": setRailOpen((v) => !v); return true;
+        case "p": if (!deck) return false; if (present.presenting) present.exit(); else present.enter(); return true;
+        case "n": if (present.presenting) present.toggleNotes(); return true;
         default: return false;
       }
     },
-    [deck, enterPresent, exitPresent, setLayoutPersist],
+    [deck, present, setLayoutPersist],
   );
   useChordListener(runChord);
 
@@ -703,7 +678,7 @@ export default function PlainEditor({
           },
         }}
         view={{ value: layout, onChange: setLayoutPersist, allowSplit: true }}
-        onPresent={deck ? enterPresent : undefined}
+        onPresent={deck ? present.enter : undefined}
         share={
           // A local file has no address to share, so this slot takes it to the
           // online gmist, where it can be shared or presented to others.
@@ -752,25 +727,16 @@ export default function PlainEditor({
         </div>
       )}
       {presenting && (
-        <div className="fixed inset-0 z-50 bg-black">
+        <PresentLayer
+          present={present}
+          markdown={text}
+          frontmatter={frontmatter}
+          currentSlide={presentSlide}
+          slidesOpen={outlineOpen}
+          onToggleSlides={() => setOutlineOpen((v) => !v)}
+          className="fixed inset-0 z-50 bg-black"
+        >
           <SlidesView {...slideProps} />
-          {railOpen && (
-            <PresenterRail
-              markdown={text}
-              frontmatter={frontmatter}
-              currentSlide={slideIndexForOffset(text, cursorOffset)}
-              startedAt={presentStart}
-              onMouseLeave={() => setRailOpen(false)}
-            />
-          )}
-          {!railOpen && (
-            // A right-edge target that reveals the presenter card on hover.
-            <div
-              onMouseEnter={() => setRailOpen(true)}
-              title="Presenter info"
-              className="absolute right-0 top-1/2 z-40 h-48 w-4 -translate-y-1/2"
-            />
-          )}
           {/* The slide list, reachable while presenting exactly as on the Drive
               side (Ctrl/Cmd+Alt+D, or the Slides button). */}
           {outlineOpen && (
@@ -779,21 +745,13 @@ export default function PlainEditor({
               text={text}
               deck={deck}
               canEdit={false}
-              currentSlide={slideIndexForOffset(text, cursorOffset)}
+              currentSlide={presentSlide}
               overlay
               onClose={() => setOutlineOpen(false)}
               onMouseLeave={() => setOutlineOpen(false)}
             />
           )}
-          <PresentControls
-            speakerHref={`/slides/${fileId}`}
-            notesOpen={railOpen}
-            slidesOpen={outlineOpen}
-            onToggleNotes={() => setRailOpen((v) => !v)}
-            onToggleSlides={() => setOutlineOpen((v) => !v)}
-            onExit={exitPresent}
-          />
-        </div>
+        </PresentLayer>
       )}
       <div className={`flex min-h-0 flex-1 ${alreadyOpen || presenting ? "hidden" : ""}`}>
         {outlineOpen && (
@@ -818,8 +776,10 @@ export default function PlainEditor({
           }`}
         />
         {/* Live is the editor alone, typeset in place. Only split and preview put a
-            second pane beside it. For a deck that pane is the deck itself. */}
-        {(layout === "split" || layout === "preview") && (
+            second pane beside it. For a deck that pane is the deck itself, and it
+            is not mounted while presenting: two decks would both report slides
+            and both take the speaker window's steps. */}
+        {(layout === "split" || layout === "preview") && !presenting && (
           <div className={layout === "split" ? "min-h-0 w-1/2" : "min-h-0 flex-1"}>
             {deck ? (
               <SlidesView {...slideProps} />

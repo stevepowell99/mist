@@ -261,6 +261,17 @@ export default function SlidesView({
     return () => window.removeEventListener("mist-goto-slide", onJump);
   }, []);
 
+  // Step the deck as its own arrow keys would, fragments included, for the
+  // speaker window's buttons and keys (stepDeck in usePresent).
+  useEffect(() => {
+    const onStep = (e: Event) => {
+      const dir = (e as CustomEvent<string>).detail;
+      if (dir === "next" || dir === "prev") iframeRef.current?.contentWindow?.postMessage({ type: "mist-nav", dir }, "*");
+    };
+    window.addEventListener("mist-deck-nav", onStep);
+    return () => window.removeEventListener("mist-deck-nav", onStep);
+  }, []);
+
   return (
     <iframe
       ref={setIframe}
@@ -270,7 +281,7 @@ export default function SlidesView({
       // allow + allowFullScreen let reveal's F key take the deck fullscreen from
       // inside the sandboxed iframe. Speaker notes are not here: the preview has
       // no navigable deck URL for reveal's notes window, so S is disabled in the
-      // embedded runtime and notes live on the standalone Present page instead.
+      // embedded runtime and Present's own speaker window shows the notes.
       allow="fullscreen"
       allowFullScreen
       srcDoc={html}
