@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Compartment, EditorState, Transaction } from "@codemirror/state";
 import { EditorView, keymap, highlightActiveLine, highlightActiveLineGutter, lineNumbers } from "@codemirror/view";
-import { remember, remembered } from "~/lib/remembered";
+import { remember, remembered, rememberedNumber } from "~/lib/remembered";
+import { useSplitDrag } from "~/lib/useSplitDrag";
+import SplitGutter from "~/components/SplitGutter";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { searchKeymap } from "@codemirror/search";
@@ -106,6 +108,10 @@ type View = "live" | "editor" | "split" | "preview";
 const VIEW_KEY = "gmist.plain.view";
 const REVIEW_KEY = "gmist.plain.review";
 const MODE_KEY = "gmist.plain.mode";
+/** The editor's share of the split, in percent, kept within SPLIT_MIN..SPLIT_MAX. */
+const SPLIT_KEY = "gmist.plain.split";
+const SPLIT_MIN = 20;
+const SPLIT_MAX = 80;
 
 /** The class names the deck stylesheet defines, for the `.`-picker. */
 const CSS_CLASSES = parseCssClasses(DECK_BASE_CSS);
@@ -153,6 +159,16 @@ export default function PlainEditor({
    *  created after a fetch, so the remembered view has long since been restored
    *  by then, but the creation effect cannot see the state it landed in. */
   const layoutRef = useRef<View>("live");
+  /** Split view: the editor's width, dragged on the divider and remembered per browser. */
+  const [splitPct, setSplitPct] = useState(50);
+  const splitRef = useRef<HTMLDivElement | null>(null);
+  const setSplitClamped = useCallback((p: number) => setSplitPct(Math.min(SPLIT_MAX, Math.max(SPLIT_MIN, p))), []);
+  const startSplitDrag = useSplitDrag(splitRef, setSplitClamped);
+  // Debounced: a drag changes the width every frame.
+  useEffect(() => {
+    const t = setTimeout(() => remember(SPLIT_KEY, String(Math.round(splitPct))), 300);
+    return () => clearTimeout(t);
+  }, [splitPct]);
   const [outlineOpen, setOutlineOpen] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
   /** Suggesting turns every edit into CriticMarkup instead of applying it. It is
@@ -286,6 +302,7 @@ export default function PlainEditor({
     setOutlineOpen(remembered(OUTLINE_KEY, ["yes", "no"] as const, "no") === "yes");
     setReviewOpen(remembered(REVIEW_KEY, ["yes", "no"] as const, "no") === "yes");
     setMode(remembered(MODE_KEY, ["edit", "suggest"] as const, "edit"));
+    setSplitPct(rememberedNumber(SPLIT_KEY, SPLIT_MIN, SPLIT_MAX, 50));
   }, []);
 
   useEffect(() => {
@@ -765,34 +782,38 @@ export default function PlainEditor({
             />
           </div>
         )}
-        <div
-          ref={host}
-          className={`min-h-0 overflow-auto ${
-            layout === "preview"
-              ? "hidden"
-              : layout === "split"
-                ? "flex w-1/2 flex-col border-r border-border"
-                : "flex flex-1 flex-col"
-          }`}
-        />
-        {/* Live is the editor alone, typeset in place. Only split and preview put a
-            second pane beside it. For a deck that pane is the deck itself, and it
-            is not mounted while presenting: two decks would both report slides
-            and both take the speaker window's steps. */}
-        {(layout === "split" || layout === "preview") && !presenting && (
-          <div className={layout === "split" ? "min-h-0 w-1/2" : "min-h-0 flex-1"}>
-            {deck ? (
-              <SlidesView {...slideProps} />
-            ) : (
-              <PlainPreview
-                markdown={text}
-                drive={folderId ? ({ fileId, name, folderId } as DriveMeta) : null}
-                assetToken={assetToken}
-                bibLib={bibLib}
-              />
-            )}
-          </div>
-        )}
+        <div ref={splitRef} className="flex min-h-0 min-w-0 flex-1">
+          <div
+            ref={host}
+            className={`min-h-0 overflow-auto ${
+              layout === "preview"
+                ? "hidden"
+                : layout === "split"
+                  ? "flex shrink-0 flex-col"
+                  : "flex flex-1 flex-col"
+            }`}
+            style={layout === "split" ? { width: `${splitPct}%` } : undefined}
+          />
+          {layout === "split" && !presenting && <SplitGutter onMouseDown={startSplitDrag} />}
+          {/* Live is the editor alone, typeset in place. Only split and preview put a
+              second pane beside it. For a deck that pane is the deck itself, and it
+              is not mounted while presenting: two decks would both report slides
+              and both take the speaker window's steps. */}
+          {(layout === "split" || layout === "preview") && !presenting && (
+            <div className="min-h-0 min-w-0 flex-1">
+              {deck ? (
+                <SlidesView {...slideProps} />
+              ) : (
+                <PlainPreview
+                  markdown={text}
+                  drive={folderId ? ({ fileId, name, folderId } as DriveMeta) : null}
+                  assetToken={assetToken}
+                  bibLib={bibLib}
+                />
+              )}
+            </div>
+          )}
+        </div>
         {reviewOpen && (
           <div className="min-h-0 w-72 shrink-0">
             <PlainReview view={editorView} text={text} onClose={() => setReviewOpen(false)} />

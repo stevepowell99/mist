@@ -13,6 +13,16 @@ export function remembered<T extends string>(key: string, allowed: readonly T[],
   }
 }
 
+/** A remembered number, such as a pane width; anything outside min..max reads as the fallback. */
+export function rememberedNumber(key: string, min: number, max: number, fallback: number): number {
+  try {
+    const n = Number(window.localStorage.getItem(key));
+    return Number.isFinite(n) && n >= min && n <= max ? n : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export function remember(key: string, value: string) {
   try {
     window.localStorage.setItem(key, value);

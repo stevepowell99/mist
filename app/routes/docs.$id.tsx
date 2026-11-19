@@ -37,6 +37,7 @@ import NamePrompt from "~/components/NamePrompt";
 import FolderSidebar from "~/components/FolderSidebar";
 import OutlinePanel from "~/components/OutlinePanel";
 import PresentLayer from "~/components/PresentLayer";
+import SplitGutter from "~/components/SplitGutter";
 import { usePresent } from "~/lib/usePresent";
 import HelpPanel from "~/components/HelpPanel";
 import LibraryGallery from "~/components/LibraryGallery";
@@ -1018,16 +1019,8 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
             {!splitOpen && showPreview && !deck && <Preview />}
           </main>
           {isDesktop && splitOpen && (
-            <div
-              role="separator"
-              aria-orientation="vertical"
-              onMouseDown={startDrag}
-              title="Drag to resize editor and preview"
-              className="group relative z-10 flex w-2 shrink-0 cursor-col-resize items-center justify-center bg-border transition-colors hover:bg-chartreuse"
-            >
-              {/* widen the grab target a few px into each pane */}
-              <span className="absolute inset-y-0 -left-1 -right-1" />
-              {deck ? (
+            <SplitGutter onMouseDown={startDrag}>
+              {deck && (
                 /* On a deck, a left-arrow on the divider moves the editor to the
                    slide shown on the right. stopPropagation so it does not start a
                    drag. Replaces the old navbar jump icon. */
@@ -1043,15 +1036,8 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
                     <path d="m15 18-6-6 6-6" />
                   </svg>
                 </button>
-              ) : (
-                /* grip dots so the handle is findable */
-                <span className="pointer-events-none flex flex-col gap-1 opacity-50 group-hover:opacity-90">
-                  <span className="h-1 w-1 rounded-full bg-ink" />
-                  <span className="h-1 w-1 rounded-full bg-ink" />
-                  <span className="h-1 w-1 rounded-full bg-ink" />
-                </span>
               )}
-            </div>
+            </SplitGutter>
           )}
           {(splitOpen || slidesFull) && (
             <section className="flex-1 overflow-hidden">
