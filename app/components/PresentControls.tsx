@@ -33,7 +33,7 @@ export default function PresentControls({
 }) {
   const cls = (on: boolean) =>
     `cursor-pointer rounded px-2 py-1 text-xs uppercase tracking-wider transition-colors ${
-      on ? "bg-white/25 text-white" : "bg-black/40 text-white/70 hover:text-white"
+      on ? "bg-black/70 text-white ring-1 ring-white/60" : "bg-black/40 text-white/70 hover:text-white"
     }`;
   return (
     <div
