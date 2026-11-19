@@ -4,6 +4,15 @@ import type { EditorView } from "@codemirror/view";
 import { extractOutlineFromText, moveSection, sectionEnd, toggleHiddenText, type OutlineItem } from "~/lib/outline";
 import { slideIndexForOffset } from "~/lib/slide-cursor";
 import type { Peer } from "~/lib/usePresence";
+import { remember, rememberedNumber } from "~/lib/remembered";
+import { useSplitDrag } from "~/lib/useSplitDrag";
+import SplitGutter from "~/components/SplitGutter";
+
+/** The outline's width in px, dragged on its right-hand divider and remembered per browser, in both editors. */
+const WIDTH_KEY = "gmist.outline.width";
+const WIDTH_MIN = 160;
+const WIDTH_MAX = 560;
+const WIDTH_DEFAULT = 256;
 
 /**
  * Header-only outline for the open document (CodeMirror / Y.Text core). For a
@@ -39,6 +48,18 @@ export default function OutlinePanel({
 }) {
   const [maxLevel, setMaxLevel] = useState(3);
   const items = useMemo(() => extractOutlineFromText(text), [text]);
+
+  // The panel only ever mounts client-side (both editors open it from an
+  // effect), so the remembered width can be read on first render.
+  const [width, setWidth] = useState(() => rememberedNumber(WIDTH_KEY, WIDTH_MIN, WIDTH_MAX, WIDTH_DEFAULT));
+  const boxRef = useRef<HTMLDivElement | null>(null);
+  const setWidthClamped = useCallback((px: number) => setWidth(Math.min(WIDTH_MAX, Math.max(WIDTH_MIN, px))), []);
+  const startDrag = useSplitDrag(boxRef, setWidthClamped, "px");
+  // Debounced: a drag changes the width every frame.
+  useEffect(() => {
+    const t = setTimeout(() => remember(WIDTH_KEY, String(Math.round(width))), 300);
+    return () => clearTimeout(t);
+  }, [width]);
 
   // Group peers by the flat slide index they are on, so each row can show who is
   // on that slide (deck only).
@@ -137,13 +158,14 @@ export default function OutlinePanel({
     [view, canEdit, items, shown, text],
   );
 
-  return (
+  const panel = (
     <aside
       onMouseLeave={overlay ? onMouseLeave : undefined}
+      style={{ width }}
       className={
         overlay
-          ? "absolute inset-y-0 left-0 z-50 flex w-64 flex-col overflow-hidden border-r border-border bg-paper shadow-2xl"
-          : "panel-slide-left hidden w-64 shrink-0 flex-col overflow-hidden border-r border-border bg-paper lg:flex"
+          ? "absolute inset-y-0 left-0 z-50 flex flex-col overflow-hidden border-r border-border bg-paper shadow-2xl"
+          : "flex shrink-0 flex-col overflow-hidden bg-paper"
       }
     >
       <div className="flex shrink-0 items-center justify-between border-b border-border px-3 py-2">
@@ -268,5 +290,15 @@ export default function OutlinePanel({
         })}
       </div>
     </aside>
+  );
+
+  // The overlay peek floats over the deck and has no divider; in the layout the
+  // divider is the panel's right edge, the same one the editor/preview split uses.
+  if (overlay) return panel;
+  return (
+    <div ref={boxRef} className="panel-slide-left hidden min-h-0 shrink-0 lg:flex">
+      {panel}
+      <SplitGutter onMouseDown={startDrag} title="Drag to resize the outline" />
+    </div>
   );
 }

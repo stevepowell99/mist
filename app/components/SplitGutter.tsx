@@ -1,16 +1,19 @@
 import type { MouseEvent as ReactMouseEvent, ReactNode } from "react";
 
 /**
- * The vertical divider between the editor and the preview, in both editors:
- * drag it to resize (`useSplitDrag` makes the handler). `children` replaces the
- * grip dots, as the room editor's jump-to-slide button does on a deck; a child
- * that can be pressed must stop its mousedown, or pressing it starts a drag.
+ * Every vertical divider, in both editors (editor/preview, and the outline's
+ * right edge): drag it to resize (`useSplitDrag` makes the handler). `children`
+ * replaces the grip dots, as the room editor's jump-to-slide button does on a
+ * deck; a child that can be pressed must stop its mousedown, or pressing it
+ * starts a drag.
  */
 export default function SplitGutter({
   onMouseDown,
+  title = "Drag to resize editor and preview",
   children,
 }: {
   onMouseDown: (e: ReactMouseEvent) => void;
+  title?: string;
   children?: ReactNode;
 }) {
   return (
@@ -18,7 +21,7 @@ export default function SplitGutter({
       role="separator"
       aria-orientation="vertical"
       onMouseDown={onMouseDown}
-      title="Drag to resize editor and preview"
+      title={title}
       className="group relative z-10 flex w-2 shrink-0 cursor-col-resize items-center justify-center bg-border transition-colors hover:bg-chartreuse"
     >
       {/* widen the grab target a few px into each pane */}

@@ -1,16 +1,19 @@
 import { useCallback, type MouseEvent as ReactMouseEvent, type RefObject } from "react";
 
 /**
- * The draggable split gutter for the editor/preview panes: on mousedown, track
- * the pointer and set the editor pane width as a percentage of the content box
- * (clamped 20..100). rAF-throttled because each move reflows the iframe-heavy
- * layout, so it coalesces to one resize per frame. `mist-dragging` lets the mouse
- * pass through the preview iframe so the drag never stalls over it. Returns the
- * mousedown handler. Extracted from docs.$id.
+ * Drag logic for every vertical divider (`SplitGutter`): on mousedown, track the
+ * pointer and report the width of the pane left of the divider, measured from
+ * the left edge of `contentRef`. In "pct" (the editor/preview split) that is a
+ * percentage of the box, clamped 20..100; in "px" (the outline) it is pixels,
+ * which the caller clamps. rAF-throttled because each move reflows the
+ * iframe-heavy layout, so it coalesces to one resize per frame. `mist-dragging`
+ * lets the mouse pass through the preview iframe so the drag never stalls over
+ * it. Returns the mousedown handler.
  */
 export function useSplitDrag(
   contentRef: RefObject<HTMLDivElement | null>,
-  setEditorPct: (pct: number) => void,
+  setWidth: (width: number) => void,
+  unit: "pct" | "px" = "pct",
 ): (e: ReactMouseEvent) => void {
   return useCallback(
     (e: ReactMouseEvent) => {
@@ -22,8 +25,9 @@ export function useSplitDrag(
       let pendingX = 0;
       const apply = () => {
         raf = 0;
+        if (unit === "px") return setWidth(pendingX - rect.left);
         const pct = ((pendingX - rect.left) / rect.width) * 100;
-        setEditorPct(Math.min(100, Math.max(20, pct)));
+        setWidth(Math.min(100, Math.max(20, pct)));
       };
       const onMove = (ev: MouseEvent) => {
         pendingX = ev.clientX;
@@ -41,6 +45,6 @@ export function useSplitDrag(
       window.addEventListener("mousemove", onMove);
       window.addEventListener("mouseup", onUp);
     },
-    [contentRef, setEditorPct],
+    [contentRef, setWidth, unit],
   );
 }

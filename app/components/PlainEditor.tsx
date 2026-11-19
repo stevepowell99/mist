@@ -772,15 +772,13 @@ export default function PlainEditor({
       )}
       <div className={`flex min-h-0 flex-1 ${alreadyOpen || presenting ? "hidden" : ""}`}>
         {outlineOpen && (
-          <div className="min-h-0 w-64 shrink-0 overflow-auto border-r border-border">
-            <OutlinePanel
-              view={editorView}
-              text={text}
-              deck={deck}
-              canEdit={status !== "conflict"}
-              onClose={() => setOutlineOpen(false)}
-            />
-          </div>
+          <OutlinePanel
+            view={editorView}
+            text={text}
+            deck={deck}
+            canEdit={status !== "conflict"}
+            onClose={() => setOutlineOpen(false)}
+          />
         )}
         <div ref={splitRef} className="flex min-h-0 min-w-0 flex-1">
           <div

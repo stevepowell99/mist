@@ -32,6 +32,22 @@ describe("SplitGutter", () => {
     expect(document.body.classList.contains("mist-dragging")).toBe(false);
   });
 
+  it("reports pixels from the box's left edge in px mode, for the outline", () => {
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((cb) => {
+      cb(0);
+      return 1;
+    });
+    const onPx = vi.fn();
+    const box = document.createElement("div");
+    vi.spyOn(box, "getBoundingClientRect").mockReturnValue({ left: 100, width: 1000 } as DOMRect);
+    const { result } = renderHook(() => useSplitDrag({ current: box }, onPx, "px"));
+    const { getByRole } = render(createElement(SplitGutter, { onMouseDown: result.current }));
+    fireEvent.mouseDown(getByRole("separator"));
+    fireEvent.mouseMove(window, { clientX: 400 });
+    fireEvent.mouseUp(window);
+    expect(onPx).toHaveBeenLastCalledWith(300);
+  });
+
   it("shows its children in place of the grip, and a child that stops mousedown starts no drag", () => {
     const onMouseDown = vi.fn();
     const { getByText, container } = render(

@@ -957,7 +957,7 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
           </PresentLayer>
         ) : (
         <>
-        <div ref={contentRef} className="relative flex flex-1 overflow-hidden">
+        <div className="relative flex flex-1 overflow-hidden">
           {/* When the deck fills the pane (presenting), a thin left-edge zone
               peeks the slide list on hover; Ctrl/Cmd+Alt+D toggles it too. */}
           {slidesFull && !outlineOpen && (
@@ -980,6 +980,9 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
               onMouseLeave={slidesFull ? () => setOutlineOpen(false) : undefined}
             />
           )}
+          {/* The editor/preview split is measured in this box alone, so the
+              outline beside it does not offset the divider from the pointer. */}
+          <div ref={contentRef} className="flex min-w-0 flex-1 overflow-hidden">
           <main
             ref={mainRef}
             onScroll={handleScroll}
@@ -1044,6 +1047,7 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
               {deck ? <SlidesView {...slideProps} /> : <div ref={previewScrollRef} className="h-full overflow-y-auto"><Preview /></div>}
             </section>
           )}
+          </div>
         </div>
         {/* No collapsed strip: an invisible right-edge zone peeks the panel on
             hover (the navbar hamburger toggles it for good). */}
