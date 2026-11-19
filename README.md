@@ -31,7 +31,7 @@ gmist began as a fork of [inanimate-tech/mist](https://github.com/inanimate-tech
 - An independent reveal.js deck builder with gmist's own composable "house framework": orthogonal class axes for components (`.panel`, `.cards`, `.callout`, `.chip`, `.bignums`, shapes), colour, fill (`.bg-<colour>`), border, the theme's own palette (`.accent`, `.page`, ...), shade, scale, opacity and absolute placement.
 - Themes set in the frontmatter (`theme:`): causal-map, qualia, brutalist, editorial, blackboard, moonshot, handwritten, minimal. The same theme styles the document preview, so a doc reads like its deck.
 - A shared library gallery drops reusable slides and images into a deck (by-id `drive:` references that resolve at render).
-- One Present mode (Ctrl/Cmd+Alt+P, the Present button, or F in the deck): the chrome hides and the deck fills the window, ready to share in a call, while a floating speaker window shows the time, position, current slide's notes and next slide, and steps the deck from its own keys. F goes full screen for a projector.
+- One Present mode (Ctrl/Cmd+Alt+P, the Present button, or F in the deck): the chrome hides and the deck fills the window, ready to share in a call; Notes (Ctrl/Cmd+Alt+N) opens a floating speaker window that shows the time, position, current slide's notes and next slide, and steps the deck from its own keys. F goes full screen for a projector.
 
 ### Drive and sharing
 

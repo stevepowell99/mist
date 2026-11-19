@@ -6,8 +6,8 @@ import { usePresent, SPEAKER_WINDOW_NAME, stepDeck } from "~/lib/usePresent";
 import PresenterRail from "~/components/PresenterRail";
 
 /**
- * Present's two windows: the deck stays here to be shared, and the notes open
- * in a window of their own. jsdom cannot open a window, so an iframe's window
+ * Present's two windows: the deck stays here to be shared, and the notes open,
+ * on request, in a window of their own. jsdom cannot open a window, so an iframe's window
  * stands in for the popup: a real second document, as the portal needs.
  */
 
@@ -34,11 +34,20 @@ afterEach(() => {
 });
 
 describe("usePresent", () => {
-  it("opens the notes in a named popup, dressed in the app's styles and theme", async () => {
+  it("enters without the notes, which open on request", async () => {
     const open = vi.spyOn(window, "open").mockImplementation(() => fakePopup());
     const { result } = renderHook(() => usePresent(true));
     await act(async () => result.current.enter());
     expect(result.current.presenting).toBe(true);
+    expect(open).not.toHaveBeenCalled();
+    expect(result.current.notesShown).toBe(false);
+  });
+
+  it("opens the notes in a named popup, dressed in the app's styles and theme", async () => {
+    const open = vi.spyOn(window, "open").mockImplementation(() => fakePopup());
+    const { result } = renderHook(() => usePresent(true));
+    await act(async () => result.current.enter());
+    await act(async () => result.current.toggleNotes());
     expect(open).toHaveBeenCalledWith("", SPEAKER_WINDOW_NAME, expect.stringContaining("popup"));
     const root = result.current.speakerRoot!;
     expect(root).not.toBeNull();
@@ -58,6 +67,7 @@ describe("usePresent", () => {
     vi.spyOn(window, "open").mockReturnValue(null);
     const { result } = renderHook(() => usePresent(true));
     await act(async () => result.current.enter());
+    await act(async () => result.current.toggleNotes());
     expect(result.current.speakerRoot).toBeNull();
     expect(result.current.cardOpen).toBe(true);
     act(() => result.current.toggleNotes());
@@ -76,6 +86,7 @@ describe("usePresent", () => {
     vi.spyOn(window, "open").mockImplementation(() => fakePopup());
     const { result } = renderHook(() => usePresent(true));
     await act(async () => result.current.enter());
+    await act(async () => result.current.toggleNotes());
     const w = result.current.speakerRoot!.ownerDocument.defaultView!;
     act(() => w.dispatchEvent(new Event("pagehide")));
     expect(result.current.speakerRoot).toBeNull();

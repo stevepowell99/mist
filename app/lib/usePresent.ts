@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 /**
  * Present, one mode for both editors: the deck fills this window, and the
- * speaker notes go in a small floating window of their own.
+ * speaker notes, opened on request (the Notes button, Ctrl/Cmd+Alt+N), go in a
+ * small floating window of their own.
  *
  * The two-window shape is for presenting online. You share this window (or its
  * tab) and keep the notes window beside it, where the audience cannot see it,
@@ -163,8 +164,7 @@ export function usePresent(deck: boolean): Present {
     setStartedAt(Date.now());
     setPresenting(true);
     presentingRef.current = true;
-    void showNotes();
-  }, [deck, showNotes]);
+  }, [deck]);
 
   const exit = useCallback(() => {
     presentingRef.current = false;
