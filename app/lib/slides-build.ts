@@ -124,15 +124,21 @@ function headingLevel(slideMd: string): number {
 }
 
 /** Split a whole deck into its per-slide RAW markdown (frontmatter dropped), with
- *  each slide's title (its first heading, else its first line). The library's
- *  "from a deck" tab uses this to offer one slide out of an existing deck; the
- *  raw markdown is inserted as-is so the slide keeps its real source. */
+ *  each slide's title: its first heading with text, else its first line of
+ *  content. An attributes-only heading (`## {.title-page}`) and a `:::` fence name
+ *  nothing. The library's "from a deck" tab uses this to offer one slide out of an
+ *  existing deck, and the speaker notes to name the slides; the raw markdown is
+ *  inserted as-is so the slide keeps its real source. */
 export function deckSlides(md: string): { index: number; raw: string; title: string }[] {
   const { body } = stripFrontmatter(md);
+  const isHeading = (l: string) => /^#{1,6}\s/.test(l);
   return splitSlides(body).map((raw, index) => {
-    const heading = raw.split("\n").find((l) => /^#{1,6}\s/.test(l.trim()));
-    const fromHeading = heading?.replace(/^\s*#{1,6}\s*/, "").replace(/\s*\{[^}]*\}\s*$/, "").trim();
-    const firstLine = raw.trim().split("\n")[0]?.trim().slice(0, 60);
+    const lines = raw.split("\n").map((l) => l.trim()).filter(Boolean);
+    const fromHeading = lines
+      .filter(isHeading)
+      .map((l) => l.replace(/^#{1,6}\s*/, "").replace(/\s*\{[^}]*\}\s*$/, "").trim())
+      .find(Boolean);
+    const firstLine = lines.find((l) => !isHeading(l) && !l.startsWith(":::"))?.slice(0, 60);
     return { index, raw: raw.trim(), title: fromHeading || firstLine || `Slide ${index + 1}` };
   });
 }

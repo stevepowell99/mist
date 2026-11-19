@@ -51,31 +51,50 @@ async function openSpeakerWindow(): Promise<Window | null> {
 }
 
 /**
+ * One of this page's stylesheets as the speaker window takes it: the rules as
+ * already loaded here, never fetched again, because a rebuild (every deploy)
+ * deletes the hashed CSS file the page was served with, and the window's fetch
+ * of it 404s. A cross-origin sheet (Google Fonts) hides its rules, so that one
+ * goes by its link.
+ */
+function copySheet(d: Document, sheet: CSSStyleSheet): HTMLElement | null {
+  try {
+    const s = d.createElement("style");
+    s.textContent = Array.from(sheet.cssRules, (r) => r.cssText).join("\n");
+    return s;
+  } catch {
+    if (!sheet.href) return null;
+    const l = d.createElement("link");
+    l.rel = "stylesheet";
+    l.href = sheet.href;
+    return l;
+  }
+}
+
+/**
  * Give the speaker window this app's stylesheets and theme, and an empty root to
  * render into. A popup reused by name still holds the last talk's page, so its
  * head and body are replaced rather than added to.
  */
 function dressSpeakerWindow(w: Window): HTMLElement {
   const d = w.document;
-  d.title = "Speaker notes";
   d.head.replaceChildren();
-  for (const el of Array.from(document.querySelectorAll('link[rel="stylesheet"], style'))) {
-    if (el instanceof HTMLLinkElement) {
-      const l = d.createElement("link");
-      l.rel = "stylesheet";
-      l.href = el.href;
-      d.head.append(l);
-    } else {
-      d.head.append(d.importNode(el, true));
-    }
+  // The window is about:blank: a relative url() in a copied rule resolves against this page.
+  const base = d.createElement("base");
+  base.href = document.baseURI;
+  d.head.appendChild(base);
+  for (const sheet of Array.from(document.styleSheets)) {
+    const el = copySheet(d, sheet);
+    if (el) d.head.appendChild(el);
   }
+  d.title = "Speaker notes";
   for (const a of Array.from(document.documentElement.attributes)) d.documentElement.setAttribute(a.name, a.value);
   d.documentElement.style.height = "100%";
   d.body.replaceChildren();
   d.body.className = "m-0 h-full bg-paper text-ink";
   const root = d.createElement("div");
   root.className = "h-full";
-  d.body.append(root);
+  d.body.appendChild(root);
   return root;
 }
 

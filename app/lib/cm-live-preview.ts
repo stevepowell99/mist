@@ -452,7 +452,7 @@ class ImageWidget extends WidgetType {
         textContent: `[image not found: ${this.src}]`,
       }));
     });
-    wrap.append(img);
+    wrap.appendChild(img);
     return wrap;
   }
   get estimatedHeight() {

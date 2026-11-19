@@ -24,7 +24,7 @@ function fakePopup(): Window {
 const DECK = "---\nformat: revealjs\n---\n\n## One\n\n::: {.notes}\nSay hello.\n:::\n\n## Two\n\nBody\n";
 
 beforeEach(() => {
-  document.head.innerHTML = '<style id="app-css">.bg-paper{}</style>';
+  document.head.innerHTML = '<style id="app-css">.bg-paper{color:red}</style>';
   document.documentElement.setAttribute("data-theme", "dark");
 });
 afterEach(() => {
@@ -44,7 +44,11 @@ describe("usePresent", () => {
     expect(root).not.toBeNull();
     const d = root.ownerDocument;
     expect(d).not.toBe(document);
-    expect(d.getElementById("app-css")).not.toBeNull();
+    // The rules as loaded here, not a link to refetch: a rebuild deletes the page's CSS file.
+    const copied = Array.from(d.head.querySelectorAll("style"), (s) => s.textContent).join("\n");
+    expect(copied).toContain(".bg-paper");
+    expect(d.head.querySelector('link[rel="stylesheet"]')).toBeNull();
+    expect(d.title).toBe("Speaker notes");
     expect(d.documentElement.getAttribute("data-theme")).toBe("dark");
     expect(result.current.cardOpen).toBe(false);
     expect(result.current.notesShown).toBe(true);
