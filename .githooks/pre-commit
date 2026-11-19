@@ -2,7 +2,9 @@
 # Typecheck before every commit, as CI does. It checks the working tree, so
 # another session's unfinished edits here can block a commit too.
 # Installed by `npm install` (the prepare script sets core.hooksPath).
-npm run --silent typecheck || {
-  echo "pre-commit: typecheck failed; fix it, or see npm run typecheck" >&2
+# Quiet when it passes; wrangler's type generation prints a page otherwise.
+out=$(npm run --silent typecheck 2>&1) || {
+  printf '%s\n' "$out" >&2
+  echo "pre-commit: typecheck failed (npm run typecheck)" >&2
   exit 1
 }
