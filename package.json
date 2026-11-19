@@ -13,6 +13,7 @@
 		"gen:styles": "node scripts/gen-styles.mjs",
 		"lint": "eslint .",
 		"postinstall": "npm run cf-typegen",
+		"prepare": "git config core.hooksPath .githooks",
 		"preview": "npm run build && vite preview",
 		"preview:local": "node scripts/dev-local.mjs --built",
 		"test": "vitest run --coverage",

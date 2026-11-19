@@ -1,0 +1,2 @@
+# A hook checked out with CRLF breaks its #!/bin/sh line.
+.githooks/* text eol=lf
