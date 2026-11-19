@@ -42,6 +42,7 @@ const PANELS: Shortcut[] = [
   { keys: [MOD, "Alt", "F"], label: "Drive folder sidebar (Drive files)" },
   { keys: [MOD, "Alt", "J"], label: "Quick open: search Drive" },
   { keys: [MOD, "Alt", "D"], label: "Outline / slide list" },
+  { keys: ["drag", "⠿"], label: "Outline: drag a row's grip to move its slide or section, subsections included" },
   { keys: [MOD, "Alt", "C"], label: "Comments panel" },
   { keys: [MOD, "Alt", "G"], label: "Editor to the shown slide (or the divider arrow)" },
   { keys: [MOD, "Alt", "/"], label: "This help" },

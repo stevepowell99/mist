@@ -211,7 +211,7 @@ export default function OutlinePanel({
                 }}
                 title="Drag to reorder"
                 aria-label="Drag to reorder"
-                className="shrink-0 cursor-grab select-none px-0.5 text-muted opacity-0 hover:text-ink group-hover:opacity-100 active:cursor-grabbing"
+                className="shrink-0 cursor-grab select-none px-0.5 text-muted opacity-30 hover:text-ink group-hover:opacity-100 active:cursor-grabbing"
               >
                 <svg width="11" height="15" viewBox="0 0 6 10" fill="currentColor" aria-hidden="true">
                   <circle cx="1.5" cy="1.5" r="1" /><circle cx="4.5" cy="1.5" r="1" />
