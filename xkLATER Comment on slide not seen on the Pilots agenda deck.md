@@ -5,3 +5,4 @@
 - Not tested: a Drive-bound deck, a visitor who is not signed in on an anyone-with-link file, narrow screens (the button is hidden below 1024 px), and browsers other than Chromium.
 - Start here: open the agenda's comment link in a fresh browser, ask Steve what he and the visitors saw, and check a hard reload picks up the new build.
 - The agenda itself moved to a PDF export the same day, so this does not block it.
+- Later: gmist stays internal (Steve and Gabriele, edit links); interaction with outsiders moves to qworkshops (Steve, 20 November 2026).

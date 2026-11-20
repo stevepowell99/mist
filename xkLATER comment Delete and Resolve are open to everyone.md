@@ -6,3 +6,4 @@
   - The editor toolbar's Delete on a comment (`cm-selection-toolbar.ts`) does not check either.
 - The "cannot" half is not explained yet: a Delete that does nothing may be a thread whose record does not match its text. Reproduce before fixing.
 - To decide with Steve: who may delete or resolve. A likely rule: the comment's author and edit-role holders only.
+- Later: gmist stays internal (Steve and Gabriele, edit links); interaction with outsiders moves to qworkshops (Steve, 20 November 2026).
