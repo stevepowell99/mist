@@ -429,6 +429,23 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
     return () => clearTimeout(t);
   }, [fileKey, editorPct, previewToggled, livePreview, followCursor, followSlide, cleanView, asideCollapsed]);
 
+  // A comment (suggest) link to a deck that names no view opens on the deck:
+  // Preview, with the comments panel and Comment on slide, whatever layout this
+  // browser last used, since a reviewer is there to read the slides. Decided
+  // once, when the synced text shows whether it is a deck. A link that names a
+  // view keeps it, and the URL then carries Preview, so a reload keeps
+  // whatever the reviewer picks next.
+  const reviewDeckOnOpen = useRef(
+    role === "suggest" && typeof window !== "undefined" && !new URL(window.location.href).searchParams.has("view"),
+  );
+  useEffect(() => {
+    if (!reviewDeckOnOpen.current || !yjs.synced) return;
+    reviewDeckOnOpen.current = false;
+    // The Y.Text itself, which holds the synced content before the editor has
+    // passed it on to `markdown`.
+    if (deck || isSlideDeck(yjs.doc.getText("body").toString())) setView("preview");
+  }, [deck, yjs.synced, yjs.doc, setView]);
+
   // Collaborative presence: broadcast the slide this user is on (the deck's
   // current slide when its preview is visible, otherwise the editor cursor's
   // slide) and read the peers, for the navbar avatars and the outline markers.
