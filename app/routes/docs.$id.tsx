@@ -14,7 +14,7 @@ import { remember, remembered } from "~/lib/remembered";
 import { extractOutlineFromText } from "~/lib/outline";
 import { QuickOpenTrigger } from "~/components/QuickOpen";
 import { useSplitDrag } from "~/lib/useSplitDrag";
-import { offsetForSlideIndex, slideIndexForOffset } from "~/lib/slide-cursor";
+import { deckIndexForOffset, offsetForDeckIndex } from "~/lib/slide-cursor";
 import { docFileKey, loadDocSettings, saveDocSettings } from "~/lib/doc-settings";
 import { resolveAssetSrc } from "~/lib/asset-urls";
 import { usePresence } from "~/lib/usePresence";
@@ -47,7 +47,7 @@ import RememberRoom from "~/components/RememberRoom";
 import SlidesView, { isSlideDeck } from "~/components/SlidesView";
 import { type DocView } from "~/components/Toolbar";
 import DocNavbar from "~/components/DocNavbar";
-import { fileTitle } from "~/lib/slides-build";
+import { deckSlideLayout, fileTitle } from "~/lib/slides-build";
 
 // useLayoutEffect on the client (so scroll is restored before paint, no flash),
 // useEffect on the server (avoids the SSR warning).
@@ -439,11 +439,14 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
     window.addEventListener("message", onMsg);
     return () => window.removeEventListener("message", onMsg);
   }, []);
+  // Every index here is the deck's (hidden slides not counted): what the deck
+  // reports, what peers jump to and what the outline marks.
+  const slideLayout = useMemo(() => (deck ? deckSlideLayout(markdown) : null), [deck, markdown]);
   const localSlide = useMemo(() => {
-    if (!deck) return null;
+    if (!slideLayout) return null;
     if ((splitOpen || slidesFull || present) && deckSlide != null) return deckSlide;
-    return slideIndexForOffset(markdown, cursorOffset);
-  }, [deck, splitOpen, slidesFull, present, deckSlide, markdown, cursorOffset]);
+    return deckIndexForOffset(markdown, cursorOffset, slideLayout);
+  }, [slideLayout, splitOpen, slidesFull, present, deckSlide, markdown, cursorOffset]);
   useEffect(() => {
     setLocalSlide(localSlide);
   }, [localSlide, setLocalSlide]);
@@ -507,7 +510,7 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
   // viewport, rather than scrollIntoView's default of the nearest edge.
   const moveCursorToSlide = (idx: number, focus: boolean) => {
     if (!editorView) return;
-    const pos = Math.min(offsetForSlideIndex(markdown, idx), editorView.state.doc.length);
+    const pos = Math.min(offsetForDeckIndex(markdown, idx, slideLayout ?? undefined) ?? markdown.length, editorView.state.doc.length);
     editorView.dispatch({
       selection: { anchor: pos },
       effects: EditorView.scrollIntoView(pos, { y: "start", yMargin: 48 }),

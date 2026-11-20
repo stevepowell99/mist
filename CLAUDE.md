@@ -101,6 +101,7 @@ Reuse these; never re-inline or redefine them.
 ### Slides and themes (technical-architecture, "Slides, themes and presenting" and "Printing to PDF")
 
 - **A theme is only variables** (`--slide-bg`, `--ink`, `--accent`, `--accent-2`, optional `--divider-bg`, a font family) plus its accent and component overrides; the canvas is set once in `PREVIEW_CSS`. `causal-map.css`'s header is the reference for writing one.
+- **Every index the deck sees is a deck index, mapped through `deckSlideLayout`**, which skips hidden slides and follows the deck's own split; `slideIndexForOffset` and `deckSlides` count source slides, for the library only. Never count slides with a split of your own.
 - **Dividers and title slides are coloured by reveal's full-viewport background**; do not reintroduce a `background` on a divider or title section.
 - Friendly class names are aliases in `CLASS_ALIAS` (`slides-build.ts`), composed from standard utility classes; add new sugar there, not as new CSS. A component's overridable defaults go in `:where(...)`.
 - **Every theme names a Google web font first and `@import`s it** at the top of its CSS: the PDF browser is Linux with none of the Windows fonts.

@@ -116,18 +116,29 @@ export function renderCriticHtml(text: string): string {
   });
 }
 
+/** The ranges of `text` that `stripCritic` keeps, in order: the text between
+ *  spans, an addition's or highlight's content, a substitution's replacement.
+ *  The clean text is these ranges joined, so a position in it maps back to the
+ *  source (the deck's slide layout relies on that). */
+export function cleanPieces(text: string): { from: number; to: number }[] {
+  const pieces: { from: number; to: number }[] = [];
+  const keep = (from: number, to: number) => {
+    if (to > from) pieces.push({ from, to });
+  };
+  let last = 0;
+  for (const s of criticSpans(text)) {
+    keep(last, s.from);
+    if (s.type === "addition" || s.type === "highlight") keep(s.contentFrom, s.contentTo);
+    else if (s.type === "substitution") keep(s.sep!.to, s.contentTo);
+    last = s.to;
+  }
+  keep(last, text.length);
+  return pieces;
+}
+
 /** Accept every suggestion and drop every comment, for a clean render (the deck). */
 export function stripCritic(text: string): string {
-  return rewriteSpans(text, (s, inner) => {
-    switch (s.type) {
-      case "addition":
-      case "highlight":
-        return inner;
-      case "substitution":
-        return subParts(text, s).replacement;
-      case "deletion":
-      case "comment":
-        return "";
-    }
-  });
+  return cleanPieces(text)
+    .map((p) => text.slice(p.from, p.to))
+    .join("");
 }

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
-import { deckSlides } from "~/lib/slides-build";
+import { shownSlides } from "~/lib/slides-build";
 import { slideThumbHtml, slideNotes } from "~/lib/slide-thumb";
 import { themeCss } from "~/lib/themes";
 import type { DeckStep } from "~/lib/usePresent";
@@ -50,7 +50,9 @@ export default function PresenterRail({
   onStep?: (dir: DeckStep) => void;
   onExit?: () => void;
 }) {
-  const slides = useMemo(() => deckSlides(markdown), [markdown]);
+  // The deck's own slides, so N / M, the notes and the next card follow the
+  // deck index the deck reports, hidden slides not counted.
+  const slides = useMemo(() => shownSlides(markdown), [markdown]);
   const total = slides.length;
   const cur = Math.min(Math.max(0, currentSlide), Math.max(0, total - 1));
   const next = slides[cur + 1] ?? null;

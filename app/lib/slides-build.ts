@@ -7,7 +7,7 @@
 import { driveAssetUrl, resolveAssetSrc, rewriteImages, type AssetCtx } from "~/lib/asset-urls";
 import { convertCitations, formatReferenceList, type BibLibrary } from "~/lib/citations";
 import { renderWikiLinks } from "~/lib/wikilinks";
-import { stripCritic } from "~/lib/critic";
+import { cleanPieces, stripCritic } from "~/lib/critic";
 import { hasIcon, renderIcon } from "~/lib/icons";
 import type { DriveMeta } from "~/shared/types";
 // The house framework, served as the default stylesheet for every deck BEFORE
@@ -131,16 +131,120 @@ function headingLevel(slideMd: string): number {
  *  inserted as-is so the slide keeps its real source. */
 export function deckSlides(md: string): { index: number; raw: string; title: string }[] {
   const { body } = stripFrontmatter(md);
+  return splitSlides(body).map((raw, index) => ({ ...slideTitle(raw, index), index }));
+}
+
+/** A slide's trimmed source and its title, as `deckSlides` describes. */
+function slideTitle(raw: string, index: number): { raw: string; title: string } {
   const isHeading = (l: string) => /^#{1,6}\s/.test(l);
-  return splitSlides(body).map((raw, index) => {
-    const lines = raw.split("\n").map((l) => l.trim()).filter(Boolean);
-    const fromHeading = lines
-      .filter(isHeading)
-      .map((l) => l.replace(/^#{1,6}\s*/, "").replace(/\s*\{[^}]*\}\s*$/, "").trim())
-      .find(Boolean);
-    const firstLine = lines.find((l) => !isHeading(l) && !l.startsWith(":::"))?.slice(0, 60);
-    return { index, raw: raw.trim(), title: fromHeading || firstLine || `Slide ${index + 1}` };
+  const lines = raw.split("\n").map((l) => l.trim()).filter(Boolean);
+  const fromHeading = lines
+    .filter(isHeading)
+    .map((l) => l.replace(/^#{1,6}\s*/, "").replace(/\s*\{[^}]*\}\s*$/, "").trim())
+    .find(Boolean);
+  const firstLine = lines.find((l) => !isHeading(l) && !l.startsWith(":::"))?.slice(0, 60);
+  return { raw: raw.trim(), title: fromHeading || firstLine || `Slide ${index + 1}` };
+}
+
+/** A raw `<style>` block in a deck body (`extractStyleBlocks`). */
+const STYLE_BLOCK_RE = /<style\b[^>]*>([\s\S]*?)<\/style>/gi;
+
+/** True when the deck leaves this slide out: its heading carries Quarto's
+ *  `{visibility="hidden"}` or a `.hidden` / `.hidden-slide` class. Leaving it
+ *  out here, rather than in the deck's CSS, makes hide and unhide work in the
+ *  preview whatever the theme. */
+export function isHiddenSlide(slideMd: string): boolean {
+  const heading = slideMd.match(/^(?:[ \t]*\n)*([^\n]*)/)![1];
+  if (!/^#{1,6}\s/.test(heading)) return false;
+  return /\bvisibility\s*=\s*"hidden"/.test(heading) || /\{[^}]*\.hidden(?:-slide)?\b[^}]*\}/.test(heading);
+}
+
+/** One slide of the deck's own split, placed in the source. */
+export interface DeckSlide {
+  /** Offset in the full markdown (frontmatter included) of the slide's first line. */
+  start: number;
+  /** Offset of the end of the slide's last line. */
+  end: number;
+  /** The deck leaves this slide out (`isHiddenSlide`). */
+  hidden: boolean;
+  /** Its index in the rendered deck, reveal's flat slide order: the `h` that
+   *  `mist-slide` reports and `mist-goto` takes. A hidden slide carries the
+   *  index of the shown slide before it (or 0), so a cursor in it keeps the
+   *  deck where it was. */
+  deck: number;
+}
+
+/** `text` with only `pieces` of it kept, and a map from a position in the
+ *  result back to `text`. */
+function keepPieces(text: string, pieces: { from: number; to: number }[]): { text: string; toSource: (i: number) => number } {
+  if (pieces.length === 1 && pieces[0].from === 0 && pieces[0].to === text.length) return { text, toSource: (i) => i };
+  const outStart: number[] = [];
+  let out = "";
+  for (const p of pieces) {
+    outStart.push(out.length);
+    out += text.slice(p.from, p.to);
+  }
+  const toSource = (i: number) => {
+    let lo = 0;
+    let hi = pieces.length - 1;
+    if (hi < 0) return 0;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (outStart[mid] <= i) lo = mid;
+      else hi = mid - 1;
+    }
+    return Math.min(pieces[lo].from + (i - outStart[lo]), pieces[lo].to);
+  };
+  return { text: out, toSource };
+}
+
+/** The offset of the first line of `text` that is not blank, or 0. */
+export function firstContentLine(text: string): number {
+  const m = text.match(/^(?:[ \t]*\n)*/);
+  return m ? m[0].length : 0;
+}
+
+/**
+ * Every slide of the deck's split, in order, with where it sits in the source,
+ * hidden slides included and flagged. It splits the body exactly as
+ * `buildSlideSections` does, after style blocks are hoisted and CriticMarkup is
+ * accepted, so a slide whose source is all a suggested deletion is not counted
+ * and a suggested new slide is. Citations and image paths are rewritten inside
+ * a line, so they cannot move a split and are skipped. This is the one mapping
+ * between the deck the reader sees and the text the editor holds: the deck
+ * index of the cursor, the slide a deck index starts at, the notes of the
+ * slide on screen.
+ */
+export function deckSlideLayout(md: string): DeckSlide[] {
+  const { body } = stripFrontmatter(md);
+  const fmLen = md.length - body.length;
+  const styleFree: { from: number; to: number }[] = [];
+  let last = 0;
+  for (const m of body.matchAll(STYLE_BLOCK_RE)) {
+    if (m.index! > last) styleFree.push({ from: last, to: m.index! });
+    last = m.index! + m[0].length;
+  }
+  if (body.length > last) styleFree.push({ from: last, to: body.length });
+  const noStyles = keepPieces(body, styleFree);
+  const clean = keepPieces(noStyles.text, cleanPieces(noStyles.text));
+  const toSource = (i: number) => fmLen + noStyles.toSource(clean.toSource(i));
+  let shown = 0;
+  return slideSpans(clean.text).map((s) => {
+    const hidden = isHiddenSlide(s.text);
+    const deck = hidden ? Math.max(0, shown - 1) : shown++;
+    const start = toSource(s.from + firstContentLine(s.text));
+    const end = s.to >= clean.text.length ? md.length : toSource(s.to);
+    return { start, end: Math.max(start, end), hidden, deck };
   });
+}
+
+/** The slides the deck shows, in its order, in the shape `deckSlides` gives:
+ *  the speaker notes and the next-slide card follow the deck index, so they
+ *  must skip what the deck leaves out. */
+export function shownSlides(md: string): { index: number; raw: string; title: string }[] {
+  return deckSlideLayout(md)
+    .filter((s) => !s.hidden)
+    .map((s, index) => ({ ...slideTitle(md.slice(s.start, s.end), index), index }));
 }
 
 /**
@@ -473,12 +577,7 @@ function buildSection(slideMd: string, ctx: AssetCtx): string {
   let bgComment = "";
   let body = slideMd;
   if (/^#{1,6}\s/.test(headingLine)) {
-    // A slide marked hidden (Quarto `{visibility="hidden"}` or a `.hidden`
-    // class) is omitted from the deck entirely, so hide/unhide works in the
-    // preview without depending on the deck's own CSS.
-    if (/\bvisibility\s*=\s*"hidden"/.test(headingLine) || /\{[^}]*\.hidden(?:-slide)?\b[^}]*\}/.test(headingLine)) {
-      return "";
-    }
+    if (isHiddenSlide(slideMd)) return "";
     const parsed = parseHeading(headingLine, ctx);
     classAttr = parsed.classAttr;
     // reveal.js markdown slides take their background via a leading
@@ -642,7 +741,7 @@ function cssUrl(
  *  them as text; Quarto hoists such inline CSS to the page head, so do the same. */
 function extractStyleBlocks(md: string): { body: string; styles: string } {
   const blocks: string[] = [];
-  const body = md.replace(/<style\b[^>]*>([\s\S]*?)<\/style>/gi, (_m, css: string) => {
+  const body = md.replace(STYLE_BLOCK_RE, (_m, css: string) => {
     blocks.push(css);
     return "";
   });
@@ -688,12 +787,12 @@ export function buildSlideSections(md: string, opts: BuildSlidesOptions): string
     usedKeys = cited.usedKeys;
   }
   body = rewriteImages(body, ctx); // relative images -> Drive proxy URLs
+  // A hidden slide builds to nothing; a stack left with no slides is dropped
+  // too, or reveal would show its empty outer section as a blank slide.
   const sections = groupSlides(splitSlides(body))
-    .map((group) =>
-      group.length === 1
-        ? buildSection(group[0], ctx)
-        : `<section>\n${group.map((s) => buildSection(s, ctx)).join("\n")}\n</section>`,
-    )
+    .map((group) => group.map((s) => buildSection(s, ctx)).filter(Boolean))
+    .map((built) => (built.length <= 1 ? (built[0] ?? "") : `<section>\n${built.join("\n")}\n</section>`))
+    .filter(Boolean)
     .join("\n");
   // Append a References slide (raw HTML, not data-markdown) when citations were
   // used. .references-slide can be styled by the deck CSS.

@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { revealPosAtTop } from "~/lib/cm-reveal";
 import type { EditorView } from "@codemirror/view";
 import { extractOutlineFromText, moveSection, sectionEnd, toggleHiddenText, type OutlineItem } from "~/lib/outline";
-import { slideIndexForOffset } from "~/lib/slide-cursor";
+import { deckSlideAt } from "~/lib/slide-cursor";
+import { deckSlideLayout } from "~/lib/slides-build";
 import type { Peer } from "~/lib/usePresence";
 import { remember, rememberedNumber } from "~/lib/remembered";
 import { useSplitDrag } from "~/lib/useSplitDrag";
@@ -74,9 +75,23 @@ export default function OutlinePanel({
     }
     return m;
   }, [peers, deck]);
+  // The deck slide each row heads. The outline lists hidden slides too, so they
+  // can be found and unhidden, but a hidden slide has no place in the deck: its
+  // row is never the current one, shows no peers and does not move the deck.
+  const layout = useMemo(() => (deck ? deckSlideLayout(text) : []), [deck, text]);
+  const shownSlideOf = useCallback(
+    (item: OutlineItem): number | null => {
+      const s = deckSlideAt(layout, item.pos);
+      return s && !s.hidden ? s.deck : null;
+    },
+    [layout],
+  );
   const peersOnItem = useCallback(
-    (item: OutlineItem): Peer[] => (deck ? peersBySlide.get(slideIndexForOffset(text, item.pos)) ?? [] : []),
-    [deck, peersBySlide, text],
+    (item: OutlineItem): Peer[] => {
+      const idx = shownSlideOf(item);
+      return idx != null ? peersBySlide.get(idx) ?? [] : [];
+    },
+    [peersBySlide, shownSlideOf],
   );
 
   const jump = useCallback(
@@ -98,13 +113,14 @@ export default function OutlinePanel({
   const pick = useCallback(
     (item: OutlineItem) => {
       if (deck) {
-        window.dispatchEvent(new CustomEvent("mist-goto-slide", { detail: slideIndexForOffset(text, item.pos) }));
+        const idx = shownSlideOf(item);
+        if (idx != null) window.dispatchEvent(new CustomEvent("mist-goto-slide", { detail: idx }));
         if (view) revealPosAtTop(view, item.pos);
       } else {
         jump(item.pos);
       }
     },
-    [deck, text, jump, view],
+    [deck, shownSlideOf, jump, view],
   );
 
   // Keep the current slide's row in view as the deck moves.
@@ -197,7 +213,7 @@ export default function OutlinePanel({
       <div className="flex-1 overflow-y-auto py-1">
         {shown.length === 0 && <p className="px-3 py-2 text-sm text-muted">No headings.</p>}
         {shown.map((item, i) => {
-          const active = deck && currentSlide != null && slideIndexForOffset(text, item.pos) === currentSlide;
+          const active = deck && currentSlide != null && shownSlideOf(item) === currentSlide;
           return (
           <div
             key={`${item.pos}-${i}`}

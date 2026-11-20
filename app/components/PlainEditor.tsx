@@ -31,7 +31,7 @@ import CommentBox from "~/components/CommentBox";
 import { markdownLineStyle } from "~/lib/cm-markdown-style";
 import PlainPreview from "~/components/PlainPreview";
 import SlidesView, { isSlideDeck } from "~/components/SlidesView";
-import { slideIndexForOffset } from "~/lib/slide-cursor";
+import { deckIndexForOffset } from "~/lib/slide-cursor";
 import PresentLayer from "~/components/PresentLayer";
 import { usePresent } from "~/lib/usePresent";
 import { ToolbarButton } from "~/components/Toolbar";
@@ -419,7 +419,10 @@ export default function PlainEditor({
     window.addEventListener("message", onMsg);
     return () => window.removeEventListener("message", onMsg);
   }, []);
-  const presentSlide = deckSlide ?? slideIndexForOffset(text, cursorOffset);
+  const presentSlide = useMemo(
+    () => deckSlide ?? (deck ? deckIndexForOffset(text, cursorOffset) : 0),
+    [deckSlide, deck, text, cursorOffset],
+  );
 
   /**
    * Print: a deck's slides or a document's A4 pages, in a print page of their

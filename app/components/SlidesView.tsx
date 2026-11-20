@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { BibLibrary } from "~/lib/citations";
 import type { DriveMeta } from "~/shared/types";
-import { buildSlidesHtml, buildSlideSections } from "~/lib/slides-build";
-import { slideIndexForOffset, fragmentIndexForOffset } from "~/lib/slide-cursor";
+import { buildSlidesHtml, buildSlideSections, deckSlideLayout } from "~/lib/slides-build";
+import { deckIndexForOffset, fragmentIndexForOffset } from "~/lib/slide-cursor";
 
 export { isSlideDeck } from "~/lib/slides-build";
 
@@ -146,15 +146,17 @@ export default function SlidesView({
   }, [sections]);
 
   // Cursor-driven sync: as the cursor moves in the editor, jump the deck to the
-  // slide it is in. The deck's slide split matches `slideIndexForOffset`. Sent
+  // slide it is in, by its deck index (hidden slides not counted). Sent
   // by postMessage because the deck runs in a sandboxed (cross-origin) iframe.
   // Only scan the markdown for the cursor's slide when the follow-cursor sync is
   // on; the scan is O(n) and ran on every cursor move otherwise, which is the
-  // main editor lag on a large deck. -1 means "no target" (keep the deck where
-  // it is on a rebuild).
+  // main editor lag on a large deck; the layout depends on the text alone, so
+  // a cursor move costs a lookup. -1 means "no target" (keep the deck where it
+  // is on a rebuild).
+  const layout = useMemo(() => (followCursor ? deckSlideLayout(markdown) : null), [markdown, followCursor]);
   const slide = useMemo(
-    () => (followCursor ? slideIndexForOffset(markdown, cursorOffset) : -1),
-    [markdown, cursorOffset, followCursor],
+    () => (layout ? deckIndexForOffset(markdown, cursorOffset, layout) : -1),
+    [markdown, cursorOffset, layout],
   );
   const slideRef = useRef(slide);
   slideRef.current = slide;
@@ -162,8 +164,8 @@ export default function SlidesView({
   // The reveal fragment the cursor is in (or -1 for none), so the deck reveals up
   // to the `.fragment` being edited. Kept in a ref for the initial-goto callback.
   const fragment = useMemo(
-    () => (followCursor ? fragmentIndexForOffset(markdown, cursorOffset) : -1),
-    [markdown, cursorOffset, followCursor],
+    () => (layout ? fragmentIndexForOffset(markdown, cursorOffset, layout) : -1),
+    [markdown, cursorOffset, layout],
   );
   const fragmentRef = useRef(fragment);
   fragmentRef.current = fragment;

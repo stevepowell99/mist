@@ -1,39 +1,57 @@
-import { classesFrom, stripFrontmatter } from "./slides-build";
+import { classesFrom, deckSlideLayout, firstContentLine, slideSpans, stripFrontmatter, type DeckSlide } from "./slides-build";
 
 /**
- * The 0-based index of the slide containing `offset` in the full editor
- * markdown (frontmatter included). Mirrors `splitSlides` so the result lines up
- * with the rendered deck: a new slide starts at the first non-empty line, at a
- * level-1/2 heading that follows content, and after a `---` rule.
+ * Two ways of counting slides, kept apart on purpose:
+ * - the SOURCE index counts every slide of the split, hidden ones included,
+ *   in step with `deckSlides` (the library saves the slide the cursor is in);
+ * - the DECK index counts what the deck shows (`deckSlideLayout`): reveal's
+ *   flat `h`, the one `mist-slide`, `mist-goto`, `?slide=`, presence and the
+ *   speaker notes all use.
+ */
+
+/** The last entry whose `start` is at or before `offset` (the first entry when
+ *  none is), by binary search over entries in source order. */
+function lastAtOrBefore(starts: number[], offset: number): number {
+  let lo = 0;
+  let hi = starts.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (starts[mid] <= offset) lo = mid;
+    else hi = mid - 1;
+  }
+  return lo;
+}
+
+/**
+ * The SOURCE index of the slide containing `offset` in the full editor
+ * markdown (frontmatter included): its place among every slide of the split,
+ * hidden ones included. A slide begins at its first non-empty line, so the
+ * blank lines and `---` rule before it still count as the slide above.
  */
 export function slideIndexForOffset(md: string, offset: number): number {
   const { body } = stripFrontmatter(md);
-  const fmLen = md.length - body.length; // characters of frontmatter prefix
-  const bodyOffset = Math.max(0, offset - fmLen);
-  const cursorLine = body.slice(0, bodyOffset).split("\n").length - 1; // 0-based
+  const fmLen = md.length - body.length;
+  const starts = slideSpans(body).map((s) => fmLen + s.from + (s.text.length - s.text.replace(/^(?:[ \t]*\n)*/, "").length));
+  return lastAtOrBefore(starts, offset);
+}
 
-  const lines = body.split("\n");
-  let slideIdx = -1;
-  let pendingNewSlide = true; // the next non-empty line starts a new slide
-  let curHasContent = false;
-  for (let i = 0; i <= cursorLine && i < lines.length; i++) {
-    const line = lines[i];
-    const t = line.trim();
-    if (t === "---") {
-      pendingNewSlide = true;
-      curHasContent = false;
-      continue;
-    }
-    if (/^#{1,2}\s/.test(line) && curHasContent) pendingNewSlide = true; // heading flushes
-    if (t !== "") {
-      if (pendingNewSlide) {
-        slideIdx++;
-        pendingNewSlide = false;
-      }
-      curHasContent = true;
-    }
-  }
-  return Math.max(0, slideIdx);
+/** The deck slide holding `offset`. A hidden slide is returned as itself
+ *  (`hidden` set, `deck` the shown slide before it), so a caller can tell. */
+export function deckSlideAt(layout: DeckSlide[], offset: number): DeckSlide | null {
+  if (!layout.length) return null;
+  return layout[lastAtOrBefore(layout.map((s) => s.start), offset)];
+}
+
+/** The DECK index of the slide holding `offset`; in a hidden slide, the shown
+ *  slide before it, so the deck stays nearby rather than jumping. */
+export function deckIndexForOffset(md: string, offset: number, layout = deckSlideLayout(md)): number {
+  return deckSlideAt(layout, offset)?.deck ?? 0;
+}
+
+/** The offset of the first line of deck slide `index`, or null past the last
+ *  one (the References slide the deck appends has no source). */
+export function offsetForDeckIndex(md: string, index: number, layout = deckSlideLayout(md)): number | null {
+  return layout.find((s) => !s.hidden && s.deck === Math.max(0, index))?.start ?? null;
 }
 
 /**
@@ -44,11 +62,13 @@ export function slideIndexForOffset(md: string, offset: number): number {
  * cursor: being inside the Nth fragment means N markers precede the cursor, so
  * the index is N - 1, matching reveal's DOM-order fragment numbering. The
  * fragments `.incremental` implies are counted too. CriticMarkup deletions are
- * dropped first, since their `.fragment` never reaches the deck.
+ * dropped first, since their `.fragment` never reaches the deck. A hidden slide
+ * has no fragments on screen, so it gives -1.
  */
-export function fragmentIndexForOffset(md: string, offset: number): number {
-  const slide = slideIndexForOffset(md, offset);
-  const slideStart = offsetForSlideIndex(md, slide);
+export function fragmentIndexForOffset(md: string, offset: number, layout = deckSlideLayout(md)): number {
+  const slide = deckSlideAt(layout, offset);
+  if (!slide || slide.hidden) return -1;
+  const slideStart = slide.start;
   if (offset <= slideStart) return -1;
   const prefix = md.slice(slideStart, offset).replace(/\{--[\s\S]*?--\}/g, "");
   const explicit = prefix.match(/\.fragment\b/g)?.length ?? 0;
@@ -143,40 +163,4 @@ export function incrementalFragmentCount(text: string): number {
     b.blank = false;
   }
   return count;
-}
-
-/**
- * The inverse: the editor offset (in the full markdown, frontmatter included) of
- * the first line of slide `index`. Mirrors the same split, so jumping the editor
- * to the slide shown in the preview lands on that slide's source.
- */
-export function offsetForSlideIndex(md: string, index: number): number {
-  const { body } = stripFrontmatter(md);
-  const fmLen = md.length - body.length;
-  const lines = body.split("\n");
-  let slideIdx = -1;
-  let pendingNewSlide = true;
-  let curHasContent = false;
-  let charPos = 0; // offset of line i's start within the body
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const t = line.trim();
-    if (t === "---") {
-      pendingNewSlide = true;
-      curHasContent = false;
-      charPos += line.length + 1;
-      continue;
-    }
-    if (/^#{1,2}\s/.test(line) && curHasContent) pendingNewSlide = true;
-    if (t !== "") {
-      if (pendingNewSlide) {
-        slideIdx++;
-        pendingNewSlide = false;
-        if (slideIdx === Math.max(0, index)) return fmLen + charPos;
-      }
-      curHasContent = true;
-    }
-    charPos += line.length + 1;
-  }
-  return md.length; // index past the last slide: end of document
 }
