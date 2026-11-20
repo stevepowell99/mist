@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { BibLibrary } from "~/lib/citations";
 import type { DriveMeta } from "~/shared/types";
-import { buildSlidesHtml, buildSlideSections, deckSlideLayout } from "~/lib/slides-build";
+import { buildSlidesHtml, buildSlideSections, deckSlideLayout, shownSlides } from "~/lib/slides-build";
 import { deckIndexForOffset, fragmentIndexForOffset } from "~/lib/slide-cursor";
 
 export { isSlideDeck } from "~/lib/slides-build";
@@ -30,6 +30,8 @@ export default function SlidesView({
   assetToken,
   followCursor,
   bibLib,
+  onCommentSlide,
+  commentPositions,
 }: {
   markdown: string;
   drive: DriveMeta | null;
@@ -39,6 +41,13 @@ export default function SlidesView({
   assetToken?: string | null;
   followCursor: boolean;
   bibLib: BibLibrary | null;
+  /** Offer "Comment on slide" over the deck, for the slide on screen: called
+   *  with the source offset of that slide's first line and a label naming it.
+   *  Left out where a comment cannot be taken (Present, the local editor). The
+   *  button is drawn on this page, never inside the deck. */
+  onCommentSlide?: (slideStart: number, label: string) => void;
+  /** Where the document's open comments sit, to count those on the slide on screen. */
+  commentPositions?: number[];
 }) {
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   // The session-minted asset token lets the sandboxed iframe fetch private-Drive
@@ -153,10 +162,11 @@ export default function SlidesView({
   // main editor lag on a large deck; the layout depends on the text alone, so
   // a cursor move costs a lookup. -1 means "no target" (keep the deck where it
   // is on a rebuild).
-  const layout = useMemo(() => (followCursor ? deckSlideLayout(markdown) : null), [markdown, followCursor]);
+  const wantsLayout = followCursor || !!onCommentSlide;
+  const layout = useMemo(() => (wantsLayout ? deckSlideLayout(markdown) : null), [markdown, wantsLayout]);
   const slide = useMemo(
-    () => (layout ? deckIndexForOffset(markdown, cursorOffset, layout) : -1),
-    [markdown, cursorOffset, layout],
+    () => (followCursor && layout ? deckIndexForOffset(markdown, cursorOffset, layout) : -1),
+    [markdown, cursorOffset, layout, followCursor],
   );
   const slideRef = useRef(slide);
   slideRef.current = slide;
@@ -164,8 +174,8 @@ export default function SlidesView({
   // The reveal fragment the cursor is in (or -1 for none), so the deck reveals up
   // to the `.fragment` being edited. Kept in a ref for the initial-goto callback.
   const fragment = useMemo(
-    () => (layout ? fragmentIndexForOffset(markdown, cursorOffset, layout) : -1),
-    [markdown, cursorOffset, layout],
+    () => (followCursor && layout ? fragmentIndexForOffset(markdown, cursorOffset, layout) : -1),
+    [markdown, cursorOffset, layout, followCursor],
   );
   const fragmentRef = useRef(fragment);
   fragmentRef.current = fragment;
@@ -181,6 +191,21 @@ export default function SlidesView({
     const s = new URL(window.location.href).searchParams.get("slide");
     initialSlide.current = s !== null && /^\d+$/.test(s) ? Number(s) : -1; // -1 = none
   }
+  // The slide on screen, as the deck last reported it, for the comment button.
+  const [onScreen, setOnScreen] = useState(() => Math.max(0, initialSlide.current ?? 0));
+  const screenSlide = useMemo(
+    () => (onCommentSlide && layout ? layout.find((s) => !s.hidden && s.deck === onScreen) ?? null : null),
+    [onCommentSlide, layout, onScreen],
+  );
+  const screenComments = useMemo(
+    () => (screenSlide ? (commentPositions ?? []).filter((p) => p >= screenSlide.start && p < screenSlide.end).length : 0),
+    [screenSlide, commentPositions],
+  );
+  const commentOnScreen = () => {
+    if (!onCommentSlide || !screenSlide) return;
+    const title = shownSlides(markdown)[onScreen]?.title;
+    onCommentSlide(screenSlide.start, `Slide ${onScreen + 1}${title ? `: ${title}` : ""}`);
+  };
 
   // Follow the editor cursor. But a deck opened at ?slide=N must STAY there: the
   // cursor sits at offset 0 (slide 0) on load, and a later recompute (content
@@ -236,6 +261,7 @@ export default function SlidesView({
       }
       // The deck reports its current slide; mirror it to the URL (?slide=).
       if (d?.type !== "mist-slide" || typeof d.h !== "number") return;
+      setOnScreen(d.h);
       const url = new URL(window.location.href);
       if (d.h > 0) url.searchParams.set("slide", String(d.h));
       else url.searchParams.delete("slide");
@@ -275,19 +301,42 @@ export default function SlidesView({
   }, []);
 
   return (
-    <iframe
-      ref={setIframe}
-      onLoad={onLoad}
-      title="Slides preview"
-      sandbox="allow-scripts"
-      // allow + allowFullScreen let reveal's F key take the deck fullscreen from
-      // inside the sandboxed iframe. Speaker notes are not here: the preview has
-      // no navigable deck URL for reveal's notes window, so S is disabled in the
-      // embedded runtime and Present's own speaker window shows the notes.
-      allow="fullscreen"
-      allowFullScreen
-      srcDoc={html}
-      className="block h-full w-full border-0"
-    />
+    <div className="relative h-full w-full">
+      <iframe
+        ref={setIframe}
+        onLoad={onLoad}
+        title="Slides preview"
+        sandbox="allow-scripts"
+        // allow + allowFullScreen let reveal's F key take the deck fullscreen from
+        // inside the sandboxed iframe. Speaker notes are not here: the preview has
+        // no navigable deck URL for reveal's notes window, so S is disabled in the
+        // embedded runtime and Present's own speaker window shows the notes.
+        allow="fullscreen"
+        allowFullScreen
+        srcDoc={html}
+        className="block h-full w-full border-0"
+      />
+      {/* Over the deck, not in it: the iframe is sandboxed and its runtime is
+          shared with Present, /slides and print, which must stay clean. Hidden
+          on a slide without source, such as the References slide. */}
+      {screenSlide && (
+        <button
+          type="button"
+          onClick={commentOnScreen}
+          title="Comment on the slide shown here"
+          className="absolute right-2 top-2 z-10 flex cursor-pointer items-center gap-1.5 border border-border bg-paper px-2 py-1 text-xs uppercase tracking-wider text-muted opacity-80 hover:text-ink hover:opacity-100"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          </svg>
+          Comment on slide
+          {screenComments > 0 && (
+            <span title={`${screenComments} open comment${screenComments === 1 ? "" : "s"} on this slide`} className="bg-canary px-1 text-[#1a1a1a]">
+              {screenComments}
+            </span>
+          )}
+        </button>
+      )}
+    </div>
   );
 }

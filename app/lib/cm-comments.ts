@@ -122,6 +122,42 @@ export function insertCommentChange(
   return { changes: [{ from, to, insert }], cursor: from + insert.length };
 }
 
+/** A line holding nothing but point comments. */
+const COMMENT_LINE_RE = /^\s*(?:\{>>[\s\S]*?<<\}\s*)+$/;
+
+/**
+ * A point comment on a whole slide (Comment on this slide, over the deck):
+ * `{>>note<<}` on a line of its own. It goes straight after the slide's heading
+ * line, never on it, so a trailing `{.class}` still ends the heading for Quarto
+ * and Obsidian, and below any comment lines already there, so a slide's
+ * comments read in the order they were made. A slide without a heading gets it
+ * above its first line. A blank line keeps it apart from content that follows,
+ * so no renderer reads the two as one block. Markup never goes inside other
+ * markup: when the heading is inside a suggestion, the comment goes after the
+ * line the suggestion ends on. `slideStart` is the offset of the slide's first
+ * line (`offsetForDeckIndex`).
+ */
+export function slideCommentChange(text: string, slideStart: number, note: string): CommentChange {
+  const comment = `{>>${note}<<}`;
+  const lineEnd = (p: number) => {
+    const i = text.indexOf("\n", p);
+    return i < 0 ? text.length : i;
+  };
+  const lineAfter = (end: number) => (end < text.length ? text.slice(end + 1, lineEnd(end + 1)) : null);
+  const start = Math.max(0, Math.min(slideStart, text.length));
+  const first = text.slice(start, lineEnd(start));
+  if (!/^#{1,6}\s/.test(first) && !COMMENT_LINE_RE.test(first) && outsideMarkup(text, start) === start) {
+    const insert = `${comment}\n\n`;
+    return { changes: [{ from: start, to: start, insert }], cursor: start + comment.length };
+  }
+  let at = lineEnd(start);
+  for (let next = lineAfter(at); next !== null && COMMENT_LINE_RE.test(next); next = lineAfter(at)) at = lineEnd(at + 1);
+  for (let out = outsideMarkup(text, at); out !== at; out = outsideMarkup(text, at)) at = lineEnd(out);
+  const next = lineAfter(at);
+  const insert = `\n${comment}${next === null || next.trim() === "" ? "" : "\n"}`;
+  return { changes: [{ from: at, to: at, insert }], cursor: at + 1 + comment.length };
+}
+
 /**
  * The change that deletes the comment at `pos` (inside the comment span or the
  * highlight it annotates), for an editor whose comments live only in the text:

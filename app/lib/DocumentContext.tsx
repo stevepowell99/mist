@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, useMemo, useEffect, useRef } from "react";
 import type { EditorView } from "@codemirror/view";
+import * as Y from "yjs";
 import type { CapturedSelection, DocMode, DocRole, DriveMeta } from "~/shared/types";
 import type { MatchedThread } from "~/lib/comment-threads";
 import type { useYjsEditor } from "~/lib/useYjsEditor";
@@ -97,6 +98,14 @@ export interface DocumentContextValue {
   commentSelection: CapturedSelection | null;
   commentHighlight: { from: number; to: number } | null;
   openCommentInput: () => void;
+  /** Open the sidebar comment input on a whole slide instead of the editor
+   *  selection (Comment on this slide, over the deck). `slideStart` is the
+   *  offset of the slide's first line and `label` names the slide above the
+   *  input; saving writes the comment under the slide's heading
+   *  (`slideCommentChange`), through the same thread path as any comment. */
+  openSlideComment: (slideStart: number, label: string) => void;
+  /** The label of the slide the open comment input is on, if it is on one. */
+  commentSlideLabel: string | null;
   handleCommentActiveChange: (active: boolean) => void;
   /** Insert a comment (on the captured selection, or a point at the cursor). */
   insertComment: (text: string) => void;
@@ -231,6 +240,10 @@ export function DocumentProvider({
   const [commentActive, setCommentActive] = useState(false);
   const [commentSelection, setCommentSelection] = useState<CapturedSelection | null>(null);
   const [commentHighlight, setCommentHighlight] = useState<{ from: number; to: number } | null>(null);
+  // The slide a slide comment is for, held as a Yjs relative position so an
+  // edit elsewhere (a collaborator typing above) cannot shift it while the
+  // comment is being typed.
+  const [commentSlide, setCommentSlide] = useState<{ at: Y.RelativePosition; label: string } | null>(null);
   const [cleanView, setCleanView] = useState(true);
   // Bumped when the editor toolbar asks to reply to a thread; ThreadList passes
   // the count to the matching panel, which opens its reply input on a change.
@@ -586,6 +599,7 @@ export function DocumentProvider({
   );
 
   const openCommentInput = useCallback(() => {
+    setCommentSlide(null);
     if (view) {
       const { from, to } = view.state.selection.main;
       if (to > from) {
@@ -599,6 +613,16 @@ export function DocumentProvider({
     }
     setCommentActive(true);
   }, [view]);
+
+  const openSlideComment = useCallback(
+    (slideStart: number, label: string) => {
+      setCommentSlide({ at: Y.createRelativePositionFromTypeIndex(yjs.doc.getText("body"), slideStart), label });
+      setCommentSelection(null);
+      setCommentHighlight(null);
+      setCommentActive(true);
+    },
+    [yjs.doc],
+  );
 
   // The editor selection toolbar's "Comment" posts this; open the sidebar input
   // on the live selection (same path as the header "New" button).
@@ -626,12 +650,18 @@ export function DocumentProvider({
   const insertComment = useCallback(
     (text: string) => {
       markUserEdited();
-      createComment(text, commentSelection ? { from: commentSelection.from, to: commentSelection.to } : undefined);
+      if (commentSlide) {
+        const at = Y.createAbsolutePositionFromRelativePosition(commentSlide.at, yjs.doc);
+        if (at) createComment(text, { slide: at.index });
+      } else {
+        createComment(text, commentSelection ? { from: commentSelection.from, to: commentSelection.to } : undefined);
+      }
       setCommentActive(false);
       setCommentSelection(null);
       setCommentHighlight(null);
+      setCommentSlide(null);
     },
-    [createComment, commentSelection, markUserEdited],
+    [createComment, commentSelection, commentSlide, yjs.doc, markUserEdited],
   );
 
   // Thread-metadata edits (reply, resolve/unresolve, delete) can change only the
@@ -674,6 +704,7 @@ export function DocumentProvider({
         setCommentActive(false);
         setCommentSelection(null);
         setCommentHighlight(null);
+        setCommentSlide(null);
       }
     },
     [openCommentInput],
@@ -729,6 +760,8 @@ export function DocumentProvider({
     commentSelection,
     commentHighlight,
     openCommentInput,
+    openSlideComment,
+    commentSlideLabel: commentSlide?.label ?? null,
     handleCommentActiveChange,
     insertComment,
     handleResolveAtCursor,

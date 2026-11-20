@@ -6,6 +6,7 @@ export default function CommentInput() {
     commentActive: active,
     handleCommentActiveChange: onActiveChange,
     commentSelection: selection,
+    commentSlideLabel: slideLabel,
     insertComment,
   } = useDocument();
 
@@ -64,11 +65,13 @@ export default function CommentInput() {
       <label className="mb-1 block text-sm uppercase tracking-wider text-muted">
         Comment
       </label>
-      {selection && (
+      {(selection || slideLabel) && (
         <div className="mb-1.5 truncate rounded-sm bg-border/50 px-2 py-1 text-sm text-muted">
-          {selection.text.length > 60
-            ? selection.text.slice(0, 60) + "\u2026"
-            : selection.text}
+          {!selection
+            ? slideLabel
+            : selection.text.length > 60
+              ? selection.text.slice(0, 60) + "\u2026"
+              : selection.text}
         </div>
       )}
       <input

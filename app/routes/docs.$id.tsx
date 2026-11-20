@@ -225,6 +225,8 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
     setFollowCursor,
     setCleanView,
     commentActive,
+    openSlideComment,
+    threads,
   } = useDocument();
 
   const title = fileTitle(drive, id);
@@ -292,6 +294,10 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
   const slidesFull = slidesMode && !splitOpen;
   // Present mode only applies to a deck; it fills the app and hides the chrome.
   const present = presenting && deck;
+  const openCommentPositions = useMemo(
+    () => threads.filter((t) => !t.resolved && t.position != null).map((t) => t.position!),
+    [threads],
+  );
   const slideProps = {
     markdown,
     drive,
@@ -1047,7 +1053,17 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
           )}
           {(splitOpen || slidesFull) && (
             <section className="flex-1 overflow-hidden">
-              {deck ? <SlidesView {...slideProps} /> : <div ref={previewScrollRef} className="h-full overflow-y-auto"><Preview /></div>}
+              {/* Comment on slide is offered only here (Split and Preview), on a
+                  screen wide enough for the comments panel it opens. */}
+              {deck ? (
+                <SlidesView
+                  {...slideProps}
+                  onCommentSlide={isDesktop ? openSlideComment : undefined}
+                  commentPositions={openCommentPositions}
+                />
+              ) : (
+                <div ref={previewScrollRef} className="h-full overflow-y-auto"><Preview /></div>
+              )}
             </section>
           )}
           </div>
