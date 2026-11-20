@@ -8,6 +8,7 @@ gmist is Causal Map's internal editor for collaborative markdown documents and s
 
 - **Origin.** It began as a fork of [inanimate-tech/mist](https://github.com/inanimate-tech/mist) (Matt Webb's editor) but has diverged completely and does not track upstream: there is no `upstream` remote and nothing to merge, so treat "based on mist" as irrelevant to current work. Remote: `origin` = `stevepowell99/mist`.
 - **Naming.** The product is "gmist" (`APP_NAME` in `app/shared/constants.ts`). The structural identifiers stay `mist` on purpose: the worker name, which fixes the live URL and every shared link, and the `mist:` frontmatter key, which holds saved comment threads. Do not rename either; why, and what a rename would need: `docs/technical-architecture.md`, "Naming".
+- **gmist is our own place for slides and documents** (Steve and Gabriele, on edit links). Interaction with outsiders, such as comments on an agenda, goes to Qualia Workshops (`qsocial`), with the deck beside it as a PDF or the public `/slides` link (Steve, 20 November 2026). Do not build outsider-review features here unless he asks.
 - **Three supported modes; keep all three working.** Drive-bound rooms (the main mode), unbound rooms (shared documents without a Drive file, made from the home page), and local-fs mode (this machine's own files, no Drive).
 - The old `19c-slides` slides app is being retired; gmist has its own slides implementation (`app/lib/slides-build.ts`) and depends on nothing in that folder.
 
