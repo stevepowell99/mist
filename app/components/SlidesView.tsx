@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { BibLibrary } from "~/lib/citations";
 import type { DriveMeta } from "~/shared/types";
-import { buildSlidesHtml, buildSlideSections, deckSlideLayout, shownSlides } from "~/lib/slides-build";
-import { deckIndexForOffset, fragmentIndexForOffset } from "~/lib/slide-cursor";
+import { buildSlidesHtml, buildSlideSections, deckSlideLayout } from "~/lib/slides-build";
+import { deckIndexForOffset, deckSlideTarget, fragmentIndexForOffset } from "~/lib/slide-cursor";
 
 export { isSlideDeck } from "~/lib/slides-build";
 
@@ -43,8 +43,9 @@ export default function SlidesView({
   bibLib: BibLibrary | null;
   /** Offer "Comment on slide" over the deck, for the slide on screen: called
    *  with the source offset of that slide's first line and a label naming it.
-   *  Left out where a comment cannot be taken (Present, the local editor). The
-   *  button is drawn on this page, never inside the deck. */
+   *  Left out in Present, whose own controls carry Comment, and in the local
+   *  editor, which cannot take one this way. The button is drawn on this
+   *  page, never inside the deck. */
   onCommentSlide?: (slideStart: number, label: string) => void;
   /** Where the document's open comments sit, to count those on the slide on screen. */
   commentPositions?: number[];
@@ -194,17 +195,15 @@ export default function SlidesView({
   // The slide on screen, as the deck last reported it, for the comment button.
   const [onScreen, setOnScreen] = useState(() => Math.max(0, initialSlide.current ?? 0));
   const screenSlide = useMemo(
-    () => (onCommentSlide && layout ? layout.find((s) => !s.hidden && s.deck === onScreen) ?? null : null),
-    [onCommentSlide, layout, onScreen],
+    () => (onCommentSlide && layout ? deckSlideTarget(markdown, onScreen, layout) : null),
+    [onCommentSlide, layout, markdown, onScreen],
   );
   const screenComments = useMemo(
     () => (screenSlide ? (commentPositions ?? []).filter((p) => p >= screenSlide.start && p < screenSlide.end).length : 0),
     [screenSlide, commentPositions],
   );
   const commentOnScreen = () => {
-    if (!onCommentSlide || !screenSlide) return;
-    const title = shownSlides(markdown)[onScreen]?.title;
-    onCommentSlide(screenSlide.start, `Slide ${onScreen + 1}${title ? `: ${title}` : ""}`);
+    if (onCommentSlide && screenSlide) onCommentSlide(screenSlide.start, screenSlide.label);
   };
 
   // Follow the editor cursor. But a deck opened at ?slide=N must STAY there: the

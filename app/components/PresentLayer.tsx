@@ -20,6 +20,8 @@ export default function PresentLayer({
   onToggleSlides,
   className,
   children,
+  onComment,
+  commentCount,
 }: {
   present: Present;
   markdown: string;
@@ -29,6 +31,9 @@ export default function PresentLayer({
   onToggleSlides: () => void;
   className: string;
   children: ReactNode;
+  /** Comment on the slide on screen (`PresentControls`). */
+  onComment?: () => void;
+  commentCount?: number;
 }) {
   return (
     <div className={className}>
@@ -45,6 +50,8 @@ export default function PresentLayer({
         onToggleSlides={onToggleSlides}
         onToggleFullscreen={present.toggleFullscreen}
         onExit={present.exit}
+        onComment={onComment}
+        commentCount={commentCount}
       />
       {present.speakerRoot &&
         createPortal(

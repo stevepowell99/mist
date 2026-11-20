@@ -25,7 +25,7 @@ gmist began as a fork of [inanimate-tech/mist](https://github.com/inanimate-tech
 
 - Suggest mode records edits as CriticMarkup additions and deletions; an edit-link holder accepts or rejects them one at a time or all at once.
 - Threaded comments and highlights (`{>>note<<}` / `{==text==}`), anchored to the text by content, kept in the file's frontmatter.
-- Comment on slide: over a deck in Split or Preview, a reviewer comments on the slide on screen without selecting text in the editor; the note is written under that slide's heading, and the button counts the slide's open comments.
+- Comment on slide: over a deck in Split, Preview or Present, a reviewer comments on the slide on screen without selecting text in the editor; the note is written under that slide's heading, and the button counts the slide's open comments.
 
 ### Slides
 

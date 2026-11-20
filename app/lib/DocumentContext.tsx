@@ -586,6 +586,20 @@ export function DocumentProvider({
   const handleViewReady = useCallback((v: EditorView | null) => {
     setView(v);
   }, []);
+  // Present unmounts the editor, which is what pushes its text here. Until it
+  // is back, follow the Y.Text itself, so the deck shows others' edits and a
+  // slide comment is placed against the current text. Only once an editor has
+  // existed, so the first load still takes its text from the editor.
+  const hadView = useRef(false);
+  if (view) hadView.current = true;
+  useEffect(() => {
+    if (view || !hadView.current) return;
+    const ytext = yjs.doc.getText("body");
+    const read = () => setMarkdown(ytext.toString());
+    read();
+    ytext.observe(read);
+    return () => ytext.unobserve(read);
+  }, [view, yjs.doc]);
   // The CodeMirror editor pushes its text on every change; markdown IS the body
   // (an identity, no serialization), so save and preview read it directly.
   const setEditorText = useCallback((text: string) => setMarkdown(text), []);

@@ -20,6 +20,8 @@ export default function PresentControls({
   onToggleSlides,
   onToggleFullscreen,
   onExit,
+  onComment,
+  commentCount = 0,
 }: {
   notesOpen: boolean;
   slidesOpen: boolean;
@@ -30,6 +32,11 @@ export default function PresentControls({
   onToggleSlides: () => void;
   onToggleFullscreen: () => void;
   onExit: () => void;
+  /** Comment on the slide on screen; left out where a comment cannot be taken
+   *  (the local editor) or the slide has no source. */
+  onComment?: () => void;
+  /** Open comments on the slide on screen. */
+  commentCount?: number;
 }) {
   const cls = (on: boolean) =>
     `cursor-pointer rounded px-2 py-1 text-xs uppercase tracking-wider transition-colors ${
@@ -41,6 +48,11 @@ export default function PresentControls({
         quiet && !slidesOpen ? "opacity-0 hover:opacity-100 focus-within:opacity-100" : ""
       }`}
     >
+      {onComment && (
+        <button type="button" onClick={onComment} title="Comment on the slide shown here" className={cls(false)}>
+          Comment{commentCount > 0 ? ` (${commentCount})` : ""}
+        </button>
+      )}
       <button
         type="button"
         onClick={onToggleSlides}

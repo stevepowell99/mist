@@ -14,7 +14,7 @@ import { remember, remembered } from "~/lib/remembered";
 import { extractOutlineFromText } from "~/lib/outline";
 import { QuickOpenTrigger } from "~/components/QuickOpen";
 import { useSplitDrag } from "~/lib/useSplitDrag";
-import { deckIndexForOffset, offsetForDeckIndex } from "~/lib/slide-cursor";
+import { deckIndexForOffset, deckSlideTarget, offsetForDeckIndex } from "~/lib/slide-cursor";
 import { docFileKey, loadDocSettings, saveDocSettings } from "~/lib/doc-settings";
 import { resolveAssetSrc } from "~/lib/asset-urls";
 import { usePresence } from "~/lib/usePresence";
@@ -453,6 +453,15 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
     if ((splitOpen || slidesFull || present) && deckSlide != null) return deckSlide;
     return deckIndexForOffset(markdown, cursorOffset, slideLayout);
   }, [slideLayout, splitOpen, slidesFull, present, deckSlide, markdown, cursorOffset]);
+  // Present has no comments panel and no button over the deck: its controls
+  // carry Comment, for the slide the deck reports, and the input floats over it.
+  const presentTarget = useMemo(
+    () => (present && slideLayout ? deckSlideTarget(markdown, localSlide ?? 0, slideLayout) : null),
+    [present, slideLayout, localSlide, markdown],
+  );
+  const presentComments = presentTarget
+    ? openCommentPositions.filter((p) => p >= presentTarget.start && p < presentTarget.end).length
+    : 0;
   useEffect(() => {
     setLocalSlide(localSlide);
   }, [localSlide, setLocalSlide]);
@@ -947,8 +956,15 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
             slidesOpen={outlineOpen}
             onToggleSlides={() => setOutlineOpen((v) => !v)}
             className="relative h-full w-full overflow-hidden bg-black"
+            onComment={presentTarget ? () => openSlideComment(presentTarget.start, presentTarget.label) : undefined}
+            commentCount={presentComments}
           >
             <SlidesView {...slideProps} />
+            {commentActive && (
+              <div className="absolute right-3 top-14 z-50 w-96 max-w-[calc(100%-1.5rem)] border border-border bg-paper">
+                <CommentInput />
+              </div>
+            )}
             {/* The slide list is still reachable in Present with Ctrl/Cmd+Alt+D. */}
             {outlineOpen && (
               <OutlinePanel
@@ -1053,7 +1069,7 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
           )}
           {(splitOpen || slidesFull) && (
             <section className="flex-1 overflow-hidden">
-              {/* Comment on slide is offered only here (Split and Preview), on a
+              {/* Comment on slide over the deck is offered here (Split and Preview), on a
                   screen wide enough for the comments panel it opens. */}
               {deck ? (
                 <SlidesView

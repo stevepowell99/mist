@@ -135,7 +135,7 @@ export function deckSlides(md: string): { index: number; raw: string; title: str
 }
 
 /** A slide's trimmed source and its title, as `deckSlides` describes. */
-function slideTitle(raw: string, index: number): { raw: string; title: string } {
+export function slideTitle(raw: string, index: number): { raw: string; title: string } {
   const isHeading = (l: string) => /^#{1,6}\s/.test(l);
   const lines = raw.split("\n").map((l) => l.trim()).filter(Boolean);
   const fromHeading = lines

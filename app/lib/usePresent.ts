@@ -220,10 +220,14 @@ export function usePresent(deck: boolean): Present {
   }, [enter, exit, toggleFullscreen]);
 
   // Esc with the focus in the app rather than the deck (after a button click).
+  // Not from a text field, such as the comment box over the deck: there Esc
+  // cancels what is being typed.
   useEffect(() => {
     if (!presenting) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !document.fullscreenElement) exit();
+      const t = e.target as HTMLElement | null;
+      const typing = !!t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
+      if (e.key === "Escape" && !document.fullscreenElement && !typing) exit();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);

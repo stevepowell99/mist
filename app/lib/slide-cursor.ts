@@ -1,4 +1,4 @@
-import { classesFrom, deckSlideLayout, firstContentLine, slideSpans, stripFrontmatter, type DeckSlide } from "./slides-build";
+import { classesFrom, deckSlideLayout, firstContentLine, slideSpans, slideTitle, stripFrontmatter, type DeckSlide } from "./slides-build";
 
 /**
  * Two ways of counting slides, kept apart on purpose:
@@ -52,6 +52,21 @@ export function deckIndexForOffset(md: string, offset: number, layout = deckSlid
  *  one (the References slide the deck appends has no source). */
 export function offsetForDeckIndex(md: string, index: number, layout = deckSlideLayout(md)): number | null {
   return layout.find((s) => !s.hidden && s.deck === Math.max(0, index))?.start ?? null;
+}
+
+/** Deck slide `index` as a comment target (Comment on slide): where its source
+ *  starts and ends, and a label naming it, "Slide 2: Results". Null for a slide
+ *  without source, such as the References slide. */
+export function deckSlideTarget(
+  md: string,
+  index: number,
+  layout = deckSlideLayout(md),
+): { start: number; end: number; label: string } | null {
+  const s = layout.find((x) => !x.hidden && x.deck === index);
+  if (!s) return null;
+  const n = `Slide ${index + 1}`;
+  const { title } = slideTitle(md.slice(s.start, s.end), index);
+  return { start: s.start, end: s.end, label: title === n ? n : `${n}: ${title}` };
 }
 
 /**

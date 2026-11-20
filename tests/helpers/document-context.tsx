@@ -73,6 +73,8 @@ export function createMockDocumentContext(
     commentSelection: null,
     commentHighlight: null,
     openCommentInput: vi.fn(),
+    openSlideComment: vi.fn(),
+    commentSlideLabel: null,
     handleCommentActiveChange: vi.fn(),
     activateComment: vi.fn(),
     handleResolveAtCursor: vi.fn(),
