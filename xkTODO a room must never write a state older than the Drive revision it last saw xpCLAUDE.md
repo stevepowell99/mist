@@ -4,6 +4,7 @@ Grade: leaning: Drive wins protects work made outside the room, but it reverses 
 Tier: Steve
 Kind: sync-conflict-winner
 Raised by: Delivery manager, 2026-11-23
+Answer: ask per case in the editor when both sides changed (Steve, briefing page, 2026-11-23). This replaces the rule "keep the live editor" in `CLAUDE.md` under Sync and saving, which the fix must update.
 
 # A room must never write a state older than the Drive revision it last saw
 
@@ -34,9 +35,7 @@ Code as of `ac1fe43`.
 
 ## Fix
 
-- Decision for Steve first: when both sides changed, which version goes to the sibling?
-  - Now: Drive's version goes to `(drive copy …)` and the room wins.
-  - Proposed: the room's version goes to `(gmist unsaved …)` and Drive stays, since the room is the side that can be hours stale. This reverses the rule "keep the live editor" in `CLAUDE.md` under Sync and saving.
+- When both sides changed, the editor asks the person which version to keep, case by case (Steve's answer above); until they choose, nothing is written to Drive. Today Drive's version goes to `(drive copy …)` and the room wins.
 - Invariant: a room writes only if Drive's body at write time equals the body the room last adopted or saved (`lastCommitMd`). Compare bodies, as `CLAUDE.md` says, since a revision id is only a hint; on any mismatch, refuse.
 - The baseline moves only to content the editor actually holds: never `setBaseline` to a Drive version the editor did not adopt.
 - A failed sibling write blocks the save instead of letting it proceed.
