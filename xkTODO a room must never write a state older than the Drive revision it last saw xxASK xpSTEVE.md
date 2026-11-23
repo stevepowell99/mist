@@ -1,3 +1,10 @@
+Question: On 20 November 2026 a gmist room wrote a stale copy of the Pilots agenda deck over three newer edits made on disk, and nothing was kept; the cause is that when a room and Drive have both changed, gmist keeps the room's text and puts Drive's text in a "(drive copy)" sibling, which a room that has been open for hours can get wrong. Should gmist reverse that rule, so Drive stays and the room's text goes to a "(gmist unsaved)" sibling, before the code fix (refuse any write whose base is not Drive's current text) is built?
+Options: Drive wins, the room's text goes to a "(gmist unsaved)" sibling | Keep the room winning, and only fix the paths that lose the sibling | Ask per case in the editor when both sides changed
+Grade: leaning: Drive wins protects work made outside the room, but it reverses the "keep the live editor" rule in CLAUDE.md, so a person typing in a live room may see their text pushed to a sibling
+Tier: Steve
+Kind: sync-conflict-winner
+Raised by: Delivery manager, 2026-11-23
+
 # A room must never write a state older than the Drive revision it last saw
 
 Reported by the Pilots session, 20 November 2026 (times UTC).
