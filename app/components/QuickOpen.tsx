@@ -431,8 +431,17 @@ export function QuickOpenTrigger() {
         setOpen((v) => !v);
       }
     };
+    // The same chord with the focus in a deck, whose iframe forwards it.
+    const onMsg = (e: MessageEvent) => {
+      const d = e.data as { type?: string; chord?: string } | null;
+      if (d?.type === "mist-key" && d.chord === "j") setOpen((v) => !v);
+    };
     window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
+    window.addEventListener("message", onMsg);
+    return () => {
+      window.removeEventListener("keydown", onKey, true);
+      window.removeEventListener("message", onMsg);
+    };
   }, []);
   return open ? <QuickOpen onClose={() => setOpen(false)} /> : null;
 }
