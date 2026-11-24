@@ -533,10 +533,13 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
   // One place runs every mod+alt shortcut, fed by three sources so focus never
   // matters: the window (page/toolbar), the editor (a CodeMirror keydown
   // handler), and the sandboxed slides iframe (which forwards chords by
-  // postMessage, since its keys never reach this window). Mode: E/S. View:
-  // 1/2/3/4. Panels: O outline, C comments, F Drive sidebar, / help. Resize: - =.
-  // The folder and help panels own their open state, so they are toggled by a
-  // custom event rather than reaching into them here.
+  // postMessage, since its keys never reach this window). Mode: S (edit or
+  // suggest). View: 1/2/3/4. Present: P, N notes. Panels: D outline, C comments,
+  // F Drive sidebar, G editor to the shown slide, / help. Resize: - =. J (quick
+  // open) and M (comment) have listeners of their own. The folder and help
+  // panels own their open state, so they are toggled by a custom event rather
+  // than reaching into them here. HelpPanel lists every chord: change its rows
+  // when one changes here.
   // Move the editor cursor to a slide's source heading. `focus` says whether to
   // pull focus back to the editor. y:"start" puts the heading near the top of the
   // viewport, rather than scrollIntoView's default of the nearest edge.

@@ -36,6 +36,7 @@ import PresentLayer from "~/components/PresentLayer";
 import { usePresent } from "~/lib/usePresent";
 import { ToolbarButton } from "~/components/Toolbar";
 import DocNavbar from "~/components/DocNavbar";
+import HelpPanel from "~/components/HelpPanel";
 import { SaveBadge } from "~/components/SaveStatus";
 import { idToPath } from "~/lib/localfs-ids";
 import { useChordListener } from "~/lib/useChordListener";
@@ -467,9 +468,10 @@ export default function PlainEditor({
   /**
    * The same chords as the Drive editor, through the same hook, because the two
    * are meant to be one app and a shortcut that works in one and not the other
-   * is just a trap. Only P was wired here before. The table is docs.$id's
-   * `runChord` minus what local has no equivalent for (the folder sidebar, the
-   * split nudge, the deck-to-editor jump, the help panel).
+   * is just a trap. The table is docs.$id's `runChord` minus what local has no
+   * equivalent for (the folder sidebar, the split nudge, the deck-to-editor
+   * jump); with the editor focused, G is CodeMirror's go-to-line instead. The
+   * Help panel lists these, so change its rows when a chord changes here.
    */
   const runChord = useCallback(
     (c: string): boolean => {
@@ -489,6 +491,7 @@ export default function PlainEditor({
         case "c": setReviewOpen((v) => { remember(REVIEW_KEY, v ? "no" : "yes"); return !v; }); return true;
         case "p": if (!deck) return false; if (present.presenting) present.exit(); else present.enter(); return true;
         case "n": if (present.presenting) present.toggleNotes(); return true;
+        case "/": window.dispatchEvent(new CustomEvent("mist-toggle-help")); return true;
         default: return false;
       }
     },
@@ -832,6 +835,7 @@ export default function PlainEditor({
           }}
         />
       )}
+      <HelpPanel editor="local" />
     </div>
   );
 }

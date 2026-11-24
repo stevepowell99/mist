@@ -1,3 +1,5 @@
+import { deckKeys } from "./deck-keys";
+
 /**
  * `.incremental`: each child of the marked box arrives on its own click, a list
  * giving each of its items a click rather than one for the whole list. On a
@@ -27,7 +29,8 @@ export function markIncremental(root: Element): void {
  * scroll, the entrance-animation replay and the modifier-chord forwarding. Split
  * out of slides-build.ts (which now only assembles the HTML shell) so each half
  * stays readable. Returns the <script> body as a string; the three interpolated
- * values are the only deck-specific config.
+ * values are the only deck-specific config, besides the standalone page's key
+ * list, which comes from the one deck-key table (`deck-keys.ts`).
  */
 export function deckRuntimeScript(opts: {
   slideNumber: string;
@@ -35,14 +38,17 @@ export function deckRuntimeScript(opts: {
   separateFragments: boolean;
 }): string {
   const { slideNumber, navigationMode, separateFragments } = opts;
+  // `<` escaped so no label can close the script element it is written into.
+  const pageKeys = JSON.stringify(deckKeys("page")).replace(/</g, "\\u003c");
   return `// scrollActivationWidth:null stops reveal v5 auto-switching to scroll view in a
 // narrow pane (the split), which in a sandboxed iframe hits sessionStorage and
 // blanks the deck.
 // width/height fix a 16:9 widescreen slide that reveal scales as a unit, so the
 // preview letterboxes instead of reflowing to the pane shape.
-// Keep reveal's own controls, progress bar, overview (O) and keyboard
-// shortcuts (F fullscreen, S notes, arrows) on, and add the hamburger menu
-// plugin if it loaded (best-effort, like Quarto's decks).
+// Reveal's own controls, progress bar, overview (O) and navigation keys stay on.
+// Its help overlay (?) is off (help:false): it lists only reveal's defaults,
+// several of which gmist rebinds below. ? opens gmist's own list instead: the
+// app's Help panel when embedded, the key overlay (toggleKeyHelp) standalone.
 // .incremental (markIncremental) runs as a plugin after the markdown one, so the
 // classes are in place before reveal counts fragments or lays out print pages.
 var markIncremental = ${markIncremental.toString()};
@@ -157,7 +163,7 @@ var KEYBOARD = EMBEDDED ? {27:null, 83:null} : {27:null};
 // overstuffed slide is clipped at the slide height (like the HTML preview, which
 // clips with section{overflow:hidden}) instead of reveal spilling the overflow
 // onto extra printed pages.
-var REVEAL_CONFIG = {plugins:revealPlugins,hash:false,controls:true,progress:true,slideNumber:${slideNumber},keyboard:KEYBOARD,overview:true,center:false,navigationMode:'${navigationMode}',pdfSeparateFragments:${separateFragments},pdfMaxPagesPerSlide:1,scrollActivationWidth:null,width:1280,height:720};
+var REVEAL_CONFIG = {plugins:revealPlugins,hash:false,controls:true,progress:true,slideNumber:${slideNumber},keyboard:KEYBOARD,help:false,overview:true,center:false,navigationMode:'${navigationMode}',pdfSeparateFragments:${separateFragments},pdfMaxPagesPerSlide:1,scrollActivationWidth:null,width:1280,height:720};
 function relayout(){ try { Reveal.layout(); } catch (e) {} }
 // Re-run layout across a few frames. In a sandboxed iframe reveal can init
 // before the pane has its real size, leaving the deck unscaled; these catch it.
@@ -236,10 +242,29 @@ window.addEventListener("message", function(e){
     if (e.data.dir === "next") Reveal.next(); else if (e.data.dir === "prev") Reveal.prev();
   }
 });
-// Forward mod+alt layout shortcuts to the parent: this sandboxed iframe has its
-// own window, so its key events never reach the app otherwise. Reveal's own keys
-// carry no modifier, so they are untouched.
+// The runtime's own keys, in capture so they pre-empt reveal's. Every key listed
+// to the user is in the deck-key table (deck-keys.ts): add a key there when you
+// add one here. The mod+alt layout chords are forwarded to the parent, because
+// this sandboxed iframe has its own window and its key events never reach the
+// app otherwise.
 window.addEventListener("keydown", function(e){
+  // ? (or F1, reveal's other help key) lists the keys. Embedded, the app's Help
+  // panel does it, at its Shortcuts tab; standalone, this page's own overlay.
+  // Not from a text field, such as reveal's jump-to-slide box (G).
+  var t = e.target;
+  var typing = !!t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName || ''));
+  if ((e.key === "?" || e.key === "F1") && !e.ctrlKey && !e.metaKey && !e.altKey && !typing) {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    if (EMBEDDED) parent.postMessage({ type: "mist-help" }, "*"); else toggleKeyHelp();
+    return;
+  }
+  if (keyHelp && e.key === "Escape") {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    toggleKeyHelp(false);
+    return;
+  }
   // Enter in the overview opens the selected slide. Reveal 5 has no Enter
   // binding there (only a click does it), and binding 13 in its keyboard config
   // would swallow Enter on every slide, so it is handled here, overview only.
@@ -308,13 +333,62 @@ window.addEventListener("wheel", function(e){
   while (wheelAccum >= 100) { Reveal.next(); wheelAccum -= 100; }
   while (wheelAccum <= -100) { Reveal.prev(); wheelAccum += 100; }
 }, { passive: false });
+// The standalone page's key list, opened by ? or F1 and the Keys button, and
+// closed by either again, Esc or a click outside it. Its rows are the deck-key
+// table's "page" rows (deck-keys.ts), written in by deckRuntimeScript. Embedded,
+// the app's Help panel lists the keys instead, so this never opens there.
+var PAGE_KEYS = ${pageKeys};
+var keyHelp = null;
+function toggleKeyHelp(show){
+  if (typeof show !== 'boolean') show = !keyHelp;
+  if (!show) { if (keyHelp) { keyHelp.remove(); keyHelp = null; } return; }
+  if (keyHelp || EMBEDDED) return;
+  var wrap = document.createElement('div');
+  wrap.id = 'mist-key-help';
+  wrap.style.cssText = 'position:fixed;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,.45);font:15px/1.4 system-ui,sans-serif';
+  wrap.addEventListener('click', function(e){ if (e.target === wrap) toggleKeyHelp(false); });
+  var card = document.createElement('div');
+  card.setAttribute('role', 'dialog');
+  card.setAttribute('aria-label', 'Keyboard shortcuts');
+  card.style.cssText = 'width:100%;max-width:600px;max-height:86vh;overflow:auto;box-sizing:border-box;padding:14px 20px;border-radius:8px;background:#fff;color:#1a1a1a;box-shadow:0 12px 40px rgba(0,0,0,.35)';
+  var head = document.createElement('div');
+  head.textContent = 'Keyboard shortcuts';
+  head.style.cssText = 'margin-bottom:6px;font-weight:600';
+  card.appendChild(head);
+  PAGE_KEYS.forEach(function(k){
+    var row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:16px;padding:7px 0;border-top:1px solid #e5e5e5';
+    var label = document.createElement('span');
+    label.textContent = k.label;
+    var keys = document.createElement('span');
+    keys.style.cssText = 'display:flex;flex-shrink:0;align-items:center;gap:4px';
+    k.keys.forEach(function(name){
+      var el;
+      if (name === 'or') {
+        el = document.createElement('span');
+        el.style.cssText = 'font-size:12px;color:#666';
+      } else {
+        el = document.createElement('kbd');
+        el.style.cssText = 'padding:1px 6px;border:1px solid #ccc;border-radius:4px;background:#f4f4f4;font:13px/1.4 ui-monospace,monospace';
+      }
+      el.textContent = name;
+      keys.appendChild(el);
+    });
+    row.appendChild(label);
+    row.appendChild(keys);
+    card.appendChild(row);
+  });
+  wrap.appendChild(card);
+  document.body.appendChild(wrap);
+  keyHelp = wrap;
+}
 /**
  * The standalone page's own controls, so a deck shown full-screen offers the
- * same three things wherever it is shown.
+ * same slide grid, notes and full screen wherever it is shown, and the key list.
  *
  * This page is where a share link lands and where Print opens, and it had no
  * controls at all: the person you send a deck to is exactly the person who does
- * not know that S opens the speaker notes and O the slide grid. In the editor's
+ * not know that S opens the speaker notes, O the slide grid and ? the keys. In the editor's
  * iframe the app draws its own bar (PresentControls) and this one stays out of
  * the way; in print there is no UI at all.
  *
@@ -353,6 +427,7 @@ function mountDeckControls(){
   mk('Full screen', 'Full screen (F)', function(){
     try { document.documentElement.requestFullscreen(); } catch (e) {}
   });
+  mk('Keys', 'Keyboard shortcuts (?)', function(){ toggleKeyHelp(); });
   document.body.appendChild(bar);
   var sync = function(){ bar.style.display = document.fullscreenElement ? 'none' : 'flex'; };
   document.addEventListener('fullscreenchange', sync);

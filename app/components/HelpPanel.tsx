@@ -1,78 +1,99 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SLASH_HELP } from "~/lib/cm-slash";
 import { ICON_NAMES } from "~/lib/icons";
+import { MOD, deckKeys, type Shortcut } from "~/lib/deck-keys";
+import { VIEW_BUTTONS } from "~/components/Toolbar";
 
 /**
- * Keyboard shortcuts and tips, opened by the ? button (bottom-right) or
- * Ctrl/Cmd+Alt+/. Self-contained: owns its open state and its shortcut, so the
- * layout just renders it once. The listed layout shortcuts mirror the mod+alt
- * handlers in docs.$id.tsx and FolderSidebar; the editor ones come from the
- * CodeMirror keymaps (cm-shortcuts, search, fold).
+ * Keyboard shortcuts and tips, opened by the ? button (bottom-right),
+ * Ctrl/Cmd+Alt+/, or ? with the focus in a deck (the deck runtime posts
+ * `mist-help`, which opens the Shortcuts tab). Self-contained: owns its open
+ * state and its shortcut, so the layout just renders it once.
+ *
+ * Every row mirrors a real handler, so check this list against them when a key
+ * changes: the Ctrl/Cmd+Alt chords in each editor's `runChord` (docs.$id.tsx,
+ * PlainEditor.tsx), QuickOpenTrigger (J), CommentInput and PlainEditor's keymap
+ * (M), the CodeMirror keymaps in CodeMirrorEditor and PlainEditor (default,
+ * search, history, fold, completion, cm-shortcuts), QuickOpen's own keys,
+ * PresenterRail (the notes window) and usePresent. The view chords come from
+ * VIEW_BUTTONS and the deck keys from the one deck-key table (deck-keys.ts),
+ * which the standalone /slides page lists too.
  *
  * On the first ten page loads in a browser it auto-shows, then flies down to the
  * ? button and pulses it, so a first-time viewer learns where help lives.
  *
- * gmist has two kinds of document, and every line here must hold for both or say
- * which it is for: Drive files (sign-in, saved to the file) and shared rooms
- * (secret link only, live editing, text kept in the room).
+ * It serves both editors. In the room editor (docs.$id) every line must hold for
+ * both kinds of document there or say which it is for: Drive files (sign-in,
+ * saved to the file) and shared rooms (secret link only, live editing, text kept
+ * in the room). In the local editor (PlainEditor, `editor="local"`) it shows
+ * only the Shortcuts and Styling tabs, without the intro, and drops the rows
+ * that local files do not have.
  */
 
-const MOD = "Ctrl/⌘";
-
-/** One key combo as a row: a label and the keys to press. */
-interface Shortcut {
-  keys: string[];
-  label: string;
+/** Which editor a row holds in; a row without `only` holds in both. */
+type Editor = "room" | "local";
+interface HelpRow extends Shortcut {
+  only?: Editor;
 }
 
-const LAYOUT: Shortcut[] = [
-  { keys: [MOD, "Alt", "S"], label: "Toggle edit / suggest" },
-  { keys: [MOD, "Alt", "1"], label: "Editor only" },
-  { keys: [MOD, "Alt", "2"], label: "Split editor + preview" },
-  { keys: [MOD, "Alt", "3"], label: "Preview only" },
-  { keys: [MOD, "Alt", "4"], label: "Live preview (editor, syntax hidden)" },
+const LAYOUT: HelpRow[] = [
+  { keys: [MOD, "Alt", "S"], label: "Switch between editing and suggesting" },
+  ...VIEW_BUTTONS.map((b) => ({ keys: [MOD, "Alt", b.chord], label: b.label })),
   { keys: [MOD, "Alt", "P"], label: "Present: the deck fills the window, notes in a floating window" },
   { keys: [MOD, "Alt", "N"], label: "Present: speaker notes window (notes, next slide, timer)" },
-  { keys: [MOD, "Alt", "-"], label: "Shrink editor pane (split view)" },
-  { keys: [MOD, "Alt", "="], label: "Grow editor pane (split view)" },
+  { keys: [MOD, "Alt", "-"], label: "Shrink the editor pane (split view)", only: "room" },
+  { keys: [MOD, "Alt", "="], label: "Grow the editor pane (split view)", only: "room" },
   { keys: [MOD, "P"], label: "Print to PDF" },
 ];
 
-const PANELS: Shortcut[] = [
-  { keys: [MOD, "Alt", "F"], label: "Drive folder sidebar (Drive files)" },
-  { keys: [MOD, "Alt", "J"], label: "Quick open: search Drive" },
+const PANELS: HelpRow[] = [
+  { keys: [MOD, "Alt", "F"], label: "Drive folder sidebar (Drive files)", only: "room" },
+  { keys: [MOD, "Alt", "J"], label: "Quick open: search Drive", only: "room" },
+  { keys: ["↑", "↓", "Enter"], label: "In Quick open: choose and open (Backspace in an empty box goes up a folder, Esc closes)", only: "room" },
+  { keys: [MOD, "click"], label: "In the Drive browser: open a file in a new tab", only: "room" },
   { keys: [MOD, "Alt", "D"], label: "Outline / slide list" },
   { keys: ["drag", "⠿"], label: "Outline: drag a row's grip to move its slide or section, subsections included" },
   { keys: [MOD, "Alt", "C"], label: "Comments panel" },
-  { keys: [MOD, "Alt", "G"], label: "Editor to the shown slide (or the divider arrow)" },
+  { keys: [MOD, "Alt", "G"], label: "Editor to the shown slide (or the divider arrow)", only: "room" },
   { keys: [MOD, "Alt", "/"], label: "This help" },
 ];
 
-const EDITOR: Shortcut[] = [
+const EDITOR: HelpRow[] = [
+  { keys: [MOD, "S"], label: "Save now (Drive files) and rebuild the deck preview", only: "room" },
+  { keys: [MOD, "S"], label: "Save now", only: "local" },
+  { keys: [MOD, "Enter"], label: "Rebuild the deck preview now", only: "room" },
   { keys: [MOD, "B"], label: "Bold (wrap **)" },
   { keys: [MOD, "I"], label: "Italic (wrap *)" },
-  { keys: ["select", "* _ ` = \" ( ["], label: "Wrap selection in the pair" },
+  { keys: ["select", "* _ ` = \" ( ["], label: "Wrap the selection in the pair" },
+  { keys: [MOD, "Alt", "M"], label: "Comment on the selection, or a point note at the cursor" },
   { keys: [MOD, "click"], label: "Add another cursor" },
-  { keys: [MOD, "D"], label: "Select next occurrence" },
+  { keys: [MOD, "D"], label: "Select the next occurrence" },
+  { keys: [MOD, "Shift", "L"], label: "Select every occurrence" },
   { keys: ["Alt", "drag"], label: "Rectangular (column) select" },
-  { keys: [MOD, "F"], label: "Find in document" },
-  { keys: ["@"], label: "Insert citation (Drive files with a .bib)" },
+  { keys: [MOD, "F"], label: "Find in the document (F3 next match, Shift+F3 previous)" },
+  { keys: [MOD, "Alt", "G"], label: "Go to line", only: "local" },
+  { keys: ["@"], label: "Insert a citation (from a .bib)" },
   { keys: ["/"], label: "Slash menu: insert a structure" },
-  { keys: ["Tab"], label: "Indent" },
-  { keys: [MOD, "Z"], label: "Undo (collaborative-safe)" },
-  { keys: [MOD, "Shift", "Z"], label: "Redo" },
-  { keys: [MOD, "Shift", "[ / ]"], label: "Fold / unfold block" },
-  { keys: [MOD, "Alt", "[ / ]"], label: "Fold / unfold all" },
+  { keys: ["Ctrl", "Space"], label: "Open the completion menu (slash, class, citation, icon)" },
+  { keys: ["Tab"], label: "Indent (Shift+Tab outdents)" },
+  { keys: [MOD, "Z"], label: "Undo; with others editing, it undoes only your own edits" },
+  { keys: [MOD, "Shift", "Z"], label: "Redo (also Ctrl+Y on Windows)" },
+  { keys: ["Ctrl", "Shift", "[ / ]"], label: "Fold / unfold the block (⌘+Alt+[ / ] on a Mac)" },
+  { keys: ["Ctrl", "Alt", "[ / ]"], label: "Fold / unfold everything" },
 ];
 
-const SLIDES: Shortcut[] = [
-  { keys: [MOD, "S"], label: "Save now (Drive files) and rebuild the preview" },
-  { keys: ["F"], label: "Present, with focus in the preview; in Present, full screen" },
-  { keys: ["Esc"], label: "Leave Present (from either window)" },
-  { keys: ["O"], label: "Overview of all slides" },
-  { keys: ["wheel"], label: "Scroll through the overview" },
-  { keys: ["←", "→"], label: "Previous / next slide" },
+// The deck's own keys, from the one table the standalone page also lists.
+const DECK: HelpRow[] = deckKeys("editor");
+
+// The speaker notes window (PresenterRail), a window of its own in Present.
+const NOTES_WINDOW: HelpRow[] = [
+  { keys: ["→", "or", "Space"], label: "Next slide or build step (also ↓, N, Page Down)" },
+  { keys: ["←"], label: "Previous slide or build step (also ↑, P, Page Up)" },
+  { keys: ["Esc"], label: "Leave Present" },
 ];
+
+const rowsFor = (rows: HelpRow[], editor: Editor): Shortcut[] =>
+  rows.filter((r) => !r.only || r.only === editor);
 
 // Deck/doc settings read from the YAML frontmatter (top-level or nested under
 // `format: revealjs:`). Documented in docs/author-grammar.md.
@@ -112,7 +133,8 @@ const CLASS_EXAMPLES: { code: string; note: string }[] = [
 // above), so this reference and the live menu cannot drift.
 
 // Sharing & review: the Share menu, who can open, and how comments/suggestions
-// work. Mirrors ShareButton, CommentInput (Ctrl/Cmd+Shift+M) and SuggestionActions.
+// work. Mirrors ShareButton, CommentInput (Ctrl/Cmd+Alt+M, or Ctrl/Cmd+Shift+M)
+// and SuggestionActions.
 const SHARE_MENU: { name: string; desc: string }[] = [
   { name: "Copy edit link", desc: "Full edit access; the holder can also switch to Suggest." },
   { name: "Copy suggest link", desc: "Locked to Suggest: the holder proposes CriticMarkup changes, never edits directly. Someone who opened a suggest link sees a single Copy link." },
@@ -123,7 +145,7 @@ const SHARE_MENU: { name: string; desc: string }[] = [
   { name: "Print to PDF", desc: "A deck's slides or a document's A4 pages as a PDF (also Ctrl/Cmd+P)." },
 ];
 
-const REVIEW: Shortcut[] = [
+const REVIEW: HelpRow[] = [
   { keys: [MOD, "Alt", "M"], label: "Comment on the selection (or a point note)" },
   { keys: [MOD, "Alt", "S"], label: "Turn Suggest mode on or off, for everyone in the document" },
   { keys: [MOD, "Alt", "C"], label: "Open the comments panel" },
@@ -194,11 +216,11 @@ const FEATURES: { title: string; items: string[] }[] = [
   },
 ];
 
-const TIPS = [
-  "Set theme: causal-map | qualia | brutalist | editorial | blackboard | moonshot | handwritten | minimal in the YAML to restyle the whole deck or doc; ::: {.brand} drops the theme's logo in the corner.",
-  "In a Drive file, edits save to Drive automatically, on a short pause after you stop typing.",
-  "Edit a Drive file in Obsidian or Drive and gmist loads the newer version when you have no unsaved edits here.",
-  "Move the cursor in the editor and the slide preview follows.",
+const TIPS: { text: string; only?: Editor }[] = [
+  { text: "Set theme: causal-map | qualia | brutalist | editorial | blackboard | moonshot | handwritten | minimal in the YAML to restyle the whole deck or doc; ::: {.brand} drops the theme's logo in the corner." },
+  { text: "In a Drive file, edits save to Drive automatically, on a short pause after you stop typing.", only: "room" },
+  { text: "Edit a Drive file in Obsidian or Drive and gmist loads the newer version when you have no unsaved edits here.", only: "room" },
+  { text: "Move the cursor in the editor and the slide preview follows." },
 ];
 
 function Kbd({ children }: { children: React.ReactNode }) {
@@ -214,9 +236,15 @@ function Row({ keys, label }: Shortcut) {
     <div className="flex items-center justify-between gap-3 py-2">
       <span className="text-base text-ink">{label}</span>
       <span className="flex shrink-0 items-center gap-1">
-        {keys.map((k, i) => (
-          <Kbd key={i}>{k}</Kbd>
-        ))}
+        {keys.map((k, i) =>
+          k === "or" ? (
+            <span key={i} className="text-sm text-ink/60">
+              or
+            </span>
+          ) : (
+            <Kbd key={i}>{k}</Kbd>
+          ),
+        )}
       </span>
     </div>
   );
@@ -273,34 +301,71 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
 const INTRO_KEY = "mistHelpIntroLoads";
 const INTRO_LOADS = 10;
 
-export default function HelpPanel() {
+type Tab = "overview" | "shortcuts" | "styling" | "sharing" | "files";
+
+export default function HelpPanel({ editor = "room" }: { editor?: Editor }) {
+  const local = editor === "local";
   const [open, setOpen] = useState(false);
-  const [tab, setTab] = useState<"overview" | "shortcuts" | "styling" | "sharing" | "files">("overview");
+  const [tab, setTab] = useState<Tab>(local ? "shortcuts" : "overview");
   // auto: this is the once-a-session intro (no dark backdrop, flies to the
   // button). flyOut: mid-flight to the corner. pulse: ring the button after.
   const [auto, setAuto] = useState(false);
   const [flyOut, setFlyOut] = useState(false);
   const [pulse, setPulse] = useState(false);
   const introTimers = useRef<number[]>([]);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  // Where the focus was before a deliberate open (the editor, or the deck's
+  // iframe after ? there), so closing hands it back.
+  const returnFocus = useRef<HTMLElement | null>(null);
+  const openRef = useRef(false);
+  useEffect(() => {
+    openRef.current = open;
+  }, [open]);
 
   const clearIntro = useCallback(() => {
     introTimers.current.forEach((t) => clearTimeout(t));
     introTimers.current = [];
   }, []);
 
-  // Any deliberate open/close ends the intro and its timers, so a click or a
-  // shortcut never gets yanked away mid-read.
+  // A deliberate open: ends the intro and its timers, so a click or a shortcut
+  // never gets yanked away mid-read.
+  const show = useCallback(
+    (at?: Tab) => {
+      clearIntro();
+      setAuto(false);
+      setFlyOut(false);
+      setPulse(false);
+      if (at) setTab(at);
+      if (!openRef.current) {
+        const a = document.activeElement;
+        returnFocus.current = a instanceof HTMLElement && a !== document.body ? a : null;
+      }
+      setOpen(true);
+    },
+    [clearIntro],
+  );
+
   const dismiss = useCallback(() => {
     clearIntro();
     setAuto(false);
     setFlyOut(false);
     setOpen(false);
+    const back = returnFocus.current;
+    returnFocus.current = null;
+    if (back?.isConnected) back.focus({ preventScroll: true });
   }, [clearIntro]);
+
+  // Take the focus on a deliberate open, so Esc reaches this window even when
+  // ? was pressed in the deck, whose iframe would otherwise keep the keys.
+  useEffect(() => {
+    if (open && !auto) dialogRef.current?.focus({ preventScroll: true });
+  }, [open, auto]);
 
   // Auto-intro, shown on the first few loads and then not again: long enough to
   // learn the app is there, short enough to stop nagging someone who works in it.
+  // Not in the local editor, which runs only on its user's own machine.
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined" || local) return;
     let loads = INTRO_LOADS;
     try {
       loads = Number(localStorage.getItem(INTRO_KEY) ?? 0);
@@ -323,39 +388,42 @@ export default function HelpPanel() {
       window.setTimeout(() => setPulse(false), 6600),
     ];
     return clearIntro;
-  }, [clearIntro]);
+  }, [clearIntro, local]);
 
   useEffect(() => {
     // Toggled by the layout's shortcut handler (Ctrl/Cmd+Alt+/, from any focus).
     const toggle = () => {
-      clearIntro();
-      setAuto(false);
-      setFlyOut(false);
-      setPulse(false);
-      setOpen((v) => !v);
+      if (openRef.current) dismiss();
+      else show();
     };
+    // ? in the deck: its sandboxed iframe posts this rather than showing
+    // reveal's own key list, which is wrong for a gmist deck.
+    const onMsg = (e: MessageEvent) => {
+      if ((e.data as { type?: string } | null)?.type === "mist-help") show("shortcuts");
+    };
+    // Esc closes this and only this: in capture, and stopped, so it does not
+    // also end Present or close whatever is underneath.
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") dismiss();
+      if (e.key !== "Escape" || !openRef.current) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      dismiss();
     };
     window.addEventListener("mist-toggle-help", toggle);
-    window.addEventListener("keydown", onKey);
+    window.addEventListener("message", onMsg);
+    window.addEventListener("keydown", onKey, true);
     return () => {
       window.removeEventListener("mist-toggle-help", toggle);
-      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("message", onMsg);
+      window.removeEventListener("keydown", onKey, true);
     };
-  }, [clearIntro, dismiss]);
+  }, [show, dismiss]);
 
   return (
     <>
       <button
         type="button"
-        onClick={() => {
-          clearIntro();
-          setAuto(false);
-          setFlyOut(false);
-          setPulse(false);
-          setOpen(true);
-        }}
+        onClick={() => show()}
         title="Shortcuts & tips (Ctrl/Cmd+Alt+/)"
         aria-label="Help"
         className={`fixed bottom-4 right-4 z-40 flex h-9 w-9 cursor-pointer items-center justify-center rounded-full bg-ink text-paper shadow-lg transition-colors hover:bg-chartreuse hover:text-[#1a1a1a] ${pulse ? "mist-help-pulse" : ""}`}
@@ -372,32 +440,40 @@ export default function HelpPanel() {
           onClick={dismiss}
         >
           <div
+            ref={dialogRef}
+            tabIndex={-1}
             role="dialog"
             aria-label="Keyboard shortcuts and tips"
             onClick={(e) => e.stopPropagation()}
             style={{ transformOrigin: "bottom right" }}
-            className={`max-h-[80vh] w-full max-w-[60vw] overflow-y-auto rounded-lg border border-border bg-paper leading-relaxed text-ink shadow-2xl transition-all duration-500 ease-in ${
+            className={`max-h-[80vh] w-full max-w-[60vw] overflow-y-auto rounded-lg border outline-none border-border bg-paper leading-relaxed text-ink shadow-2xl transition-all duration-500 ease-in ${
               flyOut ? "translate-x-[38vw] translate-y-[42vh] scale-[0.15] opacity-0" : "translate-x-0 translate-y-0 scale-100 opacity-100"
             }`}
           >
             <div className="flex items-center justify-between border-b border-border px-5 py-3">
               <div className="flex items-center gap-1">
                 <h2 className="mr-3 font-medium text-ink">Help</h2>
-                <TabButton active={tab === "overview"} onClick={() => setTab("overview")}>
-                  Overview
-                </TabButton>
+                {!local && (
+                  <TabButton active={tab === "overview"} onClick={() => setTab("overview")}>
+                    Overview
+                  </TabButton>
+                )}
                 <TabButton active={tab === "shortcuts"} onClick={() => setTab("shortcuts")}>
                   Shortcuts
                 </TabButton>
                 <TabButton active={tab === "styling"} onClick={() => setTab("styling")}>
                   Styling
                 </TabButton>
-                <TabButton active={tab === "sharing"} onClick={() => setTab("sharing")}>
-                  Sharing &amp; review
-                </TabButton>
-                <TabButton active={tab === "files"} onClick={() => setTab("files")}>
-                  Files
-                </TabButton>
+                {!local && (
+                  <>
+                    <TabButton active={tab === "sharing"} onClick={() => setTab("sharing")}>
+                      Sharing &amp; review
+                    </TabButton>
+                    <TabButton active={tab === "files"} onClick={() => setTab("files")}>
+                      Files
+                    </TabButton>
+                  </>
+                )}
               </div>
               <button
                 type="button"
@@ -424,15 +500,18 @@ export default function HelpPanel() {
             )}
             {tab === "shortcuts" && (
               <div className="grid items-start gap-4 px-5 py-4 sm:grid-cols-2">
-                <Section title="View &amp; mode" items={LAYOUT} />
-                <Section title="Panels" items={PANELS} />
-                <Section title="Editor" items={EDITOR} />
                 <div className="flex flex-col gap-4">
-                  <Section title="Slides preview" items={SLIDES} />
+                  <Section title="View &amp; mode" items={rowsFor(LAYOUT, editor)} />
+                  <Section title="Panels" items={rowsFor(PANELS, editor)} />
+                  <Section title="Editor" items={rowsFor(EDITOR, editor)} />
+                </div>
+                <div className="flex flex-col gap-4">
+                  <Section title="Deck (focus in the preview or Present)" items={rowsFor(DECK, editor)} />
+                  <Section title="Notes window (in Present)" items={rowsFor(NOTES_WINDOW, editor)} />
                   <Group title="Tips">
                     <ul className="list-disc space-y-1 pl-4 text-base text-ink/75">
-                      {TIPS.map((t) => (
-                        <li key={t}>{t}</li>
+                      {TIPS.filter((t) => !t.only || t.only === editor).map((t) => (
+                        <li key={t.text}>{t.text}</li>
                       ))}
                     </ul>
                   </Group>
