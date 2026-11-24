@@ -43,6 +43,7 @@ const DECK_KEYS: DeckKey[] = [
   { keys: ["B"], label: "Black out the screen, and back (also V, full stop or slash)" },
   { keys: ["F"], label: "Present; in Present, full screen", only: "editor" },
   { keys: ["F"], label: "Full screen", only: "page" },
+  { keys: ["D"], label: "Outline / slide list (as Ctrl/⌘+Alt+D)", only: "editor" },
   { keys: ["Esc"], label: "Close the overview, or leave Present", only: "editor" },
   { keys: ["Esc"], label: "Leave full screen", only: "page" },
   { keys: ["S"], label: "Speaker view: notes, next slide and timer, in a second window", only: "page" },

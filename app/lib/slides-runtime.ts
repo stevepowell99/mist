@@ -283,6 +283,15 @@ window.addEventListener("keydown", function(e){
     parent.postMessage({ type: "mist-present" }, "*");
     return;
   }
+  // Plain D in the embedded deck opens the outline (the slide list), as
+  // Ctrl/Cmd+Alt+D does: it is sent as that chord, so it takes the same chord
+  // path. Reveal binds nothing to D. The standalone page has no outline.
+  if ((e.key === "d" || e.key === "D") && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && EMBEDDED && !typing) {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    parent.postMessage({ type: "mist-key", chord: "d" }, "*");
+    return;
+  }
   // Esc in the embedded deck: reveal's own Esc is off (KEYBOARD), so it closes
   // the overview if open, and otherwise tells the app, which ends Present.
   if (e.key === "Escape" && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && window.parent !== window) {
