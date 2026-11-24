@@ -58,15 +58,15 @@ export const IconMore = () => svg(<>
 export type DocView = "editor" | "live" | "split" | "preview";
 
 /**
- * The view group, in the one order both editors use, with the chord in each
- * tooltip. `omit` drops a view the caller cannot offer (Split is desktop-only).
+ * The view group, in the one order both editors use. Each view's Ctrl/Cmd+Alt
+ * chord is written once here, for its tooltip and for the Help panel's list.
  */
-export const VIEW_BUTTONS: { view: DocView; title: string; Icon: () => React.ReactElement }[] = [
-  { view: "editor", title: "Source: the markdown as written (Ctrl/Cmd+Alt+1)", Icon: IconEditorOnly },
-  { view: "live", title: "Live preview (Ctrl/Cmd+Alt+4)", Icon: IconLive },
-  { view: "split", title: "Split (Ctrl/Cmd+Alt+2)", Icon: IconSplit },
-  { view: "preview", title: "Preview only (Ctrl/Cmd+Alt+3)", Icon: IconPreviewOnly },
-];
+export const VIEW_BUTTONS: { view: DocView; label: string; chord: string; title: string; Icon: () => React.ReactElement }[] = [
+  { view: "editor" as const, label: "Source: the markdown as written", chord: "1", Icon: IconEditorOnly },
+  { view: "live" as const, label: "Live preview: the source typeset as you type", chord: "4", Icon: IconLive },
+  { view: "split" as const, label: "Split: the source beside the preview", chord: "2", Icon: IconSplit },
+  { view: "preview" as const, label: "Preview only", chord: "3", Icon: IconPreviewOnly },
+].map((b) => ({ ...b, title: `${b.label} (Ctrl/Cmd+Alt+${b.chord})` }));
 
 /** A segmented navbar toggle, kept DRY across the Mode and View groups. */
 export function ToolbarToggle({
@@ -165,7 +165,7 @@ export function ModeToggle({
           ? "Suggesting: this link can only suggest changes"
           : editing
             ? "Editing: your edits are applied. Click to suggest instead (Ctrl/Cmd+Alt+S)"
-            : "Suggesting: your edits become tracked changes. Click to edit instead (Ctrl/Cmd+Alt+E)"
+            : "Suggesting: your edits become tracked changes. Click to edit instead (Ctrl/Cmd+Alt+S)"
       }
       className={`flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm uppercase tracking-wider text-paper transition-colors ${
         editing ? "bg-coral" : "bg-amber-500"
