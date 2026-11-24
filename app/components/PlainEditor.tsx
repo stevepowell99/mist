@@ -6,7 +6,7 @@ import { useSplitDrag } from "~/lib/useSplitDrag";
 import SplitGutter from "~/components/SplitGutter";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
-import { searchKeymap } from "@codemirror/search";
+import { gotoLine, searchKeymap } from "@codemirror/search";
 import { selectionHelpers } from "~/lib/cm-selection";
 import { bracketMatching, codeFolding, foldGutter, foldKeymap } from "@codemirror/language";
 import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } from "@codemirror/autocomplete";
@@ -34,12 +34,12 @@ import SlidesView, { isSlideDeck } from "~/components/SlidesView";
 import { deckIndexForOffset } from "~/lib/slide-cursor";
 import PresentLayer from "~/components/PresentLayer";
 import { usePresent } from "~/lib/usePresent";
-import { ToolbarButton } from "~/components/Toolbar";
+import { ToolbarButton, VIEW_BUTTONS } from "~/components/Toolbar";
 import DocNavbar from "~/components/DocNavbar";
 import HelpPanel from "~/components/HelpPanel";
 import { SaveBadge } from "~/components/SaveStatus";
 import { idToPath } from "~/lib/localfs-ids";
-import { useChordListener } from "~/lib/useChordListener";
+import { chordKeys, useChords } from "~/lib/chord";
 import CommitButton from "~/components/CommitButton";
 import OutlinePanel from "~/components/OutlinePanel";
 import { livePreview } from "~/lib/cm-live-preview";
@@ -466,38 +466,69 @@ export default function PlainEditor({
   }, [print]);
 
   /**
-   * The same chords as the Drive editor, through the same hook, because the two
-   * are meant to be one app and a shortcut that works in one and not the other
-   * is just a trap. The table is docs.$id's `runChord` minus what local has no
-   * equivalent for (the folder sidebar, the split nudge, the deck-to-editor
-   * jump); with the editor focused, G is CodeMirror's go-to-line instead. The
-   * Help panel lists these, so change its rows when a chord changes here.
+   * The same chords as the Drive editor, in the same registry (app/lib/chord.ts),
+   * because the two are meant to be one app and a shortcut that works in one and
+   * not the other is just a trap. Local has no folder sidebar, split nudge or
+   * deck-to-editor jump, so G stays CodeMirror's go-to-line. The Help panel lists
+   * whatever is registered.
    */
-  const runChord = useCallback(
-    (c: string): boolean => {
-      switch (c) {
-        case "s":
-          setMode((m) => {
-            const next = m === "edit" ? "suggest" : "edit";
-            remember(MODE_KEY, next);
-            return next;
-          });
-          return true;
-        case "1": setLayoutPersist("editor"); return true;
-        case "2": setLayoutPersist("split"); return true;
-        case "3": setLayoutPersist("preview"); return true;
-        case "4": setLayoutPersist("live"); return true;
-        case "d": setOutlineOpen((v) => { remember(OUTLINE_KEY, v ? "no" : "yes"); return !v; }); return true;
-        case "c": setReviewOpen((v) => { remember(REVIEW_KEY, v ? "no" : "yes"); return !v; }); return true;
-        case "p": if (!deck) return false; if (present.presenting) present.exit(); else present.enter(); return true;
-        case "n": if (present.presenting) present.toggleNotes(); return true;
-        case "/": window.dispatchEvent(new CustomEvent("mist-toggle-help")); return true;
-        default: return false;
-      }
+  useChords([
+    {
+      key: "s",
+      label: "Switch between editing and suggesting",
+      group: "view",
+      run: () =>
+        setMode((m) => {
+          const next = m === "edit" ? "suggest" : "edit";
+          remember(MODE_KEY, next);
+          return next;
+        }),
     },
-    [deck, present, setLayoutPersist],
-  );
-  useChordListener(runChord);
+    ...VIEW_BUTTONS.map((b) => ({ key: b.chord, label: b.label, group: "view" as const, run: () => setLayoutPersist(b.view) })),
+    ...(deck
+      ? [
+          {
+            key: "p",
+            label: "Present: the deck fills the window, notes in a floating window",
+            group: "view" as const,
+            run: () => (present.presenting ? present.exit() : present.enter()),
+          },
+          {
+            key: "n",
+            label: "Present: speaker notes window (notes, next slide, timer)",
+            group: "view" as const,
+            run: () => present.presenting && present.toggleNotes(),
+          },
+        ]
+      : []),
+    {
+      key: "d",
+      label: "Outline / slide list",
+      group: "panels",
+      run: () => setOutlineOpen((v) => { remember(OUTLINE_KEY, v ? "no" : "yes"); return !v; }),
+    },
+    {
+      key: "c",
+      label: "Comments panel",
+      group: "panels",
+      run: () => setReviewOpen((v) => { remember(REVIEW_KEY, v ? "no" : "yes"); return !v; }),
+    },
+    {
+      key: "m",
+      label: "Comment on the selection, or a point note at the cursor",
+      group: "editor",
+      deck: false,
+      run: () => { window.dispatchEvent(new CustomEvent("mist-comment")); },
+    },
+    {
+      key: "g",
+      label: "Go to line",
+      group: "editor",
+      deck: false,
+      fallback: true,
+      run: () => (view.current ? gotoLine(view.current) : false),
+    },
+  ]);
 
   /**
    * The file moved under us, and taking the change would lose something.
@@ -598,14 +629,9 @@ export default function PlainEditor({
             // one: this class keeps them on screen, set off as notes (app.css).
             EditorView.editorAttributes.of({ class: "inline-comments" }),
             wordCount,
+            // Registered Ctrl/Cmd+Alt chords (M comments), ahead of the keymaps below.
+            chordKeys,
             keymap.of([
-              {
-                key: "Mod-Alt-m",
-                run: () => {
-                  window.dispatchEvent(new CustomEvent("mist-comment"));
-                  return true;
-                },
-              },
               {
                 key: "Mod-s",
                 run: () => {

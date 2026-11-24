@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useDocument } from "~/lib/DocumentContext";
+import { useChords } from "~/lib/chord";
 
 export default function CommentInput() {
   const {
@@ -13,18 +14,18 @@ export default function CommentInput() {
   const [comment, setComment] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Keyboard shortcut: Ctrl/Cmd+Alt+M (as in the local editor), or Ctrl/Cmd+Shift+M.
-  // Match e.code: Shift makes e.key "M", and Alt on a Mac makes it "µ".
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && (e.altKey || e.shiftKey) && e.code === "KeyM") {
-        e.preventDefault();
-        onActiveChange(true);
-      }
-    };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, [onActiveChange]);
+  // Ctrl/Cmd+Alt+M, as in the local editor, through the one chord registry.
+  // Not from the deck: a comment there would land on whatever the editor last
+  // had selected; the deck's own Comment on slide button is the way.
+  useChords([
+    {
+      key: "m",
+      label: "Comment on the selection, or a point note at the cursor",
+      group: "editor",
+      deck: false,
+      run: () => onActiveChange(true),
+    },
+  ]);
 
   // Focus input when becoming active
   useEffect(() => {

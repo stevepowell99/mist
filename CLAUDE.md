@@ -98,7 +98,8 @@ Reuse these; never re-inline or redefine them.
 - `useFileSync` (`app/lib/useFileSync.ts`) holds every rule about a local file and its buffer; add a sync rule there, never in an editor. Each editor's `FileSyncBuffer.normalise` is the method to get right: read its paragraph in "Local-fs mode" first.
 - `printPdf` (`app/lib/pdf.server.ts`) prints both decks and documents. `shareLink`, `deckPdfLink` and `docPdfLink` (`ShareButton.tsx`) build the share and PDF links everywhere they appear.
 - The deck-key table (`app/lib/deck-keys.ts`) is every key a deck answers, listed by both the Help panel and the standalone page's `?` overlay; reveal's own help stays off. `VIEW_BUTTONS` (`Toolbar.tsx`) holds the view chords for the toolbar and the Help panel alike.
-- `searchScore` (`app/lib/fuzzy.ts`) ranks both pickers; `useChordListener` holds the `docs.$id` keyboard logic; `useSplitDrag` and `SplitGutter` are every vertical divider in both editors (editor/preview, and the outline's right edge).
+- **Every Ctrl/Cmd+Alt chord registers with `useChords` (`app/lib/chord.ts`)**, whoever handles it; the window, both CodeMirror editors (`chordKeys`) and the deck's forwarded `mist-key` all feed `runChord`, and the Help panel lists what is registered. Never add a keydown or `mist-key` listener of your own for a chord.
+- `searchScore` (`app/lib/fuzzy.ts`) ranks both pickers; `useSplitDrag` and `SplitGutter` are every vertical divider in both editors (editor/preview, and the outline's right edge).
 - **`app/styles/classes.json` is the single class catalogue.** The stepped numeric axes in `deck-base.css` are GENERATED from it: edit `classes.json`, then `npm run gen:styles`; never hand-edit between the GENERATED markers.
 - Client code never imports from `agents/` (it uses `cloudflare:` imports the browser lacks); shared types go in `app/shared/`. `~` resolves to `app/`; use `~/lib/foo`, not relative paths.
 

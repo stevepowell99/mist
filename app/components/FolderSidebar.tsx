@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useDocument } from "~/lib/DocumentContext";
+import { useChords } from "~/lib/chord";
 import DriveBrowser from "~/components/DriveBrowser";
 
 /**
@@ -52,17 +53,18 @@ export default function FolderSidebar() {
     setEverOpened(true);
   }, [cancelClose]);
 
-  // The layout's shortcut handler (Ctrl/Cmd+Alt+F, from any focus) fires this
-  // custom event; the open state lives here, so we toggle it here.
+  // The open state lives here, so the toggle does too: Ctrl/Cmd+Alt+F through
+  // the one chord registry, and the navbar's folder name by a custom event.
+  const toggle = useCallback(() => {
+    setPeek(false);
+    setPinned((v) => !v);
+    setEverOpened(true);
+  }, []);
+  useChords([{ key: "f", label: "Drive folder sidebar (Drive files)", group: "panels", run: toggle }]);
   useEffect(() => {
-    const toggle = () => {
-      setPeek(false);
-      setPinned((v) => !v);
-      setEverOpened(true);
-    };
     window.addEventListener("mist-toggle-folder", toggle);
     return () => window.removeEventListener("mist-toggle-folder", toggle);
-  }, []);
+  }, [toggle]);
 
   // Refresh the current file's details + sync log each time the panel opens, so
   // the modified time and the trail are current.

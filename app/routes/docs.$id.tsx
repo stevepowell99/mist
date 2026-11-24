@@ -9,7 +9,7 @@ import { getCloudflare } from "~/lib/cloudflare.server";
 import { isLocalMode } from "~/lib/google.server";
 import { mintDeckToken, authorizeDoc, type DriveSessionEnv } from "~/lib/drive-access.server";
 import { EditorView } from "@codemirror/view";
-import { useChordListener } from "~/lib/useChordListener";
+import { useChords } from "~/lib/chord";
 import { remember, remembered } from "~/lib/remembered";
 import { extractOutlineFromText } from "~/lib/outline";
 import { QuickOpenTrigger } from "~/components/QuickOpen";
@@ -45,7 +45,7 @@ import DocGate from "~/components/DocGate";
 import ShareOnOpen from "~/components/ShareOnOpen";
 import RememberRoom from "~/components/RememberRoom";
 import SlidesView, { isSlideDeck } from "~/components/SlidesView";
-import { type DocView } from "~/components/Toolbar";
+import { VIEW_BUTTONS, type DocView } from "~/components/Toolbar";
 import DocNavbar from "~/components/DocNavbar";
 import { deckSlideLayout, fileTitle } from "~/lib/slides-build";
 
@@ -530,16 +530,6 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
     window.history.replaceState(window.history.state, "", url.toString());
   }, [view]);
 
-  // One place runs every mod+alt shortcut, fed by three sources so focus never
-  // matters: the window (page/toolbar), the editor (a CodeMirror keydown
-  // handler), and the sandboxed slides iframe (which forwards chords by
-  // postMessage, since its keys never reach this window). Mode: S (edit or
-  // suggest). View: 1/2/3/4. Present: P, N notes. Panels: D outline, C comments,
-  // F Drive sidebar, G editor to the shown slide, / help. Resize: - =. J (quick
-  // open) and M (comment) have listeners of their own. The folder and help
-  // panels own their open state, so they are toggled by a custom event rather
-  // than reaching into them here. HelpPanel lists every chord: change its rows
-  // when one changes here.
   // Move the editor cursor to a slide's source heading. `focus` says whether to
   // pull focus back to the editor. y:"start" puts the heading near the top of the
   // viewport, rather than scrollIntoView's default of the nearest edge.
@@ -614,33 +604,45 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
     return () => window.removeEventListener("keydown", onKey, true);
   }, [printPdf]);
 
-  const runChord = useCallback(
-    (c: string): boolean => {
-      switch (c) {
-        // S toggles the binary edit/suggest mode (a no-op for suggest-only links).
-        case "s": toggleMode(); return true;
-        case "1": setView("editor"); return true;
-        case "2": if (isDesktop) setView("split"); return true;
-        case "3": setView("preview"); return true;
-        case "4": setView("live"); return true;
-        // D opens the outline / slide list (the slide-out TOC).
-        case "d": toggleOutline(); return true;
-        case "c": setAsideCollapsedPersist(!asideCollapsed); return true;
-        // Resize on - / = (not [ / ], which CodeMirror uses for fold-all).
-        case "-": nudgeSplit(-5); return true;
-        case "=": nudgeSplit(5); return true;
-        case "f": window.dispatchEvent(new CustomEvent("mist-toggle-folder")); return true;
-        case "g": syncEditorToSlideRef.current(); return true;
-        // P presents the deck (one mode: chrome off, notes in a window of their own).
-        case "p": if (!deck) return false; if (presentMode.presenting) presentMode.exit(); else presentMode.enter(); return true;
-        // N toggles the speaker notes (next slide + notes + timer) in Present.
-        case "n": if (presentMode.presenting) presentMode.toggleNotes(); return true;
-        case "/": window.dispatchEvent(new CustomEvent("mist-toggle-help")); return true;
-        default: return false;
-      }
-    },
-    [toggleMode, setView, isDesktop, setAsideCollapsedPersist, asideCollapsed, nudgeSplit, deck, presentMode, toggleOutline],
-  );
+  // This editor's Ctrl/Cmd+Alt chords, in the one chord registry (app/lib/chord.ts),
+  // which the window, the editor and the deck's iframe all feed, and which the
+  // Help panel lists. Panels that own their open state register their own: F the
+  // folder sidebar, J quick open, M the comment box, / the Help panel.
+  useChords([
+    // S toggles the binary edit/suggest mode (a no-op for suggest-only links).
+    { key: "s", label: "Switch between editing and suggesting", group: "view", run: toggleMode },
+    ...VIEW_BUTTONS.filter((b) => b.view !== "split" || isDesktop).map((b) => ({
+      key: b.chord,
+      label: b.label,
+      group: "view" as const,
+      run: () => setView(b.view),
+    })),
+    // Present is for decks: one mode, chrome off, notes in a window of their own.
+    ...(deck
+      ? [
+          {
+            key: "p",
+            label: "Present: the deck fills the window, notes in a floating window",
+            group: "view" as const,
+            run: () => (presentMode.presenting ? presentMode.exit() : presentMode.enter()),
+          },
+          {
+            key: "n",
+            label: "Present: speaker notes window (notes, next slide, timer)",
+            group: "view" as const,
+            run: () => presentMode.presenting && presentMode.toggleNotes(),
+          },
+        ]
+      : []),
+    // Resize on - / = (not [ / ], which CodeMirror uses for fold-all).
+    { key: "-", label: "Shrink the editor pane (split view)", group: "view", run: () => nudgeSplit(-5) },
+    { key: "=", label: "Grow the editor pane (split view)", group: "view", run: () => nudgeSplit(5) },
+    { key: "d", label: "Outline / slide list", group: "panels", run: toggleOutline },
+    { key: "c", label: "Comments panel", group: "panels", run: () => setAsideCollapsedPersist(!asideCollapsed) },
+    ...(deck
+      ? [{ key: "g", label: "Editor to the shown slide (or the divider arrow)", group: "panels" as const, run: () => syncEditorToSlideRef.current() }]
+      : []),
+  ]);
 
   // Ctrl/Cmd+S (and Ctrl/Cmd+Enter, dispatched by the editor) flushes a save to
   // the backend now and refreshes the deck preview. The deck rebuild is handled
@@ -650,8 +652,6 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
     window.addEventListener("mist-rebuild-deck", onSave);
     return () => window.removeEventListener("mist-rebuild-deck", onSave);
   }, [saveNow]);
-
-  useChordListener(runChord);
 
   const startDrag = useSplitDrag(contentRef, setEditorPct);
 
@@ -1058,7 +1058,6 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
                 onViewReady={handleViewReady}
                 onUserEdit={markUserEdited}
                 onImagePaste={drive ? uploadImage : undefined}
-                onShortcut={runChord}
                 className="flex flex-1 flex-col text-base"
               />
             </div>

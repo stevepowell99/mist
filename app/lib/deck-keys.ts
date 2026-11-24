@@ -3,8 +3,11 @@
  * drift: the Help panel's Deck section (the deck inside either editor, in the
  * preview and in Present) and the overlay that `?` opens on the standalone
  * /slides page (the share link). The deck runtime (`slides-runtime.ts`) answers
- * F, Esc, S, Ctrl/Cmd+P and the Ctrl/Cmd+Alt chords differently in the two
- * places, so a row names its place when it holds in only one.
+ * F, Esc, S, D, Ctrl/Cmd+P and the Ctrl/Cmd+Alt chords differently in the two
+ * places, so a row names its place when it holds in only one. The chords are
+ * not rows here: in an editor the deck passes them all on, and the Help panel
+ * lists them from the chord registry (app/lib/chord.ts) with the few that the
+ * deck cannot use.
  *
  * Reveal's own help overlay is off (`help:false`): it lists only reveal's
  * defaults, several of which gmist rebinds, and reveal 5 has no way to remove a
@@ -48,7 +51,6 @@ const DECK_KEYS: DeckKey[] = [
   { keys: ["Esc"], label: "Leave full screen", only: "page" },
   { keys: ["S"], label: "Speaker view: notes, next slide and timer, in a second window", only: "page" },
   { keys: [MOD, "P"], label: "Print the deck to PDF", only: "editor" },
-  { keys: [MOD, "Alt", "…"], label: "The view and panel shortcuts work with the focus in the deck too", only: "editor" },
   { keys: ["?", "or", "F1"], label: "These shortcuts" },
 ];
 

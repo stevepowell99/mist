@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { SLASH_HELP } from "~/lib/cm-slash";
 import { ICON_NAMES } from "~/lib/icons";
 import { MOD, deckKeys, type Shortcut } from "~/lib/deck-keys";
-import { VIEW_BUTTONS } from "~/components/Toolbar";
+import { chordWorksFromDeck, useChordList, useChords, type Chord, type ChordGroup } from "~/lib/chord";
 
 /**
  * Keyboard shortcuts and tips, opened by the ? button (bottom-right),
@@ -10,14 +10,15 @@ import { VIEW_BUTTONS } from "~/components/Toolbar";
  * `mist-help`, which opens the Shortcuts tab). Self-contained: owns its open
  * state and its shortcut, so the layout just renders it once.
  *
- * Every row mirrors a real handler, so check this list against them when a key
- * changes: the Ctrl/Cmd+Alt chords in each editor's `runChord` (docs.$id.tsx,
- * PlainEditor.tsx), QuickOpenTrigger (J), CommentInput and PlainEditor's keymap
- * (M), the CodeMirror keymaps in CodeMirrorEditor and PlainEditor (default,
- * search, history, fold, completion, cm-shortcuts), QuickOpen's own keys,
- * PresenterRail (the notes window) and usePresent. The view chords come from
- * VIEW_BUTTONS and the deck keys from the one deck-key table (deck-keys.ts),
- * which the standalone /slides page lists too.
+ * The Ctrl/Cmd+Alt rows are not written here: they are whatever is registered
+ * in the one chord registry (app/lib/chord.ts) on this page, each with its
+ * handler's own label, so the list cannot name a chord nothing handles, and the
+ * Deck section's row names the chords that do not work from the deck. The other
+ * rows mirror handlers that are not chords, so check them when a key changes:
+ * the CodeMirror keymaps in CodeMirrorEditor and PlainEditor (default, search,
+ * history, fold, completion, cm-shortcuts), QuickOpen's own keys, PresenterRail
+ * (the notes window) and usePresent. The deck keys come from the one deck-key
+ * table (deck-keys.ts), which the standalone /slides page lists too.
  *
  * On the first ten page loads in a browser it auto-shows, then flies down to the
  * ? button and pulses it, so a first-time viewer learns where help lives.
@@ -34,28 +35,16 @@ import { VIEW_BUTTONS } from "~/components/Toolbar";
 type Editor = "room" | "local";
 interface HelpRow extends Shortcut {
   only?: Editor;
+  /** Shown only while this chord is registered: a row about what it opens. */
+  with?: string;
 }
 
-const LAYOUT: HelpRow[] = [
-  { keys: [MOD, "Alt", "S"], label: "Switch between editing and suggesting" },
-  ...VIEW_BUTTONS.map((b) => ({ keys: [MOD, "Alt", b.chord], label: b.label })),
-  { keys: [MOD, "Alt", "P"], label: "Present: the deck fills the window, notes in a floating window" },
-  { keys: [MOD, "Alt", "N"], label: "Present: speaker notes window (notes, next slide, timer)" },
-  { keys: [MOD, "Alt", "-"], label: "Shrink the editor pane (split view)", only: "room" },
-  { keys: [MOD, "Alt", "="], label: "Grow the editor pane (split view)", only: "room" },
-  { keys: [MOD, "P"], label: "Print to PDF" },
-];
+const LAYOUT: HelpRow[] = [{ keys: [MOD, "P"], label: "Print to PDF" }];
 
 const PANELS: HelpRow[] = [
-  { keys: [MOD, "Alt", "F"], label: "Drive folder sidebar (Drive files)", only: "room" },
-  { keys: [MOD, "Alt", "J"], label: "Quick open: search Drive", only: "room" },
-  { keys: ["↑", "↓", "Enter"], label: "In Quick open: choose and open (Backspace in an empty box goes up a folder, Esc closes)", only: "room" },
-  { keys: [MOD, "click"], label: "In the Drive browser: open a file in a new tab", only: "room" },
-  { keys: [MOD, "Alt", "D"], label: "Outline / slide list" },
-  { keys: ["drag", "⠿"], label: "Outline: drag a row's grip to move its slide or section, subsections included" },
-  { keys: [MOD, "Alt", "C"], label: "Comments panel" },
-  { keys: [MOD, "Alt", "G"], label: "Editor to the shown slide (or the divider arrow)", only: "room" },
-  { keys: [MOD, "Alt", "/"], label: "This help" },
+  { keys: ["↑", "↓", "Enter"], label: "In Quick open: choose and open (Backspace in an empty box goes up a folder, Esc closes)", with: "j" },
+  { keys: [MOD, "click"], label: "In the Drive browser: open a file in a new tab", with: "f" },
+  { keys: ["drag", "⠿"], label: "Outline: drag a row's grip to move its slide or section, subsections included", with: "d" },
 ];
 
 const EDITOR: HelpRow[] = [
@@ -65,13 +54,11 @@ const EDITOR: HelpRow[] = [
   { keys: [MOD, "B"], label: "Bold (wrap **)" },
   { keys: [MOD, "I"], label: "Italic (wrap *)" },
   { keys: ["select", "* _ ` = \" ( ["], label: "Wrap the selection in the pair" },
-  { keys: [MOD, "Alt", "M"], label: "Comment on the selection, or a point note at the cursor" },
   { keys: [MOD, "click"], label: "Add another cursor" },
   { keys: [MOD, "D"], label: "Select the next occurrence" },
   { keys: [MOD, "Shift", "L"], label: "Select every occurrence" },
   { keys: ["Alt", "drag"], label: "Rectangular (column) select" },
   { keys: [MOD, "F"], label: "Find in the document (F3 next match, Shift+F3 previous)" },
-  { keys: [MOD, "Alt", "G"], label: "Go to line", only: "local" },
   { keys: ["@"], label: "Insert a citation (from a .bib)" },
   { keys: ["/"], label: "Slash menu: insert a structure" },
   { keys: ["Ctrl", "Space"], label: "Open the completion menu (slash, class, citation, icon)" },
@@ -92,8 +79,19 @@ const NOTES_WINDOW: HelpRow[] = [
   { keys: ["Esc"], label: "Leave Present" },
 ];
 
-const rowsFor = (rows: HelpRow[], editor: Editor): Shortcut[] =>
-  rows.filter((r) => !r.only || r.only === editor);
+const rowsFor = (rows: HelpRow[], editor: Editor, chords: readonly Chord[]): Shortcut[] =>
+  rows.filter((r) => (!r.only || r.only === editor) && (!r.with || chords.some((c) => c.key === r.with)));
+
+/** A registered chord as a row. */
+const chordRow = (c: Chord): Shortcut => ({ keys: [MOD, "Alt", c.key.toUpperCase()], label: c.label });
+const chordRows = (chords: readonly Chord[], group: ChordGroup) => chords.filter((c) => c.group === group).map(chordRow);
+
+/** The Deck section's chord row: which of the listed chords the deck passes on. */
+function deckChordRow(chords: readonly Chord[]): Shortcut {
+  const not = chords.filter((c) => !chordWorksFromDeck(c.key)).map((c) => c.key.toUpperCase());
+  const except = not.length ? `, except ${not.length > 1 ? `${not.slice(0, -1).join(", ")} and ${not[not.length - 1]}` : not[0]}` : "";
+  return { keys: [MOD, "Alt", "…"], label: `The ${MOD}+Alt shortcuts work with the focus in the deck too${except}` };
+}
 
 // Deck/doc settings read from the YAML frontmatter (top-level or nested under
 // `format: revealjs:`). Documented in docs/author-grammar.md.
@@ -145,11 +143,8 @@ const SHARE_MENU: { name: string; desc: string }[] = [
   { name: "Print to PDF", desc: "A deck's slides or a document's A4 pages as a PDF (also Ctrl/Cmd+P)." },
 ];
 
-const REVIEW: HelpRow[] = [
-  { keys: [MOD, "Alt", "M"], label: "Comment on the selection (or a point note)" },
-  { keys: [MOD, "Alt", "S"], label: "Turn Suggest mode on or off, for everyone in the document" },
-  { keys: [MOD, "Alt", "C"], label: "Open the comments panel" },
-];
+// The review chords, as registered (comment, edit or suggest, comments panel).
+const REVIEW_KEYS = ["m", "s", "c"];
 
 // Drive / files behaviour. Mirrors the Drive sidebar, autosave toggle, the
 // conflict-safe round-trip (CLAUDE.md 16 June note) and the @-citation picker.
@@ -390,12 +385,13 @@ export default function HelpPanel({ editor = "room" }: { editor?: Editor }) {
     return clearIntro;
   }, [clearIntro, local]);
 
+  // Ctrl/Cmd+Alt+/ from any focus, deck included, through the chord registry.
+  useChords([
+    { key: "/", label: "This help", group: "panels", run: () => (openRef.current ? dismiss() : show()) },
+  ]);
+  const chords = useChordList();
+
   useEffect(() => {
-    // Toggled by the layout's shortcut handler (Ctrl/Cmd+Alt+/, from any focus).
-    const toggle = () => {
-      if (openRef.current) dismiss();
-      else show();
-    };
     // ? in the deck: its sandboxed iframe posts this rather than showing
     // reveal's own key list, which is wrong for a gmist deck.
     const onMsg = (e: MessageEvent) => {
@@ -409,11 +405,9 @@ export default function HelpPanel({ editor = "room" }: { editor?: Editor }) {
       e.stopImmediatePropagation();
       dismiss();
     };
-    window.addEventListener("mist-toggle-help", toggle);
     window.addEventListener("message", onMsg);
     window.addEventListener("keydown", onKey, true);
     return () => {
-      window.removeEventListener("mist-toggle-help", toggle);
       window.removeEventListener("message", onMsg);
       window.removeEventListener("keydown", onKey, true);
     };
@@ -501,13 +495,25 @@ export default function HelpPanel({ editor = "room" }: { editor?: Editor }) {
             {tab === "shortcuts" && (
               <div className="grid items-start gap-4 px-5 py-4 sm:grid-cols-2">
                 <div className="flex flex-col gap-4">
-                  <Section title="View &amp; mode" items={rowsFor(LAYOUT, editor)} />
-                  <Section title="Panels" items={rowsFor(PANELS, editor)} />
-                  <Section title="Editor" items={rowsFor(EDITOR, editor)} />
+                  <Section
+                    title="View &amp; mode"
+                    items={[...chordRows(chords, "view"), ...rowsFor(LAYOUT, editor, chords)]}
+                  />
+                  <Section
+                    title="Panels"
+                    items={[...chordRows(chords, "panels"), ...rowsFor(PANELS, editor, chords)]}
+                  />
+                  <Section
+                    title="Editor"
+                    items={[...rowsFor(EDITOR, editor, chords), ...chordRows(chords, "editor")]}
+                  />
                 </div>
                 <div className="flex flex-col gap-4">
-                  <Section title="Deck (focus in the preview or Present)" items={rowsFor(DECK, editor)} />
-                  <Section title="Notes window (in Present)" items={rowsFor(NOTES_WINDOW, editor)} />
+                  <Section
+                    title="Deck (focus in the preview or Present)"
+                    items={[...rowsFor(DECK, editor, chords), deckChordRow(chords)]}
+                  />
+                  <Section title="Notes window (in Present)" items={rowsFor(NOTES_WINDOW, editor, chords)} />
                   <Group title="Tips">
                     <ul className="list-disc space-y-1 pl-4 text-base text-ink/75">
                       {TIPS.filter((t) => !t.only || t.only === editor).map((t) => (
@@ -633,7 +639,7 @@ export default function HelpPanel({ editor = "room" }: { editor?: Editor }) {
                     comments panel.
                   </p>
                   <div className="divide-y divide-border/60 sm:w-1/2">
-                    {REVIEW.map((s) => (
+                    {REVIEW_KEYS.flatMap((k) => chords.filter((c) => c.key === k).map(chordRow)).map((s) => (
                       <Row key={s.label} {...s} />
                     ))}
                   </div>

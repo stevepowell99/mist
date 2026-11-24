@@ -5,6 +5,7 @@ import GoogleSignIn from "~/components/GoogleSignIn";
 import { importDriveFile, readJson } from "~/lib/drive-open";
 import { getRecentOpened, addRecentOpened, type RecentItem } from "~/lib/drive-recent";
 import { searchScore } from "~/lib/fuzzy";
+import { useChords } from "~/lib/chord";
 import type { DriveKind } from "~/lib/google.server";
 import type { SearchResult } from "~/routes/drive.search";
 
@@ -416,32 +417,13 @@ export function QuickOpen({
  * Mounts the palette as a Cmd/Ctrl+Alt+J overlay anywhere it is dropped in. Plain
  * Ctrl/Cmd-K is unusable in a browser tab (Chrome steals it for the address-bar
  * search); Ctrl+Alt+J keeps the in-page overlay distinct from the OS launcher
- * hotkey (Ctrl+Alt+K), which a global tool grabs to open a fresh /go window. The
- * listener is capture-phase so it fires even when CodeMirror has focus. Drop one
+ * hotkey (Ctrl+Alt+K), which a global tool grabs to open a fresh /go window.
+ * The chord is in the one chord registry (app/lib/chord.ts), so it works with
+ * the focus on the page, in the editor or in a deck. Drop one
  * <QuickOpenTrigger/> into a page; it renders nothing until open.
  */
 export function QuickOpenTrigger() {
   const [open, setOpen] = useState(false);
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      // e.code (physical key) survives the Windows Ctrl+Alt = AltGr remap that
-      // can change e.key on some layouts.
-      if ((e.metaKey || e.ctrlKey) && e.altKey && !e.shiftKey && (e.key === "j" || e.key === "J" || e.code === "KeyJ")) {
-        e.preventDefault();
-        setOpen((v) => !v);
-      }
-    };
-    // The same chord with the focus in a deck, whose iframe forwards it.
-    const onMsg = (e: MessageEvent) => {
-      const d = e.data as { type?: string; chord?: string } | null;
-      if (d?.type === "mist-key" && d.chord === "j") setOpen((v) => !v);
-    };
-    window.addEventListener("keydown", onKey, true);
-    window.addEventListener("message", onMsg);
-    return () => {
-      window.removeEventListener("keydown", onKey, true);
-      window.removeEventListener("message", onMsg);
-    };
-  }, []);
+  useChords([{ key: "j", label: "Quick open: search Drive", group: "panels", run: () => setOpen((v) => !v) }]);
   return open ? <QuickOpen onClose={() => setOpen(false)} /> : null;
 }
