@@ -315,7 +315,9 @@ export default function HelperPanel({
           placeholder="Ask, or ask for a change · Enter to send · Shift+Enter for a new line"
           className="w-full resize-none border border-border bg-paper px-2 py-1.5 text-sm text-ink outline-none focus:border-ink"
         />
-        <div className="mt-1 flex items-center gap-2">
+        {/* Right padding clears the Help panel's fixed ? button, which sits over
+            this corner of the window. */}
+        <div className="mt-1 flex items-center gap-2 pr-12">
           {mode === "suggest" && <span className="text-xs text-muted">Suggesting: changes arrive as tracked changes</span>}
           {busySince !== null ? (
             <button
