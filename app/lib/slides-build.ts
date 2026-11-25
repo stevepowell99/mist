@@ -444,26 +444,37 @@ export function convertDashCallouts(md: string): string {
   return out.join("\n");
 }
 
+/** What a line is to `convertDivs`: a fenced-div opener with the attributes it
+ *  gives the div, a closer, or neither. The one reading of a `:::` line, shared
+ *  with the live preview's split of a slide into its parts, so the two pair
+ *  fences alike. */
+export function divFence(line: string): { classes: string[]; id: string | null; style: string } | "close" | null {
+  const t = line.trim();
+  if (!/^:::+/.test(t)) return null;
+  const braced = t.match(/^:::+\s*\{([^}]*)\}\s*$/);
+  const bare = t.match(/^:::+\s+(\S.*)$/);
+  if (!braced && !bare) return "close";
+  const attr = (braced ? braced[1] : bare![1]) ?? "";
+  const parsed = parseAttrs(attr);
+  let classes = parsed.classes;
+  if (!classes.length) classes = attr.split(/\s+/).filter((w) => /^[\w-]+$/.test(w));
+  return { classes, id: parsed.id, style: parsed.style };
+}
+
 /** Turn Quarto `::: {...}` fenced divs into real div/aside elements. */
 export function convertDivs(md: string): string {
   const out: string[] = [];
   const stack: string[] = [];
   for (const line of md.split("\n")) {
-    const t = line.trim();
-    if (!/^:::+/.test(t)) {
+    const fence = divFence(line);
+    if (!fence) {
       out.push(line);
       continue;
     }
-    const braced = t.match(/^:::+\s*\{([^}]*)\}\s*$/);
-    const bare = t.match(/^:::+\s+(\S.*)$/);
-    if (braced || bare) {
-      const attr = (braced ? braced[1] : bare![1]) ?? "";
-      const parsed = parseAttrs(attr);
-      let classes = parsed.classes;
-      if (!classes.length) classes = attr.split(/\s+/).filter((w) => /^[\w-]+$/.test(w));
-      const tag = classes.includes("notes") ? "aside" : "div";
+    if (fence !== "close") {
+      const tag = fence.classes.includes("notes") ? "aside" : "div";
       stack.push(tag);
-      out.push("", `<${tag}${attrString(classes, parsed.id, parsed.style)}>`, "");
+      out.push("", `<${tag}${attrString(fence.classes, fence.id, fence.style)}>`, "");
     } else if (stack.length) {
       out.push("", `</${stack.pop()}>`, "");
     }

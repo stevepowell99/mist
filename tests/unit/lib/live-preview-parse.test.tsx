@@ -166,6 +166,77 @@ describe("live preview over a deck", () => {
       view.destroy();
     }
   });
+
+  const mount = (doc: string, anchor: number) =>
+    new EditorView({
+      state: EditorState.create({
+        doc,
+        selection: { anchor },
+        extensions: [markdown({ base: markdownLanguage }), livePreview()],
+      }),
+      parent: document.body,
+    });
+
+  const partsDeck =
+    "---\nformat: revealjs\n---\n\n# Slide one\n\nIntro words.\n\n::: {.card}\nIn the card.\n:::\n\n" +
+    '<svg viewBox="0 0 10 10"><rect width="10" height="10"/></svg>\n\n## Slide two\n\nsecond\n';
+
+  it("in the slide the cursor is in, keeps every part but the one it touches drawn", () => {
+    const view = mount(partsDeck, partsDeck.indexOf("Intro"));
+    try {
+      expect(view.dom.querySelectorAll(".cm-lp-slide")).toHaveLength(1);
+      expect(view.dom.querySelectorAll(".cm-lp-part")).toHaveLength(2);
+      expect(view.dom.querySelector(".cm-lp-part .card")).toBeTruthy();
+      expect(view.dom.querySelector(".cm-lp-part svg")).toBeTruthy();
+      expect(view.dom.textContent).not.toContain("::: {.card}");
+
+      // Into the card: it alone turns to source, and the SVG stays drawn.
+      view.dispatch({ selection: { anchor: partsDeck.indexOf("In the card") } });
+      expect(view.dom.querySelectorAll(".cm-lp-part")).toHaveLength(1);
+      expect(view.dom.textContent).toContain("::: {.card}");
+      expect(view.dom.querySelector(".cm-lp-part svg")).toBeTruthy();
+
+      // Out of the slide: one card again.
+      view.dispatch({ selection: { anchor: partsDeck.indexOf("second") } });
+      expect(view.dom.querySelectorAll(".cm-lp-part")).toHaveLength(0);
+      expect(view.dom.querySelectorAll(".cm-lp-slide")).toHaveLength(1);
+    } finally {
+      view.destroy();
+    }
+  });
+
+  it("a click on a part lands in its source after text was typed above it", () => {
+    const view = mount(partsDeck, partsDeck.indexOf("Intro"));
+    try {
+      const before = view.dom.querySelector(".cm-lp-part")!;
+      view.dispatch({ changes: { from: partsDeck.indexOf("Intro"), insert: "More. " } });
+      // The part's DOM is kept across the edit (its source did not change), so
+      // only a position read at click time is still right.
+      const part = view.dom.querySelector(".cm-lp-part")!;
+      expect(part).toBe(before);
+      part.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true, clientY: 0 }));
+      expect(view.state.selection.main.head).toBe(view.state.doc.toString().indexOf("::: {.card}"));
+    } finally {
+      view.destroy();
+    }
+  });
+
+  it("a table inside a drawn part is drawn by the part, never twice", () => {
+    const tableDeck =
+      "---\nformat: revealjs\n---\n\n# Slide one\n\nWords.\n\n::: {.panel}\n\n" +
+      "| a | b |\n| --- | --- |\n| 1 | 2 |\n\n:::\n";
+    const view = mount(tableDeck, tableDeck.indexOf("Words"));
+    try {
+      expect(view.dom.querySelectorAll(".cm-lp-part table")).toHaveLength(1);
+      expect(view.dom.querySelectorAll(".cm-lp-table")).toHaveLength(0);
+      // In the panel but not the table: the table is a block of its own again.
+      view.dispatch({ selection: { anchor: tableDeck.indexOf("::: {.panel}") } });
+      expect(view.dom.querySelectorAll(".cm-lp-part")).toHaveLength(0);
+      expect(view.dom.querySelectorAll(".cm-lp-table")).toHaveLength(1);
+    } finally {
+      view.destroy();
+    }
+  });
 });
 
 describe("live preview over a document with an image", () => {

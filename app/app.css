@@ -479,9 +479,26 @@ body {
   color: var(--ink, var(--color-ink));
   box-shadow: 0 1px 4px color-mix(in srgb, var(--color-ink) 10%, transparent);
 }
+/* One part of the slide being edited (a fenced div, an inline SVG), drawn while
+   the cursor is elsewhere on the slide. It takes the slide's fill and ink, so a
+   dark theme's light text stays readable, without the card's frame. */
+.cm-lp-part {
+  margin: 0.4em 0;
+  padding: 0.5em 0.75em;
+  border-radius: 0.35em;
+  background: var(--slide-bg, var(--color-paper));
+  color: var(--ink, var(--color-ink));
+  cursor: text;
+}
+/* A block placed with `top=`/`left=` floats on the slide; alone in the editor it
+   has no slide to float on, so it sits in the part's flow. */
+.cm-lp-part [style*="position:absolute"] {
+  position: static !important;
+}
 /* The click-position markers `slideLiveHtml` inserts (source-anchors.ts):
    read by `slideClickPos`, never shown. */
-.cm-lp-slide br[data-pos] {
+.cm-lp-slide br[data-pos],
+.cm-lp-part br[data-pos] {
   display: none;
 }
 

@@ -16,7 +16,7 @@ import { marked } from "marked";
 import DOMPurify from "dompurify";
 import { runMermaid } from "./mermaid";
 import { criticSpans } from "./critic";
-import { CALLOUT_ALIAS, isSlideDeck, slideSpans, stripFrontmatter } from "./slides-build";
+import { CALLOUT_ALIAS, divFence, isSlideDeck, slideSpans, stripFrontmatter } from "./slides-build";
 import { slideLiveHtml } from "./slide-thumb";
 import { citationSpans, type BibLibrary } from "./citations";
 import { bibOf } from "./cm-citations";
@@ -660,11 +660,12 @@ const liveHighlight = HighlightStyle.define([
  * whole editing story: the table becomes its own source, you edit the pipes, you
  * move away and it is a table again. Clicking the rendered block does the same,
  * because a widget swallows the click that would otherwise place the cursor. A
- * slide is the same rule at a coarser grain, so editing, commenting and
- * suggesting all still happen on the real markdown once you are in one; only
- * structural changes (columns, overlays, backgrounds) want Split or Present,
- * which run the full deck grammar through reveal.js rather than this widget's
- * plain HTML render.
+ * slide follows the same rule at two grains: a slide the cursor is outside is
+ * one card, and the slide it is in shows as source with each of its parts (a
+ * fenced div, a raw HTML or SVG block) still rendered until the cursor touches
+ * that part (`slideParts`). Editing, commenting and suggesting therefore all
+ * happen on the real markdown; Split and Present run the full deck grammar
+ * through reveal.js, which these widgets' plain HTML render does not.
  */
 class BlockWidget extends WidgetType {
   constructor(
@@ -721,36 +722,46 @@ class BlockWidget extends WidgetType {
 }
 
 /**
- * A whole slide, rendered the house grammar as global CSS the way the library
- * gallery and the presenter rail already render one (no reveal iframe needed):
- * a `.preview` card in place of the slide's source, via `slideLiveHtml`, the
- * variant of that render carrying `data-pos` anchors (for `slideClickPos`
- * below) and CriticMarkup rendered rather than left as literal braces. Cursor
- * or click into it and it drops back to plain markdown, the same
- * reveal-on-touch rule as a table or a mermaid fence, so ordinary edits,
- * comments and suggestions happen on the real text underneath. Structural
- * work (columns, overlays, backgrounds) still wants Split or Present, which
- * run the full deck grammar through reveal.js itself.
+ * A whole slide, or one part of the slide being edited, rendered the house
+ * grammar as global CSS the way the library gallery and the presenter rail
+ * already render one (no reveal iframe needed): a `.preview` box in place of
+ * the source, via `slideLiveHtml`, the variant of that render carrying
+ * `data-pos` anchors (for `slideClickPos` below) and CriticMarkup rendered
+ * rather than left as literal braces. A slide is framed as a card; a part
+ * (`slideParts`) takes the slide's fill and ink without the frame. Cursor or
+ * click into either and it drops back to plain markdown, the same
+ * reveal-on-touch rule as a table or a mermaid fence.
  */
 class SlideWidget extends WidgetType {
   constructor(
     readonly source: string,
     readonly from: number,
     readonly bib: BibLibrary | null,
+    readonly part = false,
   ) {
     super();
   }
   eq(other: SlideWidget) {
-    return other.source === this.source && other.bib === this.bib;
+    return other.source === this.source && other.bib === this.bib && other.part === this.part;
   }
   toDOM(view: EditorView) {
     const wrap = document.createElement("div");
-    wrap.className = "cm-lp-slide preview font-serif";
+    wrap.className = `${this.part ? "cm-lp-part" : "cm-lp-slide"} preview font-serif`;
     wrap.innerHTML = slideLiveHtml(this.source, this.bib);
     void runMermaid(wrap);
     wrap.addEventListener("mousedown", (e) => {
       e.preventDefault();
-      const pos = slideClickPos(wrap, e.clientY, this.from, this.source.length);
+      // The widget's start is read from the DOM at click time, as for a table:
+      // `eq` keeps this DOM, and this listener's `this.from`, after an edit
+      // above has moved the source, which a part beside the text being typed
+      // sees on every keystroke.
+      let from: number;
+      try {
+        from = view.posAtDOM(wrap);
+      } catch {
+        from = this.from;
+      }
+      const pos = slideClickPos(wrap, e.clientY, from, this.source.length);
       view.dispatch({ selection: { anchor: pos }, scrollIntoView: false });
       view.focus();
     });
@@ -761,7 +772,7 @@ class SlideWidget extends WidgetType {
     // widget is in the DOM. Scaled with the source rather than a flat number,
     // so a short slide and a dense one are not equally (mis)guessed before
     // that first measurement lands.
-    return 120 + 22 * this.source.split("\n").length;
+    return (this.part ? 40 : 120) + 22 * this.source.split("\n").length;
   }
   // As for a table/mermaid block: the widget places the cursor itself.
   ignoreEvent(e: Event) {
@@ -906,40 +917,183 @@ const blockField = StateField.define<DecorationSet>({
   provide: (f) => EditorView.decorations.from(f),
 });
 
-/** Slide spans the cursor is not touching, in full-document offsets: what
- *  `buildBlocks` renders as `SlideWidget`s instead of raw markdown. Empty, for
- *  anything that isn't a deck (`isSlideDeck` is the same check the rest of the
- *  app uses), so a plain document never runs this at all. */
-function hiddenSlides(state: EditorState, text: string): { from: number; to: number; widget: SlideWidget }[] {
+export interface SlidePart {
+  from: number;
+  to: number;
+  text: string;
+}
+
+const CODE_FENCE = /^ {0,3}(`{3,}|~{3,})/;
+/** A raw HTML block's first line: a tag at the start of the line. */
+const HTML_START = /^ {0,3}<([A-Za-z][\w-]*)/;
+/** Phrasing elements, which open a paragraph rather than a block of their own,
+ *  and the two elements that draw nothing (a deck hoists its `<style>` blocks). */
+const NOT_A_PART_TAG =
+  /^(?:a|abbr|b|br|cite|code|del|em|i|ins|kbd|mark|q|s|small|span|strong|sub|sup|time|u|var|style|script)$/i;
+
+/**
+ * The parts of a slide the cursor is in that stay rendered: each fenced div
+ * (`:::`) and each raw HTML block (an inline `<svg>`, say) that no selection
+ * range touches, edges included, with positions `base` plus the offset in
+ * `text`. A div the selection is inside is source, and its own parts are found
+ * the same way, so in a two-column slide the column being edited is source and
+ * the other column stays drawn. Everything else on the slide is source with the
+ * line-level live preview over it: headings, paragraphs and lists, images
+ * (`collect`), and tables and mermaid fences (`blockRanges`).
+ *
+ * The split follows the render. Fences pair through `divFence`, the reading
+ * `convertDivs` uses, and a fence inside a code block is code. A speaker-notes
+ * div is never a part, since the render hides it. An HTML block starts where a
+ * paragraph could not continue (CommonMark: a tag on its own line cannot
+ * interrupt a paragraph) and runs to its closing tag, blank lines inside an SVG
+ * included, then on to the next blank line or fence, as the markdown renderer
+ * reads it.
+ */
+export function slideParts(text: string, sel: readonly { from: number; to: number }[], base = 0): SlidePart[] {
+  const lines = text.split("\n");
+  const starts: number[] = [];
+  for (let p = 0, i = 0; i < lines.length; i++) {
+    starts.push(p);
+    p += lines[i].length + 1;
+  }
+  const lineEnd = (i: number) => starts[i] + lines[i].length;
+  const touched = (i: number, j: number) =>
+    sel.some((r) => r.from <= base + lineEnd(j) && r.to >= base + starts[i]);
+  const out: SlidePart[] = [];
+
+  /** Index of the line closing the code fence opened at line `i`, or the last
+   *  line of the region when it never closes. */
+  const codeEnd = (i: number, hi: number, mark: string) => {
+    const close = new RegExp(`^ {0,3}${mark[0] === "`" ? "`" : "~"}{3,}`);
+    for (let j = i + 1; j < hi; j++) if (close.test(lines[j])) return j;
+    return hi - 1;
+  };
+
+  /** Last line of the HTML block opened by tag `name` at line `i`. */
+  const htmlEnd = (i: number, hi: number, name: string) => {
+    let j = i;
+    // To the line holding the matching close tag, counting nested ones, over
+    // the joined text so an open tag split across lines still counts.
+    const region = text.slice(starts[i], lineEnd(hi - 1));
+    const tags = new RegExp(`<(/?)${name}(?=[\\s/>])[^>]*?(/?)>`, "gi");
+    let depth = 0;
+    for (const m of region.matchAll(tags)) {
+      if (m[1]) depth--;
+      else if (!m[2]) depth++;
+      if (depth <= 0) {
+        const at = starts[i] + (m.index ?? 0) + m[0].length;
+        while (j + 1 < hi && starts[j + 1] <= at) j++;
+        break;
+      }
+    }
+    while (j + 1 < hi && lines[j + 1].trim() !== "" && !divFence(lines[j + 1])) j++;
+    return j;
+  };
+
+  const scan = (lo: number, hi: number) => {
+    let inPara = false;
+    for (let i = lo; i < hi; ) {
+      const line = lines[i];
+      const code = CODE_FENCE.exec(line);
+      if (code) {
+        i = codeEnd(i, hi, code[1]) + 1;
+        inPara = false;
+        continue;
+      }
+      const fence = divFence(line);
+      if (fence && fence !== "close") {
+        let depth = 1;
+        let j = i + 1;
+        for (; j < hi; j++) {
+          const c = CODE_FENCE.exec(lines[j]);
+          if (c) {
+            j = codeEnd(j, hi, c[1]);
+            continue;
+          }
+          const f = divFence(lines[j]);
+          if (f === "close" && --depth === 0) break;
+          if (f && f !== "close") depth++;
+        }
+        // An unclosed div runs to the end, where `convertDivs` closes it.
+        const end = Math.min(j, hi - 1);
+        if (!fence.classes.includes("notes")) {
+          if (!touched(i, end)) out.push({ from: base + starts[i], to: base + lineEnd(end), text: text.slice(starts[i], lineEnd(end)) });
+          else scan(i + 1, j < hi ? j : hi);
+        }
+        i = end + 1;
+        inPara = false;
+        continue;
+      }
+      if (fence === "close" || line.trim() === "") {
+        // A blank line, or a closer with no div open, which the render drops.
+        i++;
+        inPara = false;
+        continue;
+      }
+      const tag = HTML_START.exec(line);
+      if (!inPara && tag && !NOT_A_PART_TAG.test(tag[1])) {
+        const end = htmlEnd(i, hi, tag[1]);
+        if (!touched(i, end)) out.push({ from: base + starts[i], to: base + lineEnd(end), text: text.slice(starts[i], lineEnd(end)) });
+        i = end + 1;
+        inPara = false;
+        continue;
+      }
+      // A heading is one line; anything else may be a paragraph the next line continues.
+      inPara = !/^ {0,3}#{1,6}(\s|$)/.test(line);
+      i++;
+    }
+  };
+  scan(0, lines.length);
+  return out;
+}
+
+/** What a deck draws in place of its source, in full-document offsets: each
+ *  slide the cursor is not touching as one card, and in each slide it is
+ *  touching, the parts it is not touching (`slideParts`). Empty for anything
+ *  that isn't a deck (`isSlideDeck` is the same check the rest of the app
+ *  uses), so a plain document never runs this at all. */
+function slideBlocks(state: EditorState, text: string): { from: number; to: number; widget: SlideWidget }[] {
   if (!isSlideDeck(text)) return [];
   const { body } = stripFrontmatter(text);
   const bodyOffset = text.length - body.length;
-  const sel = state.selection.ranges;
+  const sel = state.selection.ranges.map((r) => ({ from: r.from, to: r.to }));
   const bib = bibOf(state);
   const out: { from: number; to: number; widget: SlideWidget }[] = [];
   for (const span of slideSpans(body)) {
     if (!span.text.trim()) continue;
     const from = bodyOffset + span.from;
     const to = bodyOffset + span.to;
-    if (sel.some((r) => r.from <= to && r.to >= from)) continue;
-    out.push({ from, to, widget: new SlideWidget(span.text, from, bib) });
+    if (!sel.some((r) => r.from <= to && r.to >= from)) {
+      out.push({ from, to, widget: new SlideWidget(span.text, from, bib) });
+      continue;
+    }
+    for (const p of slideParts(span.text, sel, from)) {
+      out.push({ from: p.from, to: p.to, widget: new SlideWidget(p.text, p.from, bib, true) });
+    }
   }
   return out;
 }
 
 function buildBlocks(state: EditorState): DecorationSet {
-  const slides = hiddenSlides(state, state.doc.toString());
-  // A table or mermaid fence already inside a hidden slide is rendered as part
-  // of that slide's own HTML (`slideThumbHtml` runs the same grammar), so it
-  // must not also get its own widget: two block-replace decorations from this
-  // field covering the same range is a genuine conflict, not just redundant.
-  const blocks = blockRanges(state).filter(
-    (b) => !slides.some((s) => b.from >= s.from && b.to <= s.to),
-  );
+  const slides = slideBlocks(state, state.doc.toString());
+  // A table or mermaid fence inside a rendered slide or part is drawn by that
+  // widget's own HTML (`slideLiveHtml` runs the same grammar), so it must not
+  // also get its own widget: two block-replace decorations from this field over
+  // the same lines are a genuine conflict, not just redundant. The parser and
+  // `slideParts` can disagree on where a block ends (a table row runs on into a
+  // `:::` line, say), so any overlap at all counts.
+  const blocks = blockRanges(state).filter((b) => !slides.some((s) => b.from <= s.to && b.to >= s.from));
   const items: { from: number; to: number; widget: WidgetType }[] = [...slides, ...blocks];
   items.sort((a, b) => a.from - b.from);
   const builder = new RangeSetBuilder<Decoration>();
-  for (const it of items) builder.add(it.from, it.to, Decoration.replace({ widget: it.widget, block: true }));
+  let lastTo = -1;
+  for (const it of items) {
+    // Kept total whatever the inputs: an overlapping range would make the
+    // builder throw, and a throwing state field takes the editor with it.
+    if (it.from <= lastTo) continue;
+    builder.add(it.from, it.to, Decoration.replace({ widget: it.widget, block: true }));
+    lastTo = it.to;
+  }
   return builder.finish();
 }
 
