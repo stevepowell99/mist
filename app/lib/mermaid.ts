@@ -43,8 +43,10 @@ function loadMermaid(): Promise<MermaidApi> {
  *  not by the class on its code block. Matching only the class missed real
  *  diagrams (a fence written Quarto-style as ```{mermaid} carries the class
  *  `language-{mermaid}`, and any renderer or sanitizer that drops the class takes
- *  the diagram with it): the block then rendered as its own source text. */
-const MERMAID_START =
+ *  the diagram with it): the block then rendered as its own source text. Also
+ *  read by the editor (a fence with no language is still a diagram to live
+ *  preview and to the default folds). */
+export const MERMAID_START =
   /^\s*(?:%%\{|graph\s|flowchart\s|sequenceDiagram\b|classDiagram\b|stateDiagram(?:-v2)?\b|erDiagram\b|journey\b|gantt\b|pie\b|mindmap\b|timeline\b|quadrantChart\b|gitGraph\b|xychart-beta\b|block-beta\b|sankey-beta\b|C4Context\b)/;
 
 function isMermaidBlock(code: Element): boolean {

@@ -14,7 +14,8 @@ import { tags } from "@lezer/highlight";
 import type { SyntaxNodeRef, Tree } from "@lezer/common";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
-import { runMermaid } from "./mermaid";
+import { MERMAID_START, runMermaid } from "./mermaid";
+import { closeTagEnd } from "./html-tags";
 import { criticSpans } from "./critic";
 import { CALLOUT_ALIAS, divFence, isSlideDeck, slideSpans, stripFrontmatter } from "./slides-build";
 import { slideLiveHtml } from "./slide-thumb";
@@ -892,11 +893,6 @@ function blockRanges(state: EditorState): { from: number; to: number; widget: Bl
   return out;
 }
 
-/** Mermaid's own opening keywords, so a fence with no language is still read as
- *  a diagram (the same rule `app/lib/mermaid.ts` applies in the preview). */
-const MERMAID_START =
-  /^\s*(?:%%\{|graph\s|flowchart\s|sequenceDiagram\b|classDiagram\b|stateDiagram(?:-v2)?\b|erDiagram\b|journey\b|gantt\b|pie\b|mindmap\b|timeline\b|quadrantChart\b|gitGraph\b|xychart-beta\b|block-beta\b|sankey-beta\b|C4Context\b)/;
-
 const blockField = StateField.define<DecorationSet>({
   create: (state) => buildBlocks(state),
   update(value, tr) {
@@ -969,23 +965,12 @@ export function slideParts(text: string, sel: readonly { from: number; to: numbe
     return hi - 1;
   };
 
-  /** Last line of the HTML block opened by tag `name` at line `i`. */
+  /** Last line of the HTML block opened by tag `name` at line `i`: the line
+   *  holding its matching close tag, then on to the next blank line or fence. */
   const htmlEnd = (i: number, hi: number, name: string) => {
     let j = i;
-    // To the line holding the matching close tag, counting nested ones, over
-    // the joined text so an open tag split across lines still counts.
-    const region = text.slice(starts[i], lineEnd(hi - 1));
-    const tags = new RegExp(`<(/?)${name}(?=[\\s/>])[^>]*?(/?)>`, "gi");
-    let depth = 0;
-    for (const m of region.matchAll(tags)) {
-      if (m[1]) depth--;
-      else if (!m[2]) depth++;
-      if (depth <= 0) {
-        const at = starts[i] + (m.index ?? 0) + m[0].length;
-        while (j + 1 < hi && starts[j + 1] <= at) j++;
-        break;
-      }
-    }
+    const at = closeTagEnd(text, starts[i], name, lineEnd(hi - 1));
+    if (at >= 0) while (j + 1 < hi && starts[j + 1] <= at) j++;
     while (j + 1 < hi && lines[j + 1].trim() !== "" && !divFence(lines[j + 1])) j++;
     return j;
   };
