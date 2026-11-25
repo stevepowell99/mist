@@ -364,3 +364,19 @@ export async function gitCommit(
     body: JSON.stringify({ message: message ?? "" }),
   });
 }
+
+/** One helper turn, run by the sidecar as headless Claude Code (see
+ *  scripts/helper-claude.mjs). `signal` is the browser's request, so Stop in
+ *  the panel reaches the child process. */
+export async function helperAsk(
+  token: string,
+  body: { system: string; prompt: string },
+  signal?: AbortSignal,
+): Promise<{ text: string; durationMs: number; model: string }> {
+  return call(token, "/ask", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    signal,
+  });
+}

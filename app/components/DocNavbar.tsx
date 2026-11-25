@@ -5,6 +5,7 @@ import { APP_NAME } from "~/shared/constants";
 import { useTheme, type Theme } from "~/lib/useTheme";
 import {
   IconComments,
+  IconHelper,
   IconMore,
   IconOutline,
   IconPresent,
@@ -38,7 +39,8 @@ export interface NavMenuItem {
  * - how you are working on it: Editing or Suggesting, and the four views;
  * - what you can do with it: Present (decks), Share, and a More menu holding
  *   the occasional actions (print, the library, the colour theme);
- * - who is here, then the comments panel toggle, above the panel it opens.
+ * - who is here, then the helper (local files only) and comments panel
+ *   toggles, above the panels they open.
  *
  * What differs between the editors is only what really differs, and it arrives
  * as a slot: a Drive file has a Share menu, a local file a link to the online
@@ -59,6 +61,7 @@ export default function DocNavbar({
   share,
   menu,
   people,
+  helper,
   comments,
 }: {
   headerRef?: React.Ref<HTMLElement>;
@@ -78,6 +81,8 @@ export default function DocNavbar({
   share: React.ReactNode;
   menu: NavMenuItem[];
   people?: React.ReactNode;
+  /** The AI helper panel: local gmist only, where it runs on this machine. */
+  helper?: { open: boolean; onToggle: () => void };
   comments: { open: boolean; peek?: boolean; onToggle: () => void };
 }) {
   return (
@@ -163,6 +168,15 @@ export default function DocNavbar({
       </div>
       {people && <div className="hidden shrink-0 items-stretch border-l border-border lg:flex">{people}</div>}
       <div className="flex shrink-0 items-stretch border-l border-border">
+        {helper && (
+          <ToolbarButton
+            onClick={helper.onToggle}
+            title="Helper: ask Claude about this document, or to change it (Ctrl/Cmd+Alt+H)"
+            active={helper.open}
+          >
+            <IconHelper />
+          </ToolbarButton>
+        )}
         <ToolbarButton
           onClick={comments.onToggle}
           title="Comments and suggested edits (Ctrl/Cmd+Alt+C)"

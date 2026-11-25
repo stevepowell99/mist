@@ -50,6 +50,10 @@ export const IconPrint = () => svg(<>
 export const IconComments = () => svg(<>
   <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z" /><path d="M13 8H7" /><path d="M17 12H7" />
 </>);
+// A four-point spark, for the helper: the one glyph here that is not a document part.
+export const IconHelper = () => svg(<>
+  <path d="M12 3l1.9 5.6L19.5 10.5l-5.6 1.9L12 18l-1.9-5.6L4.5 10.5l5.6-1.9Z" /><path d="M19 17v4M17 19h4" />
+</>);
 export const IconMore = () => svg(<>
   <circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" />
 </>);

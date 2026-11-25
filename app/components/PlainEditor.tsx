@@ -27,6 +27,8 @@ import { wordCount } from "~/lib/cm-word-count";
 import { insertCommentChange } from "~/lib/cm-comments";
 import { wrapOnSelection } from "~/lib/cm-shortcuts";
 import PlainReview from "~/components/PlainReview";
+import HelperPanel from "~/components/HelperPanel";
+import { helperMarksExtension } from "~/lib/cm-helper-marks";
 import CommentBox from "~/components/CommentBox";
 import { markdownLineStyle } from "~/lib/cm-markdown-style";
 import PlainPreview from "~/components/PlainPreview";
@@ -108,6 +110,7 @@ type View = "live" | "editor" | "split" | "preview";
  */
 const VIEW_KEY = "gmist.plain.view";
 const REVIEW_KEY = "gmist.plain.review";
+const HELPER_KEY = "gmist.plain.helper";
 const MODE_KEY = "gmist.plain.mode";
 /** The editor's share of the split, in percent, kept within SPLIT_MIN..SPLIT_MAX. */
 const SPLIT_KEY = "gmist.plain.split";
@@ -172,6 +175,15 @@ export default function PlainEditor({
   }, [splitPct]);
   const [outlineOpen, setOutlineOpen] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [helperOpen, setHelperOpen] = useState(false);
+  const toggleHelper = useCallback(
+    () =>
+      setHelperOpen((o) => {
+        remember(HELPER_KEY, o ? "no" : "yes");
+        return !o;
+      }),
+    [],
+  );
   /** Suggesting turns every edit into CriticMarkup instead of applying it. It is
    *  a mode of typing, not of storage: the marks are characters in the file. */
   const [mode, setMode] = useState<"edit" | "suggest">("edit");
@@ -302,6 +314,7 @@ export default function PlainEditor({
     setLayout(view);
     setOutlineOpen(remembered(OUTLINE_KEY, ["yes", "no"] as const, "no") === "yes");
     setReviewOpen(remembered(REVIEW_KEY, ["yes", "no"] as const, "no") === "yes");
+    setHelperOpen(remembered(HELPER_KEY, ["yes", "no"] as const, "no") === "yes");
     setMode(remembered(MODE_KEY, ["edit", "suggest"] as const, "edit"));
     setSplitPct(rememberedNumber(SPLIT_KEY, SPLIT_MIN, SPLIT_MAX, 50));
   }, []);
@@ -514,6 +527,12 @@ export default function PlainEditor({
       run: () => setReviewOpen((v) => { remember(REVIEW_KEY, v ? "no" : "yes"); return !v; }),
     },
     {
+      key: "h",
+      label: "Helper: ask Claude about this document, or to change it",
+      group: "panels",
+      run: toggleHelper,
+    },
+    {
       key: "m",
       label: "Comment on the selection, or a point note at the cursor",
       group: "editor",
@@ -606,6 +625,8 @@ export default function PlainEditor({
             mistFolds,
             criticMarkup,
             fencedDivStyle,
+            // What the helper changed: highlighted for a moment, kept for its Undo.
+            helperMarksExtension,
             autocompletion({
               override: [
                 slashSource(),
@@ -746,6 +767,7 @@ export default function PlainEditor({
             onSelect: () => void print(),
           },
         ]}
+        helper={{ open: helperOpen, onToggle: toggleHelper }}
         comments={{
           open: reviewOpen,
           onToggle: () =>
@@ -844,6 +866,18 @@ export default function PlainEditor({
             </div>
           )}
         </div>
+        {helperOpen && (
+          <div className="min-h-0 w-96 shrink-0">
+            <HelperPanel
+              view={editorView}
+              fileId={fileId}
+              name={name}
+              mode={mode}
+              frozen={status === "conflict"}
+              onClose={toggleHelper}
+            />
+          </div>
+        )}
         {reviewOpen && (
           <div className="min-h-0 w-72 shrink-0">
             <PlainReview view={editorView} text={text} onClose={() => setReviewOpen(false)} />

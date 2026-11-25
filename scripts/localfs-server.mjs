@@ -33,6 +33,7 @@ import os from "node:os";
 import path from "node:path";
 import { execFile } from "node:child_process";
 import { readDevVars } from "./dev-vars.mjs";
+import { askClaude } from "./helper-claude.mjs";
 
 /**
  * Commit one file, from the editor, on demand.
@@ -688,6 +689,32 @@ const handlers = {
     const result = await commitFile(abs, message);
     if (result.error) throw new HttpError(result.status || 500, result.error);
     return result;
+  },
+
+  // The local helper's model call (scripts/helper-claude.mjs): headless Claude
+  // Code with no tools, on this machine's own sign-in. Not a file operation,
+  // but this is the only local process the worker can reach, and the token
+  // guards it like everything else here. Stopping the request stops the run.
+  "POST /ask": async (_params, req, res) => {
+    let body;
+    try {
+      body = JSON.parse((await readBody(req)).toString("utf8"));
+    } catch {
+      throw new HttpError(400, "bad JSON");
+    }
+    if (typeof body?.system !== "string" || typeof body?.prompt !== "string") throw new HttpError(400, "system and prompt are required");
+    const stop = new AbortController();
+    res.on("close", () => {
+      if (!res.writableEnded) stop.abort();
+    });
+    try {
+      const out = await askClaude({ system: body.system, prompt: body.prompt }, { signal: stop.signal });
+      console.log(`localfs: helper answered in ${out.durationMs} ms (${body.prompt.length} chars in, ${out.text.length} out, ${out.model})`);
+      return out;
+    } catch (err) {
+      console.log(`localfs: helper failed: ${err.message}`);
+      throw new HttpError(502, err.message);
+    }
   },
 
   "GET /list": async (params) => ({ entries: await listDir(absOf(params.get("path"))) }),

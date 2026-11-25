@@ -70,6 +70,17 @@ export async function localGitCommit(env: DriveEnv, fileId: string, message?: st
   return localfs.gitCommit(await getDriveAccessToken(env), fileId, message);
 }
 
+/** The helper's model call, for a local file. Local mode only, like git: it is
+ *  headless Claude Code on this machine, which the deployed worker has none of. */
+export async function localHelperAsk(
+  env: DriveEnv,
+  body: { system: string; prompt: string },
+  signal?: AbortSignal,
+) {
+  if (!isLocalMode(env)) throw new Error("localHelperAsk is local-mode only");
+  return localfs.helperAsk(await getDriveAccessToken(env), body, signal);
+}
+
 /** The operations both implementations provide; assigning localfs here is the
  *  compile-time guard that the two surfaces stay in step. */
 type StorageOps = Pick<
