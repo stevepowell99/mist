@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { EditorSelection } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import type { BibLibrary } from "~/lib/citations";
 import type { DriveMeta } from "~/shared/types";
 import { revealPosAtTop } from "~/lib/cm-reveal";
 import { buildSlidesHtml, buildSlideSections, deckSlideLayout } from "~/lib/slides-build";
-import { deckIndexForOffset, deckSlideTarget, fragmentIndexForOffset, offsetForDeckIndex } from "~/lib/slide-cursor";
+import { deckIndexForOffset, deckSlideTarget, fragmentIndexForOffset } from "~/lib/slide-cursor";
 
 export { isSlideDeck } from "~/lib/slides-build";
 
@@ -266,16 +267,19 @@ export default function SlidesView({
   followDeckRef.current = (h, click) => {
     const view = followDeck?.();
     if (!view || view.hasFocus || !layout) return;
-    const head = view.state.selection.main.head;
-    if (deckIndexForOffset(markdown, head, layout) === h) {
-      if (click) view.dispatch({ effects: EditorView.scrollIntoView(head, { y: "nearest" }) });
+    const target = layout.find((s) => !s.hidden && s.deck === h);
+    if (!target) return; // the References slide has no source
+    const len = view.state.doc.length;
+    const start = Math.min(target.start, len);
+    if (deckIndexForOffset(markdown, view.state.selection.main.head, layout) === h) {
+      // The least scroll that shows the whole slide, its heading first when it
+      // is taller than the pane; none when it is already in view.
+      const span = EditorSelection.range(Math.min(target.end, len), start);
+      if (click) view.dispatch({ effects: EditorView.scrollIntoView(span, { y: "nearest" }) });
       return;
     }
-    const start = offsetForDeckIndex(markdown, h, layout);
-    if (start == null) return; // the References slide has no source
-    const pos = Math.min(start, view.state.doc.length);
-    deckPlaced.current = pos;
-    revealPosAtTop(view, pos);
+    deckPlaced.current = start;
+    revealPosAtTop(view, start);
   };
 
   useEffect(() => {
