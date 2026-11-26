@@ -9,6 +9,7 @@ import { getCloudflare } from "~/lib/cloudflare.server";
 import { isLocalMode } from "~/lib/google.server";
 import { mintDeckToken, authorizeDoc, type DriveSessionEnv } from "~/lib/drive-access.server";
 import { EditorView } from "@codemirror/view";
+import { revealPosAtTop } from "~/lib/cm-reveal";
 import { useChords } from "~/lib/chord";
 import { remember, remembered } from "~/lib/remembered";
 import { extractOutlineFromText } from "~/lib/outline";
@@ -298,6 +299,9 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
     () => threads.filter((t) => !t.resolved && t.position != null).map((t) => t.position!),
     [threads],
   );
+  // Reverse sync: the editor follows the deck's slide as you navigate it, inside
+  // SlidesView. On by default; the RHS settings toggle turns it off.
+  const [followSlide, setFollowSlide] = useState(true);
   const slideProps = {
     markdown,
     drive,
@@ -306,6 +310,7 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
     assetToken,
     followCursor,
     bibLib,
+    followDeck: followSlide ? () => editorView : undefined,
   };
 
   // The View is one of four exclusive layouts. It is derived from the preview
@@ -396,9 +401,6 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
   // file to the most-recently-used layout. Keyed by the stable file id so it
   // survives re-imports. Theme and the autosave safety toggle stay global.
   const fileKey = docFileKey(drive, id);
-  // Reverse sync: the editor cursor follows the deck's slide as you navigate it.
-  // On by default; the RHS settings toggle turns it off.
-  const [followSlide, setFollowSlide] = useState(true);
   const settingsLoaded = useRef(false);
   useEffect(() => {
     settingsLoaded.current = false;
@@ -454,10 +456,7 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
   useEffect(() => {
     const onMsg = (e: MessageEvent) => {
       const d = e.data as { type?: string; h?: number };
-      if (d?.type === "mist-slide" && typeof d.h === "number") {
-        setDeckSlide(d.h);
-        followDeckInEditorRef.current(d.h);
-      }
+      if (d?.type === "mist-slide" && typeof d.h === "number") setDeckSlide(d.h);
     };
     window.addEventListener("message", onMsg);
     return () => window.removeEventListener("message", onMsg);
@@ -530,37 +529,18 @@ function DocumentLayout({ id, local, initialLive }: { id: string; local: boolean
     window.history.replaceState(window.history.state, "", url.toString());
   }, [view]);
 
-  // Move the editor cursor to a slide's source heading. `focus` says whether to
-  // pull focus back to the editor. y:"start" puts the heading near the top of the
-  // viewport, rather than scrollIntoView's default of the nearest edge.
-  const moveCursorToSlide = (idx: number, focus: boolean) => {
-    if (!editorView) return;
-    const pos = Math.min(offsetForDeckIndex(markdown, idx, slideLayout ?? undefined) ?? markdown.length, editorView.state.doc.length);
-    editorView.dispatch({
-      selection: { anchor: pos },
-      effects: EditorView.scrollIntoView(pos, { y: "start", yMargin: 48 }),
-    });
-    if (focus) editorView.focus();
-  };
-
   // Manual reverse sync (the gutter button and Ctrl/Cmd+Alt+G): jump to AND edit
-  // the slide currently shown in the preview (the deck reports it into ?slide).
+  // the slide currently shown in the preview (the deck reports it into ?slide),
+  // with its heading at the top, as the automatic follow in SlidesView lands it.
   // Held in a ref so the shortcut handler does not rebuild on every keystroke.
   const syncEditorToSlideRef = useRef<() => void>(() => {});
   syncEditorToSlideRef.current = () => {
+    if (!editorView) return;
     const s = typeof window !== "undefined" ? new URL(window.location.href).searchParams.get("slide") : null;
-    moveCursorToSlide(s && /^\d+$/.test(s) ? Number(s) : 0, true);
-  };
-
-  // Automatic reverse sync: as the deck moves (its arrow keys, clicking a slide),
-  // follow it in the editor too, WITHOUT stealing focus. Skipped while the editor
-  // is focused, so typing (which drives the deck the other way) always wins and
-  // the cursor is never yanked mid-edit: the editor is the higher-priority side.
-  // Ref so the once-registered message listener reads the current markdown/editor.
-  const followDeckInEditorRef = useRef<(idx: number) => void>(() => {});
-  followDeckInEditorRef.current = (idx: number) => {
-    if (!editorView || editorView.hasFocus || !followSlide) return;
-    moveCursorToSlide(idx, false);
+    const idx = s && /^\d+$/.test(s) ? Number(s) : 0;
+    const pos = Math.min(offsetForDeckIndex(markdown, idx, slideLayout ?? undefined) ?? markdown.length, editorView.state.doc.length);
+    revealPosAtTop(editorView, pos);
+    editorView.focus();
   };
 
   // Print as a PDF made on the server (the same link as the Share menu's "Print

@@ -170,7 +170,12 @@ function relayout(){ try { Reveal.layout(); } catch (e) {} }
 function relayoutBurst(){ relayout(); requestAnimationFrame(relayout); setTimeout(relayout, 120); setTimeout(relayout, 400); }
 // Report the current slide to the parent as a flat index (matching the editor's
 // flat split) so the URL ?slide= round-trips through 2D nesting.
-var slideChangedHandler = function(){ try { parent.postMessage({ type: 'mist-slide', h: Reveal.getSlides().indexOf(Reveal.getCurrentSlide()) }, '*'); } catch (e) {} replayEntrance(); };
+function currentFlat(){ return Reveal.getSlides().indexOf(Reveal.getCurrentSlide()); }
+var slideChangedHandler = function(){ try { parent.postMessage({ type: 'mist-slide', h: currentFlat() }, '*'); } catch (e) {} replayEntrance(); };
+// A click on the embedded deck reports the slide on screen even when it does not
+// change slide, so the editor beside it can bring that slide back into view.
+// Bubble phase, so a control's own click has already moved the deck.
+if (EMBEDDED) document.addEventListener('click', function(){ try { parent.postMessage({ type: 'mist-deck-click', h: currentFlat() }, '*'); } catch (e) {} });
 
 // In-place rebuild: swap the .slides markup, then DESTROY and re-initialise
 // reveal, so the deck is rebuilt by the EXACT same path as a fresh load. Running

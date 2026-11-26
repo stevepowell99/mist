@@ -420,6 +420,7 @@ export default function PlainEditor({
     cursorOffset,
     followCursor: true,
     bibLib,
+    followDeck: () => view.current,
   };
 
   /** Present: the deck fills this window and the notes get one of their own. */

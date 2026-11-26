@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { EditorView } from "@codemirror/view";
 import type { BibLibrary } from "~/lib/citations";
 import type { DriveMeta } from "~/shared/types";
+import { revealPosAtTop } from "~/lib/cm-reveal";
 import { buildSlidesHtml, buildSlideSections, deckSlideLayout } from "~/lib/slides-build";
-import { deckIndexForOffset, deckSlideTarget, fragmentIndexForOffset } from "~/lib/slide-cursor";
+import { deckIndexForOffset, deckSlideTarget, fragmentIndexForOffset, offsetForDeckIndex } from "~/lib/slide-cursor";
 
 export { isSlideDeck } from "~/lib/slides-build";
 
@@ -32,6 +34,7 @@ export default function SlidesView({
   bibLib,
   onCommentSlide,
   commentPositions,
+  followDeck,
 }: {
   markdown: string;
   drive: DriveMeta | null;
@@ -49,6 +52,10 @@ export default function SlidesView({
   onCommentSlide?: (slideStart: number, label: string) => void;
   /** Where the document's open comments sit, to count those on the slide on screen. */
   commentPositions?: number[];
+  /** The editor to bring to the slide the deck moves to or is clicked on. A
+   *  getter rather than the view, because React's dev logging walks object
+   *  props (see setIframe). Left out, the deck never moves the editor. */
+  followDeck?: () => EditorView | null;
 }) {
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   // The session-minted asset token lets the sandboxed iframe fetch private-Drive
@@ -163,7 +170,7 @@ export default function SlidesView({
   // main editor lag on a large deck; the layout depends on the text alone, so
   // a cursor move costs a lookup. -1 means "no target" (keep the deck where it
   // is on a rebuild).
-  const wantsLayout = followCursor || !!onCommentSlide;
+  const wantsLayout = followCursor || !!onCommentSlide || !!followDeck;
   const layout = useMemo(() => (wantsLayout ? deckSlideLayout(markdown) : null), [markdown, wantsLayout]);
   const slide = useMemo(
     () => (followCursor && layout ? deckIndexForOffset(markdown, cursorOffset, layout) : -1),
@@ -187,7 +194,6 @@ export default function SlidesView({
   // the URL (?slide=) so a reload restores the same slide. On the first load,
   // restore that slide rather than the cursor's, so the URL wins.
   const initialSlide = useRef<number | null>(null);
-  const restored = useRef(false);
   if (initialSlide.current === null && typeof window !== "undefined") {
     const s = new URL(window.location.href).searchParams.get("slide");
     initialSlide.current = s !== null && /^\d+$/.test(s) ? Number(s) : -1; // -1 = none
@@ -213,7 +219,16 @@ export default function SlidesView({
   // actually moves the cursor. Without a URL slide there is nothing to protect.
   const cursorMoved = useRef(false);
   const firstCursor = useRef(true);
+  // The cursor offset the deck last put the editor at (followDeckRef below), so
+  // the cursor follow does not send that move back to the deck. Echoed, it would
+  // hide every fragment of a slide reached by stepping back, and in a burst of
+  // steps it could pull the deck back to a slide it had already left. Kept only
+  // while the cursor is still there.
+  const deckPlaced = useRef<number | null>(null);
+  const cursorRef = useRef(cursorOffset);
+  cursorRef.current = cursorOffset;
   useEffect(() => {
+    if (cursorOffset !== deckPlaced.current) deckPlaced.current = null;
     if (firstCursor.current) {
       firstCursor.current = false;
       return;
@@ -223,20 +238,45 @@ export default function SlidesView({
   useEffect(() => {
     if (!followCursor) return;
     if ((initialSlide.current ?? -1) >= 0 && !cursorMoved.current) return;
+    if (deckPlaced.current != null && deckPlaced.current === cursorRef.current) {
+      deckPlaced.current = null;
+      return;
+    }
     sendGoto(slide, fragment);
   }, [slide, fragment, followCursor]);
 
-  // Send the deck the slide it should open on: the URL's ?slide on the very
-  // first load (so a shared link restores it), otherwise the cursor's slide.
-  // Stable (reads refs only), so the handshake listener below can depend on it.
+  // Send the deck the slide it should open on: the URL's ?slide until the
+  // cursor first moves (so a shared link restores it), otherwise the cursor's
+  // slide. A load asks twice, by mist-need-goto and by the iframe's onLoad; were
+  // the restore one-shot, the second ask would send the cursor's slide 0 and
+  // snap the deck back to the first slide. Stable (reads refs only), so the
+  // handshake listener below can depend on it.
   const sendInitialGoto = useCallback(() => {
-    if (!restored.current && initialSlide.current != null && initialSlide.current >= 0) {
-      restored.current = true;
-      sendGoto(initialSlide.current, -1);
-    } else {
-      sendGoto(slideRef.current, fragmentRef.current);
-    }
+    if ((initialSlide.current ?? -1) >= 0 && !cursorMoved.current) sendGoto(initialSlide.current!, -1);
+    else sendGoto(slideRef.current, fragmentRef.current);
   }, []);
+
+  // Follow the deck: when it moves to a slide (its keys, a control, the
+  // overview) or is clicked, bring the editor to that slide. Never while the
+  // editor has focus, because then the cursor is driving the deck and the deck's
+  // report of the slide it was sent to must not move the cursor. A cursor
+  // already in the slide stays put; a click scrolls it back into view. Ref, so
+  // the once-registered listener reads the current text and editor.
+  const followDeckRef = useRef<(h: number, click: boolean) => void>(() => {});
+  followDeckRef.current = (h, click) => {
+    const view = followDeck?.();
+    if (!view || view.hasFocus || !layout) return;
+    const head = view.state.selection.main.head;
+    if (deckIndexForOffset(markdown, head, layout) === h) {
+      if (click) view.dispatch({ effects: EditorView.scrollIntoView(head, { y: "nearest" }) });
+      return;
+    }
+    const start = offsetForDeckIndex(markdown, h, layout);
+    if (start == null) return; // the References slide has no source
+    const pos = Math.min(start, view.state.doc.length);
+    deckPlaced.current = pos;
+    revealPosAtTop(view, pos);
+  };
 
   useEffect(() => {
     const onMsg = (e: MessageEvent) => {
@@ -258,6 +298,11 @@ export default function SlidesView({
         sendInitialGoto();
         return;
       }
+      const ours = e.source === iframeRef.current?.contentWindow;
+      if (d?.type === "mist-deck-click" && typeof d.h === "number") {
+        if (ours) followDeckRef.current(d.h, true);
+        return;
+      }
       // The deck reports its current slide; mirror it to the URL (?slide=).
       if (d?.type !== "mist-slide" || typeof d.h !== "number") return;
       setOnScreen(d.h);
@@ -265,6 +310,7 @@ export default function SlidesView({
       if (d.h > 0) url.searchParams.set("slide", String(d.h));
       else url.searchParams.delete("slide");
       window.history.replaceState(window.history.state, "", url.toString());
+      if (ours) followDeckRef.current(d.h, false);
     };
     window.addEventListener("message", onMsg);
     return () => window.removeEventListener("message", onMsg);
