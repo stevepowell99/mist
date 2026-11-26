@@ -21,10 +21,22 @@ describe("parseHelperReply", () => {
   it("counts edits that are not usable", () => {
     expect(parseHelperReply('{"reply":"x","edits":[{"op":"replace","find":"a"}]}').rejected).toBe(1);
   });
+
+  it("drops every edit from an ask turn, whatever the model returned", () => {
+    const raw = '{"reply":"It argues X.","edits":[{"op":"replace","find":"a b","replace":"a"},{"op":"comment","text":"n"}]}';
+    expect(parseHelperReply(raw, "ask")).toEqual({ reply: "It argues X.", edits: [], rejected: 0, unparsed: false });
+  });
 });
 
 describe("helperPrompt", () => {
-  const base = { name: "notes.md", document: "# Title\n\nBody.", mode: "edit" as const, history: [], message: "Tighten it" };
+  const base = {
+    name: "notes.md",
+    document: "# Title\n\nBody.",
+    mode: "edit" as const,
+    intent: "change" as const,
+    history: [],
+    message: "Tighten it",
+  };
 
   it("sends the whole document, the selection and the request", () => {
     const p = helperPrompt({ ...base, selection: "Body." });
@@ -35,6 +47,12 @@ describe("helperPrompt", () => {
 
   it("says which mode the editor is in", () => {
     expect(helperPrompt({ ...base, mode: "suggest" })).toContain("Suggesting mode");
+  });
+
+  it("asks for no edits on an ask turn, and drops the editor mode", () => {
+    const p = helperPrompt({ ...base, mode: "suggest", intent: "ask" });
+    expect(p).toContain("answer only");
+    expect(p).not.toContain("Suggesting mode");
   });
 
   it("sends only the last HISTORY_TURNS messages", () => {

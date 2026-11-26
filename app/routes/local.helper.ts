@@ -18,8 +18,9 @@ import {
  * The edits are not applied here. The browser holds the document, and the user
  * may have typed while the model was thinking, so the panel applies them to the
  * editor as it is when the answer arrives (`planHelperEdits`). This route only
- * composes the prompt, runs the model through the sidecar and reads the reply.
- * A body of `{ cancel: id }` stops the run the panel started with that id.
+ * composes the prompt, runs the model through the sidecar and reads the reply;
+ * an `intent` of "ask" returns no edits at all. A body of `{ cancel: id }`
+ * stops the run the panel started with that id.
  */
 export async function action({ request, context }: Route.ActionArgs) {
   const { env } = getCloudflare(context);
@@ -50,18 +51,20 @@ export async function action({ request, context }: Route.ActionArgs) {
     );
   }
 
+  const intent = req.intent === "ask" ? "ask" : "change";
   const prompt = helperPrompt({
     name: String(req.name ?? ""),
     document: req.document,
     selection: typeof req.selection === "string" && req.selection ? req.selection : undefined,
     mode: req.mode === "suggest" ? "suggest" : "edit",
+    intent,
     history: Array.isArray(req.history) ? req.history.filter((m) => m && typeof m.text === "string") : [],
     message: req.message,
   });
   try {
     const id = typeof req.id === "string" ? req.id : undefined;
     const out = await localHelperAsk(env, { system: HELPER_SYSTEM, prompt, schema: HELPER_SCHEMA, id }, request.signal);
-    return json({ ...parseHelperReply(out.text), durationMs: out.durationMs, model: out.model });
+    return json({ ...parseHelperReply(out.text, intent), durationMs: out.durationMs, model: out.model });
   } catch (err) {
     return json({ error: err instanceof Error ? err.message : "the helper failed" }, 502);
   }

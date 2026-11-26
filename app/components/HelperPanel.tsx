@@ -4,8 +4,9 @@ import { marked } from "marked";
 import DOMPurify from "dompurify";
 import { planHelperEdits, type HelperOp, type HelperOutcome } from "~/lib/helper-edits";
 import { fadeHelperMarks, helperEditSpec, helperMarkAt, helperUndoSpec } from "~/lib/cm-helper-marks";
-import { HISTORY_TURNS, type HelperMessage } from "~/lib/helper-prompt";
+import { HELPER_INTENTS, HISTORY_TURNS, type HelperIntent, type HelperMessage } from "~/lib/helper-prompt";
 import { revealPos } from "~/lib/cm-reveal";
+import { remember, remembered } from "~/lib/remembered";
 import { trustedClick } from "~/lib/trusted-click";
 
 /**
@@ -18,7 +19,8 @@ import { trustedClick } from "~/lib/trusted-click";
  * applies the changes at once, because they are edits in the user's own editor:
  * each one is highlighted, the reply's Undo takes them back, and so does
  * Ctrl+Z, which sees the helper's edit as one step. In Suggesting mode the
- * changes arrive as tracked changes instead, to accept or reject.
+ * changes arrive as tracked changes instead, to accept or reject. Switched to
+ * Ask, it only answers: the route returns no edits for such a turn.
  *
  * The edits go into the editor as ordinary transactions, so autosave, the
  * conflict guard and undo treat them exactly like typing. They are applied to
@@ -45,6 +47,7 @@ interface Entry {
 const KEEP = 40;
 const FADE_MS = 8000;
 const storeKey = (fileId: string) => `gmist.helper.${fileId}`;
+const INTENT_KEY = "gmist.helper-intent";
 
 function load(fileId: string): Entry[] {
   try {
@@ -93,6 +96,12 @@ export default function HelperPanel({
 }) {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [input, setInput] = useState("");
+  const [intent, setIntent] = useState<HelperIntent>("change");
+  const chooseIntent = (next: HelperIntent) => {
+    setIntent(next);
+    remember(INTENT_KEY, next);
+    inputRef.current?.focus();
+  };
   const [busySince, setBusySince] = useState<number | null>(null);
   const [now, setNow] = useState(0);
   const stopRef = useRef<{ stop: AbortController; run: string } | null>(null);
@@ -107,6 +116,7 @@ export default function HelperPanel({
 
   // localStorage exists only on the client, so the chat is restored after mount.
   useEffect(() => setEntries(load(fileId)), [fileId]);
+  useEffect(() => setIntent(remembered(INTENT_KEY, HELPER_INTENTS, "change")), []);
   useEffect(() => inputRef.current?.focus(), []);
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
@@ -167,6 +177,7 @@ export default function HelperPanel({
           document: v.state.doc.toString(),
           selection: sel.empty ? undefined : v.state.sliceDoc(sel.from, sel.to),
           mode: live.current.mode,
+          intent,
           history,
           message,
         }),
@@ -275,10 +286,10 @@ export default function HelperPanel({
         </button>
       </div>
       <p className="border-b border-border px-3 py-2 text-xs text-muted">
-        Ask about this document, or ask for a change: it edits the text directly, and Undo or Ctrl+Z
-        takes a change back. In Suggesting mode its changes arrive as tracked changes. It runs
-        Claude Code on this machine, sees the whole document and the last {HISTORY_TURNS} messages,
-        and takes ten to thirty seconds.
+        On Ask it only answers and leaves the document alone. On Change it can also edit the text
+        directly, and Undo or Ctrl+Z takes a change back; in Suggesting mode its changes arrive as
+        tracked changes. It runs Claude Code on this machine, sees the whole document and the last{" "}
+        {HISTORY_TURNS} messages, and takes ten to thirty seconds.
       </p>
 
       <div ref={listRef} className="min-h-0 flex-1 overflow-auto px-3 py-2">
@@ -331,13 +342,38 @@ export default function HelperPanel({
               void send();
             }
           }}
-          placeholder="Ask, or ask for a change · Enter to send · Shift+Enter for a new line"
+          placeholder={`${intent === "ask" ? "Ask about this document" : "Ask, or ask for a change"} · Enter to send · Shift+Enter for a new line`}
           className="w-full resize-none border border-border bg-paper px-2 py-1.5 text-sm text-ink outline-none focus:border-ink"
         />
         {/* Right padding clears the Help panel's fixed ? button, which sits over
             this corner of the window. */}
         <div className="mt-1 flex items-center gap-2 pr-12">
-          {mode === "suggest" && <span className="text-xs text-muted">Suggesting: changes arrive as tracked changes</span>}
+          <div role="group" aria-label="What the helper may do" className="flex">
+            {(
+              [
+                ["ask", "Ask", "Answer only: the document is not changed"],
+                ["change", "Change", "Answer, and change the document when asked"],
+              ] as const
+            ).map(([value, label, title]) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={intent === value}
+                title={title}
+                onClick={() => chooseIntent(value)}
+                className={`cursor-pointer border border-border px-2 py-1 text-xs uppercase tracking-wider first:border-r-0 ${
+                  intent === value ? "bg-ink text-paper" : "text-muted hover:text-ink"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {intent === "change" && mode === "suggest" && (
+            <span className="text-xs text-muted" title="Suggesting mode: the helper's changes arrive as tracked changes">
+              As tracked changes
+            </span>
+          )}
           {busySince !== null ? (
             <button
               type="button"

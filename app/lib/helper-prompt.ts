@@ -18,9 +18,14 @@ export interface HelperRequest {
   /** The selected text, when there is a selection: what "this" refers to. */
   selection?: string;
   mode: "edit" | "suggest";
+  /** "ask": answer only, and the route drops any edits; "change": answer and edit. */
+  intent: HelperIntent;
   history: HelperMessage[];
   message: string;
 }
+
+export type HelperIntent = "ask" | "change";
+export const HELPER_INTENTS = ["ask", "change"] as const satisfies readonly HelperIntent[];
 
 /** How many earlier messages go with each turn. */
 export const HISTORY_TURNS = 20;
@@ -75,6 +80,7 @@ Rules:
 - Write plain replacement text. Never write CriticMarkup additions or deletions yourself: in Suggesting mode the editor turns your edits into tracked changes.
 - Never invent facts, figures, quotations, citations or references. If a request needs facts the document does not contain, say so in "reply" and leave a comment instead of making them up.
 - When text is selected, "this", "here" and "it" mean the selection.
+- A question gets an answer. Change the document, or comment on it, only when they ask for a change or a review.
 - If the request is unclear, ask in "reply" and make no edits.`;
 
 /** The turn's user prompt: the conversation so far, the document, the ask. */
@@ -91,7 +97,9 @@ export function helperPrompt(req: HelperRequest): string {
   parts.push(`<document name="${req.name.replace(/"/g, "'")}">\n${req.document}\n</document>`);
   if (req.selection) parts.push(`<selection>\n${req.selection}\n</selection>`);
   parts.push(
-    `The editor is in ${req.mode === "suggest" ? "Suggesting mode: your edits will appear as tracked changes for them to accept or reject" : "Editing mode: your edits change the text directly"}.`,
+    req.intent === "ask"
+      ? "They want an answer only this turn: leave the document as it is, return an empty edits list, and do not mention changes. Where a change would help, describe it in the reply."
+      : `The editor is in ${req.mode === "suggest" ? "Suggesting mode: your edits will appear as tracked changes for them to accept or reject" : "Editing mode: your edits change the text directly"}.`,
   );
   parts.push(`<request>\n${req.message}\n</request>`);
   return parts.join("\n\n");
@@ -110,15 +118,17 @@ export interface HelperReply {
  * Read the model's reply. It is asked for bare JSON; anything around the
  * object (a fence, a sentence) is tolerated by taking the outermost braces.
  * A reply with no usable JSON is shown as it is, with no edits, and says so.
+ * An "ask" turn never carries edits, whatever the model returned: the prompt
+ * asks for none, and this is what makes it so.
  */
-export function parseHelperReply(raw: string): HelperReply {
+export function parseHelperReply(raw: string, intent: HelperIntent = "change"): HelperReply {
   const start = raw.indexOf("{");
   const end = raw.lastIndexOf("}");
   if (start >= 0 && end > start) {
     try {
       const data = JSON.parse(raw.slice(start, end + 1)) as { reply?: unknown; edits?: unknown };
       if (data && typeof data === "object" && (typeof data.reply === "string" || Array.isArray(data.edits))) {
-        const { ops, rejected } = validHelperOps(data.edits);
+        const { ops, rejected } = intent === "ask" ? { ops: [], rejected: 0 } : validHelperOps(data.edits);
         return { reply: typeof data.reply === "string" ? data.reply : "", edits: ops, rejected, unparsed: false };
       }
     } catch {

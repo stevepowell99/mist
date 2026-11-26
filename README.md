@@ -30,6 +30,7 @@ gmist began as a fork of [inanimate-tech/mist](https://github.com/inanimate-tech
 ### Helper (local gmist)
 
 - A chat panel beside a local file (the spark button in the bar, or Ctrl/Cmd+Alt+H) answers questions about the document and changes it on request: rewriting, adding, deleting or commenting on passages.
+- Ask and Change, beside Send, say what it may do: on Ask it only answers and the document is left alone; on Change it can edit too. The choice is remembered.
 - It applies its changes in the editor at once, highlighted for a few seconds and listed under the reply that made them; the reply's Undo, or Ctrl+Z, takes them back. In Suggesting mode they arrive as tracked changes to accept or reject.
 - Each change finds its passage by its words in the document as it stands when the reply arrives, so text typed while the helper was thinking stays; a passage that has changed meanwhile is skipped and named.
 - It runs Claude Code headless on this machine, on its signed-in subscription and with no tools, through the local file server. It sees the whole document and the last 20 messages of the chat, which the browser keeps per file. The online gmist does not have it.
