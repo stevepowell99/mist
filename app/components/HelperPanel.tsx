@@ -95,7 +95,7 @@ export default function HelperPanel({
   const [input, setInput] = useState("");
   const [busySince, setBusySince] = useState<number | null>(null);
   const [now, setNow] = useState(0);
-  const stopRef = useRef<AbortController | null>(null);
+  const stopRef = useRef<{ stop: AbortController; run: string } | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   // Read when the reply lands, not when it was asked: the editor, the mode and
@@ -116,7 +116,24 @@ export default function HelperPanel({
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
   }, [busySince]);
-  useEffect(() => () => stopRef.current?.abort(), []);
+  useEffect(() => () => stopRun(), []);
+
+  /**
+   * Stop the run: drop the reply and kill the process. Dropping the request
+   * alone does not reach the sidecar (workerd keeps its subrequest going), so
+   * the run is named in a request of its own.
+   */
+  function stopRun() {
+    const current = stopRef.current;
+    if (!current) return;
+    current.stop.abort();
+    void fetch("/local/helper", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cancel: current.run }),
+      keepalive: true,
+    }).catch(() => {});
+  }
 
   const update = (fn: (prev: Entry[]) => Entry[]) =>
     setEntries((prev) => {
@@ -133,7 +150,8 @@ export default function HelperPanel({
     update((prev) => [...prev, { id: newId(), role: "user", text: message }]);
     setInput("");
     const stop = new AbortController();
-    stopRef.current = stop;
+    const run = newId();
+    stopRef.current = { stop, run };
     const started = Date.now();
     setBusySince(started);
     setNow(started);
@@ -144,6 +162,7 @@ export default function HelperPanel({
         headers: { "Content-Type": "application/json" },
         signal: stop.signal,
         body: JSON.stringify({
+          id: run,
           name,
           document: v.state.doc.toString(),
           selection: sel.empty ? undefined : v.state.sliceDoc(sel.from, sel.to),
@@ -322,7 +341,7 @@ export default function HelperPanel({
           {busySince !== null ? (
             <button
               type="button"
-              onClick={() => stopRef.current?.abort()}
+              onClick={stopRun}
               className="ml-auto cursor-pointer border border-border px-3 py-1 text-xs uppercase tracking-wider text-ink hover:bg-border"
             >
               Stop

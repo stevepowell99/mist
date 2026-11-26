@@ -74,11 +74,16 @@ export async function localGitCommit(env: DriveEnv, fileId: string, message?: st
  *  headless Claude Code on this machine, which the deployed worker has none of. */
 export async function localHelperAsk(
   env: DriveEnv,
-  body: { system: string; prompt: string },
+  body: { system: string; prompt: string; schema?: object; id?: string },
   signal?: AbortSignal,
 ) {
   if (!isLocalMode(env)) throw new Error("localHelperAsk is local-mode only");
   return localfs.helperAsk(await getDriveAccessToken(env), body, signal);
+}
+
+export async function localHelperCancel(env: DriveEnv, id: string) {
+  if (!isLocalMode(env)) throw new Error("localHelperCancel is local-mode only");
+  return localfs.helperCancel(await getDriveAccessToken(env), id);
 }
 
 /** The operations both implementations provide; assigning localfs here is the

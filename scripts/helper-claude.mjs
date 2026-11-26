@@ -58,9 +58,12 @@ export function findClaude(env = process.env) {
 /**
  * Run one helper turn. Resolves to { text, durationMs, model } or rejects with
  * an Error whose message is fit to show. `signal` aborts the run (the user
- * pressed Stop, or the request went away), killing the child.
+ * pressed Stop, or the request went away), killing the child. With a `schema`,
+ * Claude Code's structured output enforces the reply's shape, and `text` is
+ * that validated object as JSON: a model writing JSON by hand leaves quotation
+ * marks in a passage unescaped often enough to matter.
  */
-export async function askClaude({ system, prompt }, { signal } = {}) {
+export async function askClaude({ system, prompt, schema }, { signal } = {}) {
   const bin = findClaude();
   if (!bin) throw new Error("Claude Code was not found on this machine (set GMIST_CLAUDE_BIN to its path)");
   const model = process.env.GMIST_HELPER_MODEL || "sonnet";
@@ -80,6 +83,7 @@ export async function askClaude({ system, prompt }, { signal } = {}) {
     "--setting-sources", "",
     "--no-session-persistence",
   ];
+  if (schema) args.push("--json-schema", JSON.stringify(schema));
 
   const started = Date.now();
   try {
@@ -120,7 +124,8 @@ export async function askClaude({ system, prompt }, { signal } = {}) {
           return finish(reject, new Error(`Claude Code exited ${code}${why ? `: ${why}` : ""}`));
         }
         if (data.is_error) return finish(reject, new Error(String(data.result || data.subtype || "Claude Code reported an error")));
-        finish(resolve, { text: String(data.result ?? ""), durationMs: Date.now() - started, model });
+        const text = data.structured_output !== undefined ? JSON.stringify(data.structured_output) : String(data.result ?? "");
+        finish(resolve, { text, durationMs: Date.now() - started, model });
       });
       child.stdin.end(prompt, "utf8");
     });

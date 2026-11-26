@@ -41,7 +41,9 @@ export interface HelperOutcome {
   added?: string;
 }
 
-const OPS = new Set(["replace", "insertAfter", "insertBefore", "delete", "comment"]);
+/** The five ops, the one list both this check and the reply schema read. */
+export const HELPER_OPS = ["replace", "insertAfter", "insertBefore", "delete", "comment"] as const;
+const OPS = new Set<string>(HELPER_OPS);
 
 /**
  * Keep only edits whose shape is one of the five ops. Anything else the model

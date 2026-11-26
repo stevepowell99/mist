@@ -1,4 +1,4 @@
-import { validHelperOps, type HelperOp } from "./helper-edits";
+import { HELPER_OPS, validHelperOps, type HelperOp } from "./helper-edits";
 
 /**
  * What the helper sends the model, and how its reply is read back.
@@ -29,9 +29,37 @@ export const HISTORY_TURNS = 20;
  *  document cannot anchor edits in the rest, and would not say so. */
 export const MAX_DOCUMENT_CHARS = 600_000;
 
+/**
+ * The reply's shape, enforced by Claude Code's structured output
+ * (`--json-schema`), so a passage full of quotation marks and line breaks
+ * cannot break the JSON. Asked for in prose too, and `parseHelperReply` still
+ * validates every edit, since a schema says what may be there, not that it is
+ * usable.
+ */
+export const HELPER_SCHEMA = {
+  type: "object",
+  properties: {
+    reply: { type: "string" },
+    edits: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          op: { type: "string", enum: HELPER_OPS },
+          find: { type: "string" },
+          replace: { type: "string" },
+          text: { type: "string" },
+        },
+        required: ["op"],
+      },
+    },
+  },
+  required: ["reply", "edits"],
+} as const;
+
 export const HELPER_SYSTEM = `You are the writing helper inside gmist, a markdown editor. The person talking to you is writing the document you are shown, and you can change it directly.
 
-Answer with ONLY a JSON object, no code fence and no text around it, with two fields:
+Answer with a JSON object with two fields:
 - "reply": your answer to them, in markdown, brief. Say what you changed and why, or answer the question. If you changed nothing, say so.
 - "edits": an array of changes to the document, empty when none is wanted.
 

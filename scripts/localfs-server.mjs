@@ -527,6 +527,9 @@ function readBody(req) {
   });
 }
 
+/** Helper runs in flight, by the id the panel gave each, so Stop can find one. */
+const runningAsks = new Map();
+
 const handlers = {
   "GET /health": async () => ({ ok: true }),
 
@@ -694,7 +697,10 @@ const handlers = {
   // The local helper's model call (scripts/helper-claude.mjs): headless Claude
   // Code with no tools, on this machine's own sign-in. Not a file operation,
   // but this is the only local process the worker can reach, and the token
-  // guards it like everything else here. Stopping the request stops the run.
+  // guards it like everything else here. A run carries the id the panel gave
+  // it, and Stop is its own request naming that id: workerd does not pass a
+  // cancelled browser request on to this subrequest, so a run stopped only by
+  // dropping the connection carried on to the end (measured: 57 s, unseen).
   "POST /ask": async (_params, req, res) => {
     let body;
     try {
@@ -704,17 +710,31 @@ const handlers = {
     }
     if (typeof body?.system !== "string" || typeof body?.prompt !== "string") throw new HttpError(400, "system and prompt are required");
     const stop = new AbortController();
+    const id = typeof body.id === "string" && body.id ? body.id : null;
+    if (id) runningAsks.set(id, stop);
     res.on("close", () => {
       if (!res.writableEnded) stop.abort();
     });
     try {
-      const out = await askClaude({ system: body.system, prompt: body.prompt }, { signal: stop.signal });
+      const schema = body.schema && typeof body.schema === "object" ? body.schema : undefined;
+      const out = await askClaude({ system: body.system, prompt: body.prompt, schema }, { signal: stop.signal });
       console.log(`localfs: helper answered in ${out.durationMs} ms (${body.prompt.length} chars in, ${out.text.length} out, ${out.model})`);
       return out;
     } catch (err) {
       console.log(`localfs: helper failed: ${err.message}`);
       throw new HttpError(502, err.message);
+    } finally {
+      if (id) runningAsks.delete(id);
     }
+  },
+
+  // Stop one helper run by its id. Says whether there was one to stop, so a
+  // Stop that arrives after the answer is not reported as having stopped it.
+  "POST /ask-cancel": async (params) => {
+    const stop = runningAsks.get(params.get("id") ?? "");
+    if (stop) stop.abort();
+    console.log(`localfs: helper stop ${stop ? "killed the run" : "found nothing running"}`);
+    return { stopped: !!stop };
   },
 
   "GET /list": async (params) => ({ entries: await listDir(absOf(params.get("path"))) }),

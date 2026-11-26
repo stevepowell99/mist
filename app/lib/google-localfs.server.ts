@@ -370,7 +370,7 @@ export async function gitCommit(
  *  the panel reaches the child process. */
 export async function helperAsk(
   token: string,
-  body: { system: string; prompt: string },
+  body: { system: string; prompt: string; schema?: object; id?: string },
   signal?: AbortSignal,
 ): Promise<{ text: string; durationMs: number; model: string }> {
   return call(token, "/ask", {
@@ -379,4 +379,9 @@ export async function helperAsk(
     body: JSON.stringify(body),
     signal,
   });
+}
+
+/** Stop the helper run with this id; `stopped` is false if it had finished. */
+export async function helperCancel(token: string, id: string): Promise<{ stopped: boolean }> {
+  return call(token, "/ask-cancel" + q({ id }), { method: "POST" });
 }
