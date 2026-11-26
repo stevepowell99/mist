@@ -38,8 +38,29 @@ export function revealPos(view: EditorView, pos: number): void {
  * below the fold.
  */
 export function revealPosAtTop(view: EditorView, pos: number): void {
-  view.dispatch({
-    selection: { anchor: pos },
-    effects: EditorView.scrollIntoView(pos, { y: "start", yMargin: 16 }),
-  });
+  view.dispatch({ selection: { anchor: pos }, effects: scrollPosToTop(pos) });
+}
+
+/** The scroll of revealPosAtTop alone, for a caller that leaves the cursor be. */
+export function scrollPosToTop(pos: number) {
+  return EditorView.scrollIntoView(pos, { y: "start", yMargin: 16 });
+}
+
+/**
+ * Whether `pos` is on screen: drawn, and inside every pane around the editor
+ * that clips it. Both hosts scroll a pane the editor grows inside, so the
+ * editor's own box says nothing about what is in view.
+ */
+export function posOnScreen(view: EditorView, pos: number): boolean {
+  const c = view.coordsAtPos(pos);
+  if (!c) return false;
+  let top = 0;
+  let bottom = window.innerHeight;
+  for (let el: HTMLElement | null = view.scrollDOM; el; el = el.parentElement) {
+    if (getComputedStyle(el).overflowY === "visible") continue;
+    const r = el.getBoundingClientRect();
+    top = Math.max(top, r.top);
+    bottom = Math.min(bottom, r.bottom);
+  }
+  return c.top >= top && c.bottom <= bottom;
 }

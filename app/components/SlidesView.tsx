@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { EditorSelection } from "@codemirror/state";
-import { EditorView } from "@codemirror/view";
+import type { EditorView } from "@codemirror/view";
 import type { BibLibrary } from "~/lib/citations";
 import type { DriveMeta } from "~/shared/types";
-import { revealPosAtTop } from "~/lib/cm-reveal";
+import { posOnScreen, revealPosAtTop, scrollPosToTop } from "~/lib/cm-reveal";
 import { buildSlidesHtml, buildSlideSections, deckSlideLayout } from "~/lib/slides-build";
 import { deckIndexForOffset, deckSlideTarget, fragmentIndexForOffset } from "~/lib/slide-cursor";
 
@@ -261,7 +260,8 @@ export default function SlidesView({
   // overview) or is clicked, bring the editor to that slide. Never while the
   // editor has focus, because then the cursor is driving the deck and the deck's
   // report of the slide it was sent to must not move the cursor. A cursor
-  // already in the slide stays put; a click scrolls it back into view. Ref, so
+  // already in the slide stays put; a click with it out of view scrolls the
+  // slide back into view. Ref, so
   // the once-registered listener reads the current text and editor.
   const followDeckRef = useRef<(h: number, click: boolean) => void>(() => {});
   followDeckRef.current = (h, click) => {
@@ -269,13 +269,11 @@ export default function SlidesView({
     if (!view || view.hasFocus || !layout) return;
     const target = layout.find((s) => !s.hidden && s.deck === h);
     if (!target) return; // the References slide has no source
-    const len = view.state.doc.length;
-    const start = Math.min(target.start, len);
-    if (deckIndexForOffset(markdown, view.state.selection.main.head, layout) === h) {
-      // The least scroll that shows the whole slide, its heading first when it
-      // is taller than the pane; none when it is already in view.
-      const span = EditorSelection.range(Math.min(target.end, len), start);
-      if (click) view.dispatch({ effects: EditorView.scrollIntoView(span, { y: "nearest" }) });
+    const start = Math.min(target.start, view.state.doc.length);
+    const head = view.state.selection.main.head;
+    if (deckIndexForOffset(markdown, head, layout) === h) {
+      // A cursor out of view: show the slide from its heading, cursor untouched.
+      if (click && !posOnScreen(view, head)) view.dispatch({ effects: scrollPosToTop(start) });
       return;
     }
     deckPlaced.current = start;
